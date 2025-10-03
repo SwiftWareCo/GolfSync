@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "~/server/db";
-import { events, eventRegistrations, eventDetails } from "~/server/db/schema";
-import { eq, and } from "drizzle-orm";
+import { events, eventRegistrations, eventDetails, members } from "~/server/db/schema";
+import { eq, and, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { isMemberRegistered } from "./data";
@@ -23,6 +23,8 @@ const eventSchema = z.object({
   registrationDeadline: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
   memberClasses: z.array(z.string()).default([]),
+  teamSize: z.number().int().positive().default(1),
+  guestsAllowed: z.boolean().default(false),
 });
 
 // Validation schema for event details
@@ -49,6 +51,8 @@ export async function createEvent(formData: {
   registrationDeadline?: string;
   isActive?: boolean;
   memberClasses?: string[];
+  teamSize?: number;
+  guestsAllowed?: boolean;
   // Event details
   format?: string;
   rules?: string;
@@ -72,6 +76,8 @@ export async function createEvent(formData: {
       registrationDeadline: formData.registrationDeadline || null,
       isActive: formData.isActive ?? true,
       memberClasses: formData.memberClasses || [],
+      teamSize: formData.teamSize || 1,
+      guestsAllowed: formData.guestsAllowed || false,
     });
 
     // Insert event
@@ -93,6 +99,8 @@ export async function createEvent(formData: {
           : undefined,
         isActive: eventData.isActive,
         memberClasses: eventData.memberClasses,
+        teamSize: eventData.teamSize,
+        guestsAllowed: eventData.guestsAllowed,
       })
       .returning();
 
@@ -153,6 +161,8 @@ export async function updateEvent(
     registrationDeadline?: string;
     isActive?: boolean;
     memberClasses?: string[];
+    teamSize?: number;
+    guestsAllowed?: boolean;
     // Event details
     format?: string;
     rules?: string;
@@ -177,6 +187,8 @@ export async function updateEvent(
       registrationDeadline: formData.registrationDeadline || null,
       isActive: formData.isActive ?? true,
       memberClasses: formData.memberClasses || [],
+      teamSize: formData.teamSize || 1,
+      guestsAllowed: formData.guestsAllowed || false,
     });
 
     // Update event
@@ -196,6 +208,8 @@ export async function updateEvent(
         registrationDeadline: eventData.registrationDeadline || undefined,
         isActive: eventData.isActive,
         memberClasses: eventData.memberClasses,
+        teamSize: eventData.teamSize,
+        guestsAllowed: eventData.guestsAllowed,
       })
       .where(eq(events.id, eventId));
 
@@ -269,29 +283,116 @@ export async function deleteEvent(eventId: number) {
   }
 }
 
+// Check if members are already registered for an event
+export async function checkMembersRegistrationStatus(
+  eventId: number,
+  memberIds: number[]
+) {
+  try {
+    const registeredMembers: number[] = [];
+
+    for (const memberId of memberIds) {
+      const existingRegistration = await db.query.eventRegistrations.findFirst({
+        where: and(
+          eq(eventRegistrations.eventId, eventId),
+          or(
+            eq(eventRegistrations.memberId, memberId),
+            sql`${memberId} = ANY(team_member_ids)`
+          )
+        ),
+      });
+
+      if (existingRegistration) {
+        registeredMembers.push(memberId);
+      }
+    }
+
+    return { success: true, registeredMembers };
+  } catch (error) {
+    console.error("Error checking member registration status:", error);
+    return { success: false, registeredMembers: [] };
+  }
+}
+
 // Register a member for an event
 export async function registerForEvent(
   eventId: number,
   memberId: number,
   notes?: string,
+  teamMemberIds?: number[],
+  fills?: Array<{fillType: string; customName?: string}>,
 ) {
   try {
-    // Check if already registered
-    const isRegistered = await isMemberRegistered(eventId, memberId);
-    if (isRegistered) {
+    // Check if captain is already registered (as captain or team member)
+    const captainExistingRegistration = await db.query.eventRegistrations.findFirst({
+      where: and(
+        eq(eventRegistrations.eventId, eventId),
+        or(
+          eq(eventRegistrations.memberId, memberId),
+          sql`${memberId} = ANY(team_member_ids)`
+        )
+      ),
+    });
+
+    if (captainExistingRegistration) {
       return {
         success: false,
-        error: "Member is already registered for this event",
+        error: "You are already registered for this event",
       };
     }
 
-    // Get the event to check if approval is required
+    // Check if any team members are already registered (as captain or team member)
+    if (teamMemberIds && teamMemberIds.length > 0) {
+      for (const teamMemberId of teamMemberIds) {
+        const memberExistingRegistration = await db.query.eventRegistrations.findFirst({
+          where: and(
+            eq(eventRegistrations.eventId, eventId),
+            or(
+              eq(eventRegistrations.memberId, teamMemberId),
+              sql`${teamMemberId} = ANY(team_member_ids)`
+            )
+          ),
+        });
+
+        if (memberExistingRegistration) {
+          // Get member name for better error message
+          const member = await db.query.members.findFirst({
+            where: eq(members.id, teamMemberId),
+          });
+          return {
+            success: false,
+            error: `${member?.firstName} ${member?.lastName} is already registered for this event`
+          };
+        }
+      }
+    }
+
+    // Get the event to check requirements
     const event = await db.query.events.findFirst({
       where: eq(events.id, eventId),
     });
 
     if (!event) {
       return { success: false, error: "Event not found" };
+    }
+
+    // Validate team size if event requires teams
+    if (event.teamSize > 1) {
+      const totalTeamSize = 1 + (teamMemberIds?.length || 0) + (fills?.length || 0);
+      if (totalTeamSize !== event.teamSize) {
+        return {
+          success: false,
+          error: `Team must have exactly ${event.teamSize} players`,
+        };
+      }
+
+      // Validate fills only allowed if guests allowed
+      if (fills && fills.length > 0 && !event.guestsAllowed) {
+        return {
+          success: false,
+          error: "Guests are not allowed for this event",
+        };
+      }
     }
 
     // Set default status based on whether approval is required
@@ -303,10 +404,15 @@ export async function registerForEvent(
       memberId,
       status: defaultStatus,
       notes: notes || undefined,
+      teamMemberIds: teamMemberIds || undefined,
+      fills: fills as any || undefined,
+      isTeamCaptain: true,
     });
 
     revalidatePath(`/admin/events/${eventId}`);
     revalidatePath(`/members/events/${eventId}`);
+    revalidatePath(`/events`);
+    revalidatePath(`/members`);
     return { success: true };
   } catch (error) {
     console.error("Error registering for event:", error);
@@ -350,5 +456,141 @@ export async function updateRegistrationStatus(
   } catch (error) {
     console.error("Error updating registration status:", error);
     return { success: false, error: "Failed to update registration status" };
+  }
+}
+
+// Update event registration details (team members and fills)
+export async function updateEventRegistrationDetails(
+  registrationId: number,
+  details: {
+    teamMemberIds?: number[];
+    fills?: Array<{ fillType: string; customName?: string }>;
+  }
+) {
+  try {
+    // Get the current registration to check eventId and captain
+    const currentRegistration = await db.query.eventRegistrations.findFirst({
+      where: eq(eventRegistrations.id, registrationId),
+    });
+
+    if (!currentRegistration) {
+      return { success: false, error: "Registration not found" };
+    }
+
+    // Check if any team members are already registered in OTHER registrations (as captain or team member)
+    if (details.teamMemberIds && details.teamMemberIds.length > 0) {
+      for (const memberId of details.teamMemberIds) {
+        const memberExistingRegistration = await db.query.eventRegistrations.findFirst({
+          where: and(
+            eq(eventRegistrations.eventId, currentRegistration.eventId),
+            // Exclude the current registration we're editing
+            sql`id != ${registrationId}`,
+            or(
+              eq(eventRegistrations.memberId, memberId),
+              sql`${memberId} = ANY(team_member_ids)`
+            )
+          ),
+        });
+
+        if (memberExistingRegistration) {
+          // Get member name for better error message
+          const member = await db.query.members.findFirst({
+            where: eq(members.id, memberId),
+          });
+          return {
+            success: false,
+            error: `${member?.firstName} ${member?.lastName} is already registered for this event`
+          };
+        }
+      }
+    }
+
+    await db
+      .update(eventRegistrations)
+      .set({
+        teamMemberIds: details.teamMemberIds || [],
+        fills: details.fills || [],
+      })
+      .where(eq(eventRegistrations.id, registrationId));
+
+    revalidatePath("/admin/events");
+    revalidatePath("/members/events");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating registration details:", error);
+    return { success: false, error: "Failed to update registration details" };
+  }
+}
+
+// Create event registration as admin
+export async function createEventRegistrationAsAdmin(
+  eventId: number,
+  details: {
+    captainId: number;
+    teamMemberIds?: number[];
+    fills?: Array<{ fillType: string; customName?: string }>;
+    notes?: string;
+    status: "APPROVED" | "PENDING" | "REJECTED";
+  }
+) {
+  try {
+    // Check if captain is already registered (as captain or team member)
+    const captainExistingRegistration = await db.query.eventRegistrations.findFirst({
+      where: and(
+        eq(eventRegistrations.eventId, eventId),
+        or(
+          eq(eventRegistrations.memberId, details.captainId),
+          sql`${details.captainId} = ANY(team_member_ids)`
+        )
+      ),
+    });
+
+    if (captainExistingRegistration) {
+      return { success: false, error: "Captain is already registered for this event" };
+    }
+
+    // Check if any team members are already registered (as captain or team member)
+    if (details.teamMemberIds && details.teamMemberIds.length > 0) {
+      for (const memberId of details.teamMemberIds) {
+        const memberExistingRegistration = await db.query.eventRegistrations.findFirst({
+          where: and(
+            eq(eventRegistrations.eventId, eventId),
+            or(
+              eq(eventRegistrations.memberId, memberId),
+              sql`${memberId} = ANY(team_member_ids)`
+            )
+          ),
+        });
+
+        if (memberExistingRegistration) {
+          // Get member name for better error message
+          const member = await db.query.members.findFirst({
+            where: eq(members.id, memberId),
+          });
+          return {
+            success: false,
+            error: `${member?.firstName} ${member?.lastName} is already registered for this event`
+          };
+        }
+      }
+    }
+
+    // Create the registration
+    await db.insert(eventRegistrations).values({
+      eventId,
+      memberId: details.captainId,
+      teamMemberIds: details.teamMemberIds || [],
+      fills: details.fills || [],
+      notes: details.notes || null,
+      status: details.status,
+      isTeamCaptain: true,
+    });
+
+    revalidatePath("/admin/events");
+    revalidatePath("/members/events");
+    return { success: true };
+  } catch (error) {
+    console.error("Error creating registration as admin:", error);
+    return { success: false, error: "Failed to create registration" };
   }
 }

@@ -195,6 +195,30 @@ export async function searchMembersAction(query = "") {
   }));
 }
 
+// Get members by their IDs
+export async function getMembersByIds(memberIds: number[]) {
+  if (!memberIds || memberIds.length === 0) {
+    return [];
+  }
+
+  try {
+    const results = await db.query.members.findMany({
+      where: (members, { inArray }) => inArray(members.id, memberIds),
+    });
+
+    return results.map((member) => ({
+      id: member.id,
+      firstName: member.firstName,
+      lastName: member.lastName,
+      memberNumber: member.memberNumber,
+      class: member.class,
+    }));
+  } catch (error) {
+    console.error("Error fetching members by IDs:", error);
+    return [];
+  }
+}
+
 export async function getMemberBookingHistoryAction(
   memberId: number,
   year?: number,

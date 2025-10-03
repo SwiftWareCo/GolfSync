@@ -11,7 +11,7 @@ import {
 import { CourseInfoClient } from "~/components/course-info/CourseInfoClient";
 import { UpcomingTeeTimes } from "~/components/member-teesheet-client/UpcomingTeeTimes";
 import { type Member } from "~/app/types/MemberTypes";
-import { EventCard } from "~/components/events/EventCard";
+import { EventTimetableRow } from "~/components/events/EventTimetableRow";
 import Link from "next/link";
 import { InstallPrompt } from "~/components/pwa/InstallPrompt";
 
@@ -80,9 +80,9 @@ export default async function MembersHome() {
             </Link>
           </div>
           {upcomingEvents.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-0">
               {upcomingEvents.map((event) => (
-                <EventCard
+                <EventTimetableRow
                   key={event.id}
                   event={{
                     id: event.id,
@@ -99,6 +99,8 @@ export default async function MembersHome() {
                     registrationDeadline: event.registrationDeadline,
                     isActive: event.isActive,
                     memberClasses: event.memberClasses,
+                    teamSize: event.teamSize,
+                    guestsAllowed: event.guestsAllowed,
                     createdAt: event.createdAt,
                     updatedAt: event.updatedAt,
                     details: event.details
@@ -112,14 +114,12 @@ export default async function MembersHome() {
                         }
                       : null,
                     registrationsCount: event.registrationsCount,
-                    pendingRegistrationsCount: event.pendingRegistrationsCount,
+                    pendingRegistrationsCount:
+                      event.pendingRegistrationsCount,
                   }}
-                  className="border-0 shadow-none"
-                  isMember={true}
                   memberId={member?.id}
                   isRegistered={registrationMap.has(event.id)}
                   registrationStatus={registrationMap.get(event.id)}
-                  variant="compact"
                 />
               ))}
             </div>

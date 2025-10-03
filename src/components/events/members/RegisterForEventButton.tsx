@@ -16,17 +16,53 @@ import { registerForEvent } from "~/server/events/actions";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { type RegisterForEventButtonProps } from "~/app/types/events";
+import TeamRegistrationForm from "./TeamRegistrationForm";
+
+interface ExtendedRegisterForEventButtonProps extends RegisterForEventButtonProps {
+  event?: {
+    id: number;
+    name: string;
+    teamSize: number;
+    guestsAllowed: boolean;
+    requiresApproval: boolean;
+    isActive: boolean;
+  };
+  memberName?: string;
+}
 
 export default function RegisterForEventButton({
   eventId,
   memberId,
   disabled = false,
   requiresApproval = false,
-}: RegisterForEventButtonProps) {
+  className,
+  event,
+  memberName,
+}: ExtendedRegisterForEventButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [notes, setNotes] = useState("");
   const router = useRouter();
+
+  // If event requires team registration, use TeamRegistrationForm
+  if (event && event.teamSize > 1) {
+    return (
+      <TeamRegistrationForm
+        event={{
+          ...event,
+          description: "",
+          eventType: "TOURNAMENT",
+          startDate: "",
+          endDate: "",
+          memberClasses: [],
+          createdAt: new Date(),
+        }}
+        memberId={memberId}
+        memberName={memberName || "You"}
+        className={className}
+      />
+    );
+  }
 
   const handleRegister = async () => {
     setIsSubmitting(true);
@@ -54,8 +90,11 @@ export default function RegisterForEventButton({
   return (
     <>
       <Button
-        className="w-full"
-        onClick={() => setIsOpen(true)}
+        className={className || "w-full"}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen(true);
+        }}
         disabled={disabled}
       >
         Register for this Event

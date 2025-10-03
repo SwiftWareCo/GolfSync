@@ -770,6 +770,8 @@ export const events = createTable(
     registrationDeadline: date("registration_deadline"),
     isActive: boolean("is_active").default(true),
     memberClasses: varchar("member_classes", { length: 50 }).array(),
+    teamSize: integer("team_size").default(1).notNull(), // 1, 2, or 4 players
+    guestsAllowed: boolean("guests_allowed").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -796,6 +798,9 @@ export const eventRegistrations = createTable(
       .notNull(),
     status: varchar("status", { length: 20 }).default("PENDING").notNull(), // PENDING, APPROVED, REJECTED
     notes: text("notes"),
+    teamMemberIds: integer("team_member_ids").array(), // Array of member IDs in team
+    fills: jsonb("fills"), // Array of {fillType, customName} objects
+    isTeamCaptain: boolean("is_team_captain").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),

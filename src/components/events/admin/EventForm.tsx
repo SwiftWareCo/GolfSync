@@ -16,15 +16,6 @@ import { BasicInfoForm } from "./form-sections/BasicInfoForm";
 import { EventDetailsForm } from "./form-sections/EventDetailsForm";
 import { EventSettingsForm } from "./form-sections/EventSettingsForm";
 
-// Event types
-const EVENT_TYPES = [
-  { value: "TOURNAMENT", label: "Tournament" },
-  { value: "DINNER", label: "Dinner" },
-  { value: "SOCIAL", label: "Social Event" },
-  { value: "MEETING", label: "Meeting" },
-  { value: "OTHER", label: "Other" },
-];
-
 // Form schema
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -40,6 +31,8 @@ const formSchema = z.object({
   registrationDeadline: z.string().optional(),
   isActive: z.boolean(),
   memberClasses: z.array(z.string()),
+  teamSize: z.coerce.number().int().positive(),
+  guestsAllowed: z.boolean(),
   // Tournament/event details
   format: z.string().optional(),
   rules: z.string().optional(),
@@ -64,25 +57,27 @@ export function EventForm({
 
   const form = useForm<EventFormValues>({
     defaultValues: {
-      name: existingEvent?.name || "",
-      description: existingEvent?.description || "",
-      eventType: existingEvent?.eventType || "TOURNAMENT",
+      name: existingEvent?.name ?? "",
+      description: existingEvent?.description ?? "",
+      eventType: existingEvent?.eventType ?? "TOURNAMENT",
       startDate:
-        existingEvent?.startDate || new Date().toISOString().split("T")[0],
-      endDate: existingEvent?.endDate || new Date().toISOString().split("T")[0],
-      startTime: existingEvent?.startTime || "",
-      endTime: existingEvent?.endTime || "",
-      location: existingEvent?.location || "",
-      capacity: existingEvent?.capacity || undefined,
+        existingEvent?.startDate ?? new Date().toISOString().split("T")[0],
+      endDate: existingEvent?.endDate ?? new Date().toISOString().split("T")[0],
+      startTime: existingEvent?.startTime ?? "",
+      endTime: existingEvent?.endTime ?? "",
+      location: existingEvent?.location ?? "",
+      capacity: existingEvent?.capacity ?? undefined,
       requiresApproval: existingEvent?.requiresApproval ?? false,
-      registrationDeadline: existingEvent?.registrationDeadline || undefined,
+      registrationDeadline: existingEvent?.registrationDeadline ?? undefined,
       isActive: existingEvent?.isActive ?? true,
-      memberClasses: existingEvent?.memberClasses || [],
-      format: existingEvent?.details?.format || "",
-      rules: existingEvent?.details?.rules || "",
-      prizes: existingEvent?.details?.prizes || "",
-      entryFee: existingEvent?.details?.entryFee || undefined,
-      additionalInfo: existingEvent?.details?.additionalInfo || "",
+      memberClasses: existingEvent?.memberClasses ?? [],
+      teamSize: existingEvent?.teamSize ?? 1,
+      guestsAllowed: existingEvent?.guestsAllowed ?? false,
+      format: existingEvent?.details?.format ?? "",
+      rules: existingEvent?.details?.rules ?? "",
+      prizes: existingEvent?.details?.prizes ?? "",
+      entryFee: existingEvent?.details?.entryFee ?? undefined,
+      additionalInfo: existingEvent?.details?.additionalInfo ?? "",
     },
     resolver: zodResolver(formSchema),
   });
@@ -96,14 +91,14 @@ export function EventForm({
       // Convert empty strings to undefined to ensure proper null handling
       const cleanedData = {
         ...data,
-        startTime: data.startTime || undefined,
-        endTime: data.endTime || undefined,
-        location: data.location || undefined,
-        registrationDeadline: data.registrationDeadline || undefined,
-        format: data.format || undefined,
-        rules: data.rules || undefined,
-        prizes: data.prizes || undefined,
-        additionalInfo: data.additionalInfo || undefined,
+        startTime: data.startTime ?? undefined,
+        endTime: data.endTime ?? undefined,
+        location: data.location ?? undefined,
+        registrationDeadline: data.registrationDeadline ?? undefined,
+        format: data.format ?? undefined,
+        rules: data.rules ?? undefined,
+        prizes: data.prizes ?? undefined,
+        additionalInfo: data.additionalInfo ?? undefined,
       };
 
       if (existingEvent) {
@@ -117,7 +112,7 @@ export function EventForm({
             router.push(`/admin/events/${existingEvent.id}`);
           }
         } else {
-          toast.error(result.error || "Failed to update event");
+          toast.error(result.error ?? "Failed to update event");
         }
       } else {
         // Create new event
@@ -131,7 +126,7 @@ export function EventForm({
             router.push("/admin/events");
           }
         } else {
-          toast.error(result.error || "Failed to create event");
+          toast.error(result.error ?? "Failed to create event");
         }
       }
     } catch (error) {
