@@ -16,9 +16,6 @@ import { MemberClassesSettings } from "~/components/settings/member-classes/Memb
 
 type CourseInfoType = {
   id?: number;
-  weatherStatus?: string;
-  forecast?: string;
-  rainfall?: string;
   notes?: string;
 };
 
@@ -41,9 +38,6 @@ export default async function SettingsPage() {
   if (courseInfoResult && !("success" in courseInfoResult)) {
     courseInfo = {
       id: courseInfoResult.id,
-      weatherStatus: courseInfoResult.weatherStatus ?? undefined,
-      forecast: courseInfoResult.forecast ?? undefined,
-      rainfall: courseInfoResult.rainfall ?? undefined,
       notes: courseInfoResult.notes ?? undefined,
     };
   }

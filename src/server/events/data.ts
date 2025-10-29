@@ -279,7 +279,8 @@ export async function getMemberEventRegistrations(memberId: number) {
 }
 
 export async function getEventsForClass(memberClass: string) {
-  const whereClause = sql`is_active = true AND (member_classes IS NULL OR array_length(member_classes, 1) IS NULL OR ${memberClass} = ANY(member_classes))`;
+  const today = getBCToday();
+  const whereClause = sql`start_date >= ${today} AND is_active = true AND (member_classes IS NULL OR array_length(member_classes, 1) IS NULL OR ${memberClass} = ANY(member_classes))`;
 
   const dbEvents = (await db.query.events.findMany({
     where: whereClause,

@@ -9,6 +9,7 @@ import {
   getMemberEventRegistrations,
 } from "~/server/events/data";
 import { CourseInfoClient } from "~/components/course-info/CourseInfoClient";
+import { WeatherDisplay } from "~/components/weather/WeatherDisplay";
 import { UpcomingTeeTimes } from "~/components/member-teesheet-client/UpcomingTeeTimes";
 import { type Member } from "~/app/types/MemberTypes";
 import { EventTimetableRow } from "~/components/events/EventTimetableRow";
@@ -57,6 +58,9 @@ export default async function MembersHome() {
           </div>
         </div>
       )}
+
+      {/* Weather */}
+      <WeatherDisplay />
 
       {/* Course Info */}
       {courseInfo && !("success" in courseInfo) && (

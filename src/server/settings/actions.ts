@@ -328,9 +328,6 @@ export async function updateTeesheetConfigForDate(
 
 // Update or create course info
 export async function updateCourseInfo(data: {
-  weatherStatus?: string;
-  forecast?: string;
-  rainfall?: string;
   notes?: string;
 }) {
   const { userId, orgId } = await auth();
@@ -346,11 +343,14 @@ export async function updateCourseInfo(data: {
     });
 
     if (existing) {
-      // Update existing record
+      // Update existing record - clear weather fields
       const updated = await db
         .update(courseInfo)
         .set({
-          ...data,
+          weatherStatus: null,
+          forecast: null,
+          rainfall: null,
+          notes: data.notes,
           lastUpdatedBy: userId,
           updatedAt: new Date(),
         })
@@ -361,13 +361,13 @@ export async function updateCourseInfo(data: {
       revalidatePath("/admin/settings");
       return { success: true };
     } else {
-      // Create new record
+      // Create new record - without weather fields
       const created = await db
         .insert(courseInfo)
         .values({
-          weatherStatus: data.weatherStatus,
-          forecast: data.forecast,
-          rainfall: data.rainfall,
+          weatherStatus: null,
+          forecast: null,
+          rainfall: null,
           notes: data.notes,
           lastUpdatedBy: userId,
         })
