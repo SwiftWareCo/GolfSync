@@ -3,55 +3,77 @@
 import { CloudRain } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
+import { getWeatherData } from "~/server/weather/actions";
+import { getWeatherIcon } from "./weather-utils";
+
+interface WeatherState {
+  today: Date;
+  rainfall: number;
+  currentTemp: number;
+  currentCondition: string;
+  hourlyForecast: Array<{
+    hour: number;
+    period: string;
+    temp: number;
+    condition: string;
+  }>;
+}
 
 export function WeatherDisplay() {
-  const [mounted, setMounted] = useState(false);
-  const [weatherData, setWeatherData] = useState({
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [weatherData, setWeatherData] = useState<WeatherState>({
     today: new Date(),
-    highTemp: 0,
-    lowTemp: 0,
     rainfall: 0,
     currentTemp: 0,
-    hourlyForecast: [] as Array<{ hour: number; period: string; temp: number }>,
+    currentCondition: "Clear",
+    hourlyForecast: [],
   });
 
   useEffect(() => {
-    const today = new Date();
-    const currentHour = today.getHours();
+    const fetchWeather = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-    // Generate random data (1-15 range)
-    const highTemp = Math.floor(Math.random() * 15) + 1;
-    const lowTemp = Math.floor(Math.random() * 15) + 1;
-    const rainfall = Math.floor(Math.random() * 15) + 1;
-    const currentTemp = Math.floor(Math.random() * 15) + 1;
+        const result = await getWeatherData();
 
-    // Generate next 5 hours with random temps
-    const hourlyForecast = Array.from({ length: 5 }, (_, i) => {
-      const hour = (currentHour + i) % 24;
-      const temp = Math.floor(Math.random() * 15) + 1;
-      return {
-        hour: hour === 0 ? 12 : hour > 12 ? hour - 12 : hour,
-        period: hour >= 12 ? "PM" : "AM",
-        temp,
-      };
-    });
+        if (result.success) {
+          setWeatherData({
+            today: new Date(),
+            ...result.data,
+          });
+        } else {
+          setError(result.error);
+        }
+      } catch (err) {
+        setError("Failed to load weather data");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    setWeatherData({
-      today,
-      highTemp,
-      lowTemp,
-      rainfall,
-      currentTemp,
-      hourlyForecast,
-    });
-    setMounted(true);
+    fetchWeather();
   }, []);
 
-  if (!mounted) {
+  if (isLoading) {
     return (
       <div className="overflow-hidden rounded-lg bg-white shadow-md">
         <div className="px-6 py-6 animate-pulse">
           <div className="h-20 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="overflow-hidden rounded-lg bg-white shadow-md">
+        <div className="px-6 py-6">
+          <div className="flex items-center gap-2 text-red-600">
+            <CloudRain className="h-5 w-5" />
+            <span className="text-sm">Unable to load weather data</span>
+          </div>
         </div>
       </div>
     );
@@ -72,17 +94,17 @@ export function WeatherDisplay() {
               {formattedDate}
             </div>
             <div className="flex items-center gap-4 text-sm text-neutral-600">
-              <span>H: {weatherData.highTemp}°C</span>
-              <span>L: {weatherData.lowTemp}°C</span>
               <span className="flex items-center gap-1">
-                <span>Rainfall: {weatherData.rainfall}mm</span>
+                <span>Next 24h Rainfall: {weatherData.rainfall}mm</span>
               </span>
             </div>
           </div>
 
           {/* Current Temperature */}
           <div className="flex items-center gap-3">
-            <CloudRain className="h-12 w-12 text-blue-500" />
+            <div className="h-12 w-12">
+              {getWeatherIcon({ condition: weatherData.currentCondition })}
+            </div>
             <span className="text-4xl font-bold text-neutral-800">
               {weatherData.currentTemp}°C
             </span>
@@ -97,9 +119,11 @@ export function WeatherDisplay() {
               className="flex flex-col items-center gap-2 rounded-lg bg-gradient-to-b from-blue-50 to-blue-100 px-4 py-3 min-w-[80px]"
             >
               <span className="text-xs font-medium text-neutral-600">
-                {forecast.hour} {forecast.period}
+                {index === 0 ? "Now" : `${forecast.hour} ${forecast.period}`}
               </span>
-              <CloudRain className="h-6 w-6 text-blue-500" />
+              <div className="h-6 w-6">
+                {getWeatherIcon({ condition: forecast.condition })}
+              </div>
               <span className="text-sm font-semibold text-neutral-800">
                 {forecast.temp}°C
               </span>
@@ -111,14 +135,23 @@ export function WeatherDisplay() {
       {/* Mobile Layout */}
       <div className="flex flex-col gap-4 px-6 py-6 lg:hidden">
         {/* Date and Daily Summary */}
-        <div className="flex flex-col gap-2 text-center">
+        <div className="flex flex-col gap-3 text-center">
           <div className="text-lg font-medium text-neutral-800">
             {formattedDate}
           </div>
+
+          {/* Current Temperature */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="h-10 w-10">
+              {getWeatherIcon({ condition: weatherData.currentCondition })}
+            </div>
+            <span className="text-3xl font-bold text-neutral-800">
+              {weatherData.currentTemp}°C
+            </span>
+          </div>
+
           <div className="flex items-center justify-center gap-4 text-sm text-neutral-600">
-            <span>H: {weatherData.highTemp}°C</span>
-            <span>L: {weatherData.lowTemp}°C</span>
-            <span>Rainfall: {weatherData.rainfall}mm</span>
+            <span>Next 24h Rainfall: {weatherData.rainfall}mm</span>
           </div>
         </div>
 
@@ -132,7 +165,9 @@ export function WeatherDisplay() {
               <span className="text-xs font-medium text-neutral-600">
                 {index === 0 ? "Now" : `${forecast.hour} ${forecast.period}`}
               </span>
-              <CloudRain className="h-6 w-6 text-blue-500" />
+              <div className="h-6 w-6">
+                {getWeatherIcon({ condition: forecast.condition })}
+              </div>
               <span className="text-sm font-semibold text-neutral-800">
                 {forecast.temp}°C
               </span>
