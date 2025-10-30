@@ -118,44 +118,46 @@ export async function getOrCreateTeesheet(
   // Format date as YYYY-MM-DD string using BC timezone
   const formattedDate = getDateForDB(date);
 
-  // Try to find existing teesheet for the date
-  const existingTeesheet = await db.query.teesheets.findFirst({
-    where: eq(teesheets.date, formattedDate),
-    with: {
-      config: {
-        with: {
-          rules: true,
-        },
-      },
-    },
-  });
+  // Determine the appropriate config for this date
+  const config = await getConfigForDate(date);
+
+  // Try to insert a new teesheet, but do nothing if one already exists for this date
+  const [insertedTeesheet] = await db
+    .insert(teesheets)
+    .values({
+      date: formattedDate,
+      configId: config.id,
+    })
+    .onConflictDoNothing({ target: teesheets.date })
+    .returning();
 
   let teesheet: TeeSheet;
-  let config: TeesheetConfig;
+  let teesheetConfig: TeesheetConfig;
 
-  if (existingTeesheet) {
-    // For existing teesheets, use the stored config
-    teesheet = existingTeesheet;
-    config = existingTeesheet.config as TeesheetConfig;
+  if (insertedTeesheet) {
+    // New teesheet was created, use the config we just determined
+    teesheet = insertedTeesheet;
+    teesheetConfig = config;
   } else {
-    // For new teesheets, determine the appropriate config using getConfigForDate
-    config = await getConfigForDate(date);
+    // Conflict occurred - fetch the existing teesheet
+    const existingTeesheet = await db.query.teesheets.findFirst({
+      where: eq(teesheets.date, formattedDate),
+      with: {
+        config: {
+          with: {
+            rules: true,
+          },
+        },
+      },
+    });
 
-    // Create new teesheet with the date and determined config
-    const newTeesheet = await db
-      .insert(teesheets)
-      .values({
-        date: formattedDate,
-        configId: config.id,
-      })
-      .returning()
-      .then((result) => result[0]);
-
-    if (!newTeesheet) {
-      throw new Error("Failed to create teesheet");
+    if (!existingTeesheet) {
+      throw new Error("Failed to retrieve existing teesheet after conflict");
     }
 
-    teesheet = newTeesheet;
+    // For existing teesheets, use the stored config
+    teesheet = existingTeesheet;
+    teesheetConfig = existingTeesheet.config as TeesheetConfig;
   }
 
   // Check if the teesheet has any time blocks
@@ -167,13 +169,13 @@ export async function getOrCreateTeesheet(
   // If no blocks exist, create them
   if (existingBlocks.length === 0) {
     try {
-      await createTimeBlocksForTeesheet(teesheet.id, config, formattedDate);
+      await createTimeBlocksForTeesheet(teesheet.id, teesheetConfig, formattedDate);
     } catch (error) {
       throw error;
     }
   }
 
-  return { teesheet, config };
+  return { teesheet, config: teesheetConfig };
 }
 
 export async function getTimeBlocksForTeesheet(

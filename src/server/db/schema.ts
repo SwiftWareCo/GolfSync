@@ -225,6 +225,7 @@ export const teesheets = createTable(
     ),
   },
   (table) => [
+    unique("teesheets_date_unq").on(table.date),
     index("teesheets_date_idx").on(table.date),
     index("teesheets_is_public_idx").on(table.isPublic),
   ],
