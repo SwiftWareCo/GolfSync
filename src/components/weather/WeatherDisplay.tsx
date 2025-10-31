@@ -2,59 +2,12 @@
 
 import { CloudRain } from "lucide-react";
 import { format } from "date-fns";
-import { useEffect, useState } from "react";
-import { getWeatherData } from "~/server/weather/actions";
+import { useQuery } from "@tanstack/react-query";
+import { weatherQueryOptions } from "~/server/query-options/weather-query-options";
 import { getWeatherIcon } from "./weather-utils";
 
-interface WeatherState {
-  today: Date;
-  rainfall: number;
-  currentTemp: number;
-  currentCondition: string;
-  hourlyForecast: Array<{
-    hour: number;
-    period: string;
-    temp: number;
-    condition: string;
-  }>;
-}
-
 export function WeatherDisplay() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [weatherData, setWeatherData] = useState<WeatherState>({
-    today: new Date(),
-    rainfall: 0,
-    currentTemp: 0,
-    currentCondition: "Clear",
-    hourlyForecast: [],
-  });
-
-  useEffect(() => {
-    const fetchWeather = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const result = await getWeatherData();
-
-        if (result.success) {
-          setWeatherData({
-            today: new Date(),
-            ...result.data,
-          });
-        } else {
-          setError(result.error);
-        }
-      } catch (err) {
-        setError("Failed to load weather data");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchWeather();
-  }, []);
+  const { data: weatherData, isLoading, error } = useQuery(weatherQueryOptions.current());
 
   if (isLoading) {
     return (
@@ -66,7 +19,7 @@ export function WeatherDisplay() {
     );
   }
 
-  if (error) {
+  if (error || !weatherData) {
     return (
       <div className="overflow-hidden rounded-lg bg-white shadow-md">
         <div className="px-6 py-6">
@@ -79,7 +32,7 @@ export function WeatherDisplay() {
     );
   }
 
-  const formattedDate = format(weatherData.today, "EEEE, MMMM d");
+  const formattedDate = format(new Date(), "EEEE, MMMM d");
   const mobileHourlyForecast = weatherData.hourlyForecast.slice(0, 4);
 
   return (
@@ -94,9 +47,9 @@ export function WeatherDisplay() {
               {formattedDate}
             </div>
             <div className="flex items-center gap-4 text-sm text-neutral-600">
-              <span className="flex items-center gap-1">
-                <span>Next 24h Rainfall: {weatherData.rainfall}mm</span>
-              </span>
+              <span>Today's Rainfall: {weatherData.todayRainfall}mm</span>
+              <span>•</span>
+              <span>Tomorrow's Rainfall: {weatherData.tomorrowRainfall}mm</span>
             </div>
           </div>
 
@@ -151,7 +104,9 @@ export function WeatherDisplay() {
           </div>
 
           <div className="flex items-center justify-center gap-4 text-sm text-neutral-600">
-            <span>Next 24h Rainfall: {weatherData.rainfall}mm</span>
+            <span>Today: {weatherData.todayRainfall}mm</span>
+            <span>•</span>
+            <span>Tomorrow: {weatherData.tomorrowRainfall}mm</span>
           </div>
         </div>
 

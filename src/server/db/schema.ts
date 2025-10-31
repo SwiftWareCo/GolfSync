@@ -1108,6 +1108,28 @@ export const systemMaintenance = createTable(
   ],
 );
 
+// Weather Cache table
+export const weatherCache = createTable("weather_cache", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  currentTemp: real("current_temp").notNull(),
+  feelsLike: real("feels_like"),
+  condition: varchar("condition", { length: 50 }).notNull(),
+  conditionText: varchar("condition_text", { length: 100 }),
+  humidity: integer("humidity"),
+  windSpeed: real("wind_speed"),
+  todayRainfall: real("today_rainfall").notNull(),
+  tomorrowRainfall: real("tomorrow_rainfall").notNull(),
+  hourlyForecast: jsonb("hourly_forecast").notNull(), // Array of hourly forecast data
+  lastUpdated: timestamp("last_updated", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+// Type exports for weather cache
+export type WeatherCache = typeof weatherCache.$inferSelect;
+export type WeatherCacheInsert = typeof weatherCache.$inferInsert;
+
 // Type exports for member classes
 export type MemberClass = typeof memberClasses.$inferSelect;
 export type MemberClassInsert = typeof memberClasses.$inferInsert;

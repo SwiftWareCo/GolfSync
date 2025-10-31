@@ -58,4 +58,10 @@ export const queryKeys = {
     all: () => ['lottery'] as const,
     settings: () => ['lottery', 'settings'] as const,
   },
+
+  // Weather queries
+  weather: {
+    all: () => ['weather'] as const,
+    current: () => ['weather', 'current'] as const,
+  },
 } as const;

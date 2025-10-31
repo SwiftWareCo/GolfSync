@@ -86,7 +86,15 @@ export const TeesheetView = memo(function TeesheetView({
 
   // Memoized computations for performance
   const sortedTimeBlocks = useMemo(() => {
-    return [...timeBlocks].sort((a, b) =>
+    // Deduplicate time blocks by ID to prevent duplicate rendering
+    const uniqueBlocks = new Map<number, typeof timeBlocks[0]>();
+    timeBlocks.forEach(block => {
+      if (!uniqueBlocks.has(block.id)) {
+        uniqueBlocks.set(block.id, block);
+      }
+    });
+
+    return Array.from(uniqueBlocks.values()).sort((a, b) =>
       a.startTime.localeCompare(b.startTime),
     );
   }, [timeBlocks]);
@@ -424,7 +432,6 @@ export const TeesheetView = memo(function TeesheetView({
               return (
                 <React.Fragment key={`block-${block.id}`}>
                   <TimeBlockComponent
-                    key={`timeblock-${block.id}`}
                     timeBlock={{
                       ...block,
                       startTime: block.startTime,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { AlertCircle, CalendarIcon, ClockIcon } from "lucide-react";
 import { formatDateWithDay } from "~/lib/dates";
 import { TimeBlockItem, type TimeBlockItemProps } from "./TimeBlockItem";
@@ -60,14 +60,26 @@ export function TeesheetGrid({
   isTimeBlockInPast,
 }: TeesheetGridProps) {
   const timeBlocksContainerRef = useRef<HTMLDivElement>(null);
-  const hasTimeBlocks = timeBlocks.length > 0;
+
+  // Deduplicate time blocks by ID to prevent duplicate rendering
+  const uniqueTimeBlocks = useMemo(() => {
+    const uniqueBlocks = new Map<number, ClientTimeBlock>();
+    timeBlocks.forEach(block => {
+      if (!uniqueBlocks.has(block.id)) {
+        uniqueBlocks.set(block.id, block);
+      }
+    });
+    return Array.from(uniqueBlocks.values());
+  }, [timeBlocks]);
+
+  const hasTimeBlocks = uniqueTimeBlocks.length > 0;
 
   // Auto-scroll to current time once when time blocks load
   useEffect(() => {
-    if (timeBlocks.length > 0) {
-      scrollToClosestTime(new Date(), selectedDate, timeBlocks);
+    if (uniqueTimeBlocks.length > 0) {
+      scrollToClosestTime(new Date(), selectedDate, uniqueTimeBlocks);
     }
-  }, [timeBlocks, selectedDate]);
+  }, [uniqueTimeBlocks, selectedDate]);
 
   // Simple utility to scroll to a time block on today's date
   function scrollToClosestTime(
@@ -165,7 +177,7 @@ export function TeesheetGrid({
       >
         {hasTimeBlocks ? (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {timeBlocks.map((timeBlock) => (
+            {uniqueTimeBlocks.map((timeBlock) => (
               <TimeBlockItem
                 key={timeBlock.id}
                 timeBlock={

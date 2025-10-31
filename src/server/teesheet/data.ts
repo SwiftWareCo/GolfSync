@@ -44,7 +44,18 @@ export async function createTimeBlocksForTeesheet(
     }
   }
 
-  // Delete existing time blocks for this teesheet
+  // Check if blocks already exist (to handle race conditions)
+  const existingBlocks = await db.query.timeBlocks.findMany({
+    where: eq(timeBlocks.teesheetId, teesheetId),
+    limit: 1,
+  });
+
+  // If blocks already exist, return early (another request beat us to it)
+  if (existingBlocks.length > 0) {
+    return await getTimeBlocksForTeesheet(teesheetId);
+  }
+
+  // Delete existing time blocks for this teesheet (defensive)
   await db.delete(timeBlocks).where(and(eq(timeBlocks.teesheetId, teesheetId)));
 
   // For custom configurations, fetch the template and create blocks based on it
@@ -171,7 +182,18 @@ export async function getOrCreateTeesheet(
     try {
       await createTimeBlocksForTeesheet(teesheet.id, teesheetConfig, formattedDate);
     } catch (error) {
-      throw error;
+      // If time blocks were created by another concurrent request, that's okay
+      // Check again if blocks now exist
+      const blocksAfterError = await db.query.timeBlocks.findMany({
+        where: eq(timeBlocks.teesheetId, teesheet.id),
+        limit: 1,
+      });
+
+      // Only throw error if blocks still don't exist
+      if (blocksAfterError.length === 0) {
+        throw error;
+      }
+      // Otherwise, blocks were created by another request, continue normally
     }
   }
 
