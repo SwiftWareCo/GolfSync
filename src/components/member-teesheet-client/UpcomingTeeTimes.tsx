@@ -31,7 +31,7 @@ export function UpcomingTeeTimes({ teeTimes }: UpcomingTeeTimesProps) {
           href="/members/teesheet"
           className="mt-4 inline-block text-sm text-green-700 hover:underline"
         >
-          Book a tee time →
+          View Tee Sheet →
         </Link>
       </div>
     );
@@ -85,7 +85,7 @@ export function UpcomingTeeTimes({ teeTimes }: UpcomingTeeTimesProps) {
         href="/members/teesheet"
         className="mt-2 inline-block text-sm text-green-700 hover:underline"
       >
-        Book more tee times →
+        View Tee Sheet →
       </Link>
     </div>
   );

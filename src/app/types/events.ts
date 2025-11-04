@@ -31,6 +31,8 @@ export interface Event {
   registrationDeadline?: string | null;
   isActive: boolean;
   memberClasses: string[];
+  teamSize: number;
+  guestsAllowed: boolean;
   createdAt: Date;
   updatedAt?: Date | null;
   details?: EventDetails | null;
@@ -50,6 +52,9 @@ export interface EventRegistration {
   memberId: number;
   status: string;
   notes?: string;
+  teamMemberIds?: number[];
+  fills?: Array<{fillType: string; customName?: string}>;
+  isTeamCaptain: boolean;
   createdAt: Date;
   member: {
     id: number;
@@ -58,6 +63,12 @@ export interface EventRegistration {
     memberNumber: string;
     [key: string]: any;
   };
+  teamMembers?: Array<{
+    id: number;
+    firstName: string;
+    lastName: string;
+    memberNumber: string;
+  }>;
 }
 
 export interface EventCardProps {
@@ -70,6 +81,7 @@ export interface EventCardProps {
   isRegistered?: boolean;
   registrations?: EventRegistration[];
   registrationStatus?: string;
+  registrationData?: EventRegistration | null;
   variant?: "default" | "compact";
 }
 

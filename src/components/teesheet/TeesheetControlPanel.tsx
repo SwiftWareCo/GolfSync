@@ -29,10 +29,11 @@ import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import { updateTeesheetConfigForDate } from "~/server/settings/actions";
 import toast from "react-hot-toast";
 import type { TeeSheet, TeesheetConfig } from "~/app/types/TeeSheetTypes";
-import { populateTimeBlocksWithRandomMembers } from "~/server/teesheet/actions";
 import { AdminLotteryEntryForm } from "~/components/lottery/AdminLotteryEntryForm";
 import { TeesheetSettingsModal } from "./TeesheetSettingsModal";
 import { getBCToday, formatDate, parseDate } from "~/lib/dates";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { teesheetMutationOptions } from "~/server/query-options/teesheet-query-options";
 
 // Check if we're in development mode
 const isDev =
@@ -64,12 +65,35 @@ export function TeesheetControlPanel({
   onDateChange,
   mutations,
 }: TeesheetControlPanelProps) {
+  const queryClient = useQueryClient();
+
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isPopulating, setIsPopulating] = useState(false);
   const [showAdminEntryDialog, setShowAdminEntryDialog] = useState(false);
   const [showConfigConfirmation, setShowConfigConfirmation] = useState(false);
   const [pendingConfigId, setPendingConfigId] = useState<number | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Setup populate mutation with factory pattern
+  const mutationOptions = teesheetMutationOptions.populateTimeblocks(queryClient);
+  const populateMutation = useMutation({
+    ...mutationOptions,
+    onSuccess: (result, variables) => {
+      // Call the original onSuccess to handle cache invalidation
+      if (mutationOptions.onSuccess) {
+        mutationOptions.onSuccess(result, variables);
+      }
+      // Show success toast
+      toast.success(result.message || "Successfully populated timeblocks");
+    },
+    onError: (error) => {
+      // Call the original onError
+      if (mutationOptions.onError) {
+        mutationOptions.onError(error);
+      }
+      // Show error toast
+      toast.error(error.message || "Failed to populate timeblocks");
+    },
+  });
 
 
   const handleConfirmConfigChange = async () => {
@@ -98,27 +122,12 @@ export function TeesheetControlPanel({
   };
 
   // DEBUG: Populate timeblocks with random members
-  const handlePopulateTimeBlocks = async () => {
+  const handlePopulateTimeBlocks = () => {
     if (!teesheet?.date) return;
-
-    setIsPopulating(true);
-    try {
-      const result = await populateTimeBlocksWithRandomMembers(
-        teesheet.id,
-        teesheet.date,
-      );
-
-      if (result.success) {
-        toast.success(result.message || "Successfully populated timeblocks");
-      } else {
-        toast.error(result.error || "Failed to populate timeblocks");
-      }
-    } catch (error) {
-      toast.error("An unexpected error occurred while populating timeblocks");
-      console.error(error);
-    } finally {
-      setIsPopulating(false);
-    }
+    populateMutation.mutate({
+      teesheetId: teesheet.id,
+      date: teesheet.date,
+    });
   };
 
   // Get lottery button text - simplified to only Setup and View
@@ -231,11 +240,11 @@ export function TeesheetControlPanel({
             variant="outline"
             size="sm"
             onClick={handlePopulateTimeBlocks}
-            disabled={isPopulating}
+            disabled={populateMutation.isPending}
             className="bg-yellow-50 shadow-sm hover:bg-yellow-100 hover:text-yellow-800"
           >
             <Bug className="mr-2 h-4 w-4" />
-            {isPopulating ? "Populating..." : "Auto-Populate (Debug)"}
+            {populateMutation.isPending ? "Populating..." : "Auto-Populate (Debug)"}
           </Button>
         )}
       </div>

@@ -12,6 +12,7 @@ import {
   Eye,
   Edit,
   Bell,
+  ClipboardList,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -39,6 +40,7 @@ import { useMediaQuery } from "~/hooks/use-media-query";
 import RegisterForEventButton from "./members/RegisterForEventButton";
 import RegistrationsDialog from "./admin/RegistrationsDialog";
 import DeleteEventButton from "./admin/DeleteEventButton";
+import { ViewRegistrationDialog } from "./members/ViewRegistrationDialog";
 import { type EventCardProps } from "~/app/types/events";
 import type { MemberClass } from "~/server/db/schema";
 import {
@@ -89,12 +91,27 @@ export function EventCard({
   isRegistered = false,
   registrations = [],
   registrationStatus,
+  registrationData,
   variant = "default",
   memberClasses = [],
-}: EventCardProps & { variant?: "default" | "compact"; memberClasses?: MemberClass[] }) {
+  clickableCard = false,
+}: EventCardProps & { variant?: "default" | "compact"; memberClasses?: MemberClass[]; clickableCard?: boolean }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [registrationsDialogOpen, setRegistrationsDialogOpen] = useState(false);
+  const [viewRegistrationOpen, setViewRegistrationOpen] = useState(false);
   const isMobile = useMediaQuery("(max-width: 640px)");
+
+  // Debug logging
+  if (variant === "compact") {
+    console.log("EventCard Debug:", {
+      eventName: event.name,
+      isRegistered,
+      registrationStatus,
+      hasRegistrationData: !!registrationData,
+      memberId,
+      isMember,
+    });
+  }
   const {
     label,
     variant: badgeVariant,
@@ -229,8 +246,8 @@ export function EventCard({
                 )}
               </div>
 
-              {/* Event Type Badge */}
-              <div className="flex flex-col items-end gap-2">
+              {/* Event Type and Registration Status on the right */}
+              <div className="flex flex-col items-end gap-1.5">
                 <Badge
                   variant={badgeVariant as any}
                   className="flex items-center gap-1.5 px-2.5 py-1 font-medium"
@@ -239,24 +256,18 @@ export function EventCard({
                   <span className="text-xs">{label}</span>
                 </Badge>
 
-                {/* Registration Status for registered members */}
+                {/* Registration Status for registered members - directly under event type */}
                 {isRegistered && registrationStatus && (
                   <Badge
-                    variant={
-                      getRegistrationStatusBadge(registrationStatus)
-                        .variant as any
-                    }
-                    className={cn(
-                      "px-2 py-1 text-xs font-medium",
-                      getRegistrationStatusBadge(registrationStatus).className,
-                    )}
+                    variant="outline"
+                    className="bg-green-500 text-black border-green-600 px-2.5 py-1 text-xs font-medium hover:bg-green-500"
                   >
                     {getRegistrationStatusText(registrationStatus)}
                   </Badge>
                 )}
 
                 {/* Capacity indicator */}
-                {isAtCapacity && (
+                {isAtCapacity && !isRegistered && (
                   <Badge
                     variant="outline"
                     className="border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-600"
@@ -270,26 +281,62 @@ export function EventCard({
 
           <CardFooter className="pt-0 pb-4">
             <div className="flex w-full gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setDialogOpen(true)}
-                className="h-9 flex-1 text-sm font-medium"
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
-              </Button>
+              {/* Show View Event Details and View Registration buttons for registered members */}
+              {isRegistered ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogOpen(true)}
+                    className="h-9 flex-1 text-sm font-medium"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Event Details
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setViewRegistrationOpen(true)}
+                    className="h-9 flex-1 text-sm font-medium"
+                  >
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    View Registration
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {/* For non-registered members - always show View Event Details button */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDialogOpen(true)}
+                    className="h-9 flex-1 text-sm font-medium"
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Event Details
+                  </Button>
 
-              {isMember && !isRegistered && memberId && (
-                <RegisterForEventButton
-                  eventId={event.id}
-                  memberId={memberId}
-                  disabled={
-                    !event.isActive || isRegistrationClosed || isAtCapacity
-                  }
-                  requiresApproval={event.requiresApproval}
-                  className="h-9 flex-1"
-                />
+                  {/* Register button for non-registered members */}
+                  {isMember && memberId && (
+                    <RegisterForEventButton
+                      eventId={event.id}
+                      memberId={memberId}
+                      disabled={
+                        !event.isActive || isRegistrationClosed || isAtCapacity
+                      }
+                      requiresApproval={event.requiresApproval}
+                      className="h-9 flex-1"
+                      event={{
+                        id: event.id,
+                        name: event.name,
+                        teamSize: event.teamSize,
+                        guestsAllowed: event.guestsAllowed,
+                        requiresApproval: event.requiresApproval,
+                        isActive: event.isActive,
+                      }}
+                    />
+                  )}
+                </>
               )}
             </div>
           </CardFooter>
@@ -299,8 +346,8 @@ export function EventCard({
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
             <DialogHeader className="space-y-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex-1">
+              <div className="flex items-start justify-between gap-4 pr-8">
+                <div className="flex-1 min-w-0">
                   <DialogTitle className="text-org-primary text-xl leading-tight font-bold sm:text-2xl">
                     {event.name}
                   </DialogTitle>
@@ -308,7 +355,7 @@ export function EventCard({
                     Event Details
                   </DialogDescription>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <Badge variant={badgeVariant as any} className="font-medium">
                     {event.eventType}
                   </Badge>
@@ -318,21 +365,6 @@ export function EventCard({
                       className="border-red-200 text-red-600"
                     >
                       Inactive
-                    </Badge>
-                  )}
-                  {isRegistered && registrationStatus && (
-                    <Badge
-                      variant={
-                        getRegistrationStatusBadge(registrationStatus)
-                          .variant as any
-                      }
-                      className={cn(
-                        "font-medium",
-                        getRegistrationStatusBadge(registrationStatus)
-                          .className,
-                      )}
-                    >
-                      {getRegistrationStatusText(registrationStatus)}
                     </Badge>
                   )}
                 </div>
@@ -501,11 +533,30 @@ export function EventCard({
                   }
                   requiresApproval={event.requiresApproval}
                   className="w-full"
+                  event={{
+                    id: event.id,
+                    name: event.name,
+                    teamSize: event.teamSize,
+                    guestsAllowed: event.guestsAllowed,
+                    requiresApproval: event.requiresApproval,
+                    isActive: event.isActive,
+                  }}
                 />
               )}
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* View Registration Dialog */}
+        {isRegistered && registrationData && memberId && (
+          <ViewRegistrationDialog
+            isOpen={viewRegistrationOpen}
+            onOpenChange={setViewRegistrationOpen}
+            registration={registrationData}
+            currentMemberId={memberId}
+            teamMembers={registrationData.teamMembers}
+          />
+        )}
       </>
     );
   }
@@ -619,6 +670,14 @@ export function EventCard({
                   !event.isActive || isRegistrationClosed || isAtCapacity
                 }
                 requiresApproval={event.requiresApproval}
+                event={{
+                  id: event.id,
+                  name: event.name,
+                  teamSize: event.teamSize,
+                  guestsAllowed: event.guestsAllowed,
+                  requiresApproval: event.requiresApproval,
+                  isActive: event.isActive,
+                }}
               />
             </div>
           )}
@@ -938,6 +997,14 @@ export function EventCard({
                   memberId={memberId}
                   disabled={!event.isActive || isRegistrationClosed}
                   requiresApproval={event.requiresApproval}
+                  event={{
+                    id: event.id,
+                    name: event.name,
+                    teamSize: event.teamSize,
+                    guestsAllowed: event.guestsAllowed,
+                    requiresApproval: event.requiresApproval,
+                    isActive: event.isActive,
+                  }}
                 />
               </div>
             )}
@@ -975,6 +1042,8 @@ export function EventCard({
           registrations={registrations}
           requiresApproval={!!event.requiresApproval}
           capacity={event.capacity}
+          teamSize={event.teamSize}
+          guestsAllowed={event.guestsAllowed}
           isOpen={registrationsDialogOpen}
           onOpenChange={setRegistrationsDialogOpen}
         />

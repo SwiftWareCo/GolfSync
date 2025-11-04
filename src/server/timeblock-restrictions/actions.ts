@@ -18,6 +18,76 @@ import {
   preserveDate,
 } from "~/lib/utils";
 import { format } from "date-fns";
+import {
+  getTimeblockRestrictions,
+  getTimeblockRestrictionsByCategory,
+  getTimeblockRestrictionById,
+  getTimeblockOverrides,
+} from "./data";
+
+// Query actions for client components
+export async function getTimeblockRestrictionsAction() {
+  try {
+    const result = await getTimeblockRestrictions();
+    // Handle ResultType<any[]> return type
+    if (result && typeof result === 'object' && 'success' in result && !result.success) {
+      return { success: false, error: result.error || "Failed to load restrictions", data: [] };
+    }
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error fetching restrictions:", error);
+    return { success: false, error: "Failed to fetch restrictions", data: [] };
+  }
+}
+
+export async function getTimeblockRestrictionsByCategoryAction(
+  category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY"
+) {
+  try {
+    const result = await getTimeblockRestrictionsByCategory(category);
+    if (result && typeof result === 'object' && 'success' in result && !result.success) {
+      return { success: false, error: result.error || "Failed to load restrictions", data: [] };
+    }
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error fetching restrictions by category:", error);
+    return { success: false, error: "Failed to fetch restrictions", data: [] };
+  }
+}
+
+export async function getTimeblockRestrictionByIdAction(id: number) {
+  try {
+    const result = await getTimeblockRestrictionById(id);
+    if (result && typeof result === 'object' && 'success' in result && !result.success) {
+      return { success: false, error: result.error || "Failed to load restriction" };
+    }
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error fetching restriction:", error);
+    return { success: false, error: "Failed to fetch restriction" };
+  }
+}
+
+export async function getTimeblockOverridesAction(params?: {
+  restrictionId?: number;
+  timeBlockId?: number;
+  memberId?: number;
+  guestId?: number;
+  startDate?: Date;
+  endDate?: Date;
+  searchTerm?: string;
+}) {
+  try {
+    const result = await getTimeblockOverrides(params);
+    if (result && typeof result === 'object' && 'success' in result && !result.success) {
+      return { success: false, error: result.error || "Failed to load overrides", data: [] };
+    }
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error fetching overrides:", error);
+    return { success: false, error: "Failed to fetch overrides", data: [] };
+  }
+}
 
 export async function createTimeblockRestriction(data: any) {
   try {

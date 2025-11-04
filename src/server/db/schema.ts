@@ -225,6 +225,7 @@ export const teesheets = createTable(
     ),
   },
   (table) => [
+    unique("teesheets_date_unq").on(table.date),
     index("teesheets_date_idx").on(table.date),
     index("teesheets_is_public_idx").on(table.isPublic),
   ],
@@ -770,6 +771,8 @@ export const events = createTable(
     registrationDeadline: date("registration_deadline"),
     isActive: boolean("is_active").default(true),
     memberClasses: varchar("member_classes", { length: 50 }).array(),
+    teamSize: integer("team_size").default(1).notNull(), // 1, 2, or 4 players
+    guestsAllowed: boolean("guests_allowed").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -796,6 +799,9 @@ export const eventRegistrations = createTable(
       .notNull(),
     status: varchar("status", { length: 20 }).default("PENDING").notNull(), // PENDING, APPROVED, REJECTED
     notes: text("notes"),
+    teamMemberIds: integer("team_member_ids").array(), // Array of member IDs in team
+    fills: jsonb("fills"), // Array of {fillType, customName} objects
+    isTeamCaptain: boolean("is_team_captain").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -1101,6 +1107,28 @@ export const systemMaintenance = createTable(
     ),
   ],
 );
+
+// Weather Cache table
+export const weatherCache = createTable("weather_cache", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  currentTemp: real("current_temp").notNull(),
+  feelsLike: real("feels_like"),
+  condition: varchar("condition", { length: 50 }).notNull(),
+  conditionText: varchar("condition_text", { length: 100 }),
+  humidity: integer("humidity"),
+  windSpeed: real("wind_speed"),
+  todayRainfall: real("today_rainfall").notNull(),
+  tomorrowRainfall: real("tomorrow_rainfall").notNull(),
+  hourlyForecast: jsonb("hourly_forecast").notNull(), // Array of hourly forecast data
+  lastUpdated: timestamp("last_updated", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+// Type exports for weather cache
+export type WeatherCache = typeof weatherCache.$inferSelect;
+export type WeatherCacheInsert = typeof weatherCache.$inferInsert;
 
 // Type exports for member classes
 export type MemberClass = typeof memberClasses.$inferSelect;

@@ -2,14 +2,11 @@
 
 import React from "react";
 import { Button } from "~/components/ui/button";
-import { Badge } from "~/components/ui/badge";
 import {
-  UserIcon,
   Users,
   Ban,
   AlertCircle,
   CheckCircle,
-  Info,
   ClockIcon,
 } from "lucide-react";
 import { formatTime12Hour } from "~/lib/dates";
@@ -78,16 +75,6 @@ export function TimeBlockItem({
   const isFrequencyRestricted =
     hasFrequencyViolation && !hasTimeViolation && !hasAvailabilityViolation;
 
-  // Get descriptions for all applicable violations
-  const getViolationDescriptions = (types: string[]) => {
-    if (!timeBlock.restriction?.violations) return [];
-
-    return timeBlock.restriction.violations
-      .filter((v: any) => types.includes(v.type))
-      .map((v: any) => v.restrictionDescription || v.message)
-      .filter((desc: string) => desc && desc.trim() !== "");
-  };
-
   // Determine if the button should be disabled
   const isButtonDisabled =
     disabled || isPast || isAvailabilityRestricted || isTimeRestricted;
@@ -107,60 +94,84 @@ export function TimeBlockItem({
     if (isPast)
       return {
         status: "PAST",
-        color: "bg-gray-100 border-gray-300",
+        bgColor: "bg-gray-50",
+        borderColor: "border-gray-300",
         textColor: "text-gray-500",
+        statusBgColor: "bg-gray-100",
+        statusTextColor: "text-gray-600",
       };
     if (isAvailabilityRestricted)
       return {
         status: "UNAVAILABLE",
-        color: "bg-red-50 border-red-300",
-        textColor: "text-red-600",
+        bgColor: "bg-red-50",
+        borderColor: "border-red-400",
+        textColor: "text-red-700",
+        statusBgColor: "bg-red-100",
+        statusTextColor: "text-red-700",
       };
     if (isTimeRestricted)
       return {
         status: "RESTRICTED",
-        color: "bg-red-50 border-red-300",
-        textColor: "text-red-600",
+        bgColor: "bg-red-50",
+        borderColor: "border-red-400",
+        textColor: "text-red-700",
+        statusBgColor: "bg-red-100",
+        statusTextColor: "text-red-700",
       };
     if (allMembersCheckedIn)
       return {
         status: "CHECKED IN",
-        color: "bg-emerald-50 border-emerald-400",
+        bgColor: "bg-emerald-50",
+        borderColor: "border-emerald-400",
         textColor: "text-emerald-700",
+        statusBgColor: "bg-emerald-100",
+        statusTextColor: "text-emerald-700",
       };
     if (isBooked)
       return {
         status: "BOOKED",
-        color: "bg-blue-50 border-blue-400",
+        bgColor: "bg-blue-50",
+        borderColor: "border-blue-400",
         textColor: "text-blue-700",
+        statusBgColor: "bg-blue-100",
+        statusTextColor: "text-blue-700",
       };
     if (!isAvailable)
       return {
         status: "FULL",
-        color: "bg-orange-50 border-orange-300",
-        textColor: "text-orange-600",
+        bgColor: "bg-orange-50",
+        borderColor: "border-orange-300",
+        textColor: "text-orange-700",
+        statusBgColor: "bg-orange-100",
+        statusTextColor: "text-orange-700",
       };
     if (isFrequencyRestricted)
       return {
         status: "AVAILABLE*",
-        color: "bg-yellow-50 border-yellow-300",
+        bgColor: "bg-yellow-50",
+        borderColor: "border-yellow-400",
         textColor: "text-yellow-700",
+        statusBgColor: "bg-yellow-100",
+        statusTextColor: "text-yellow-700",
       };
     return {
       status: "AVAILABLE",
-      color: "bg-green-50 border-green-400",
+      bgColor: "bg-green-50",
+      borderColor: "border-green-400",
       textColor: "text-green-700",
+      statusBgColor: "bg-green-100",
+      statusTextColor: "text-green-700",
     };
   };
 
   const statusInfo = getStatusInfo();
 
-  // Get first few player names for compact display
-  const displayPlayers = timeBlock.members.slice(0, 2);
-  const hasMorePlayers = totalPeople > 2;
-
-  // Handle click on the entire card (except action button)
-  const handleCardClick = () => {
+  // Handle click on the main area to show details
+  const handleShowDetails = (e: React.MouseEvent) => {
+    // Don't open details if clicking on a button
+    if ((e.target as HTMLElement).closest('button')) {
+      return;
+    }
     if (onShowDetails) {
       onShowDetails();
     }
@@ -169,216 +180,124 @@ export function TimeBlockItem({
   return (
     <div
       id={id}
-      className={`relative rounded-lg border-2 shadow-sm transition-all duration-200 ${statusInfo.color} flex min-h-[120px] cursor-pointer flex-col justify-between hover:shadow-md active:scale-[0.98]`}
-      onClick={handleCardClick}
+      className={`relative flex items-center justify-between rounded-lg border-2 shadow-sm transition-all duration-200 ${statusInfo.bgColor} ${statusInfo.borderColor} cursor-pointer hover:shadow-md active:scale-[0.99]`}
+      onClick={handleShowDetails}
     >
-      {/* Content Container - Clickable */}
-      <div className="flex h-full flex-col justify-between p-3">
-        {/* Header Row - Time and Status */}
-        <div className="mb-2 flex items-start justify-between">
-          <div className="flex flex-col">
-            <span className="text-xl font-bold text-gray-900">
-              {startTimeDisplay}
-            </span>
-            <span className={`text-sm font-semibold ${statusInfo.textColor}`}>
-              {statusInfo.status}
-            </span>
-          </div>
-
-          {/* Player Count Badge */}
-          <div
-            className={`flex items-center gap-1 rounded-full px-2 py-1 text-sm font-semibold ${totalPeople === maxPlayers ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-700"} `}
-          >
-            <Users className="h-4 w-4" />
-            <span>
-              {totalPeople}/{maxPlayers}
-            </span>
-          </div>
+      {/* Left Section: Time and Status */}
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        {/* Time Display */}
+        <div className="flex min-w-[70px] items-center">
+          <span className="whitespace-nowrap text-sm font-bold text-gray-900">
+            {startTimeDisplay}
+          </span>
         </div>
 
-        {/* Players Preview - Compact */}
-        <div className="min-h-[40px] flex-1">
-          {totalPeople > 0 ? (
-            <div className="space-y-1">
-              {displayPlayers.map((player, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center text-sm text-gray-700"
-                >
-                  {player.checkedIn ? (
-                    <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                  ) : (
-                    <UserIcon className="mr-2 h-4 w-4 text-gray-400" />
-                  )}
-                  <span
-                    className={`text-base font-medium ${player.checkedIn ? "text-green-600" : "text-gray-800"}`}
-                  >
-                    {player.firstName} {player.lastName?.[0]}.
-                  </span>
-                </div>
-              ))}
-              {hasMorePlayers && (
-                <div className="text-org-primary mt-1 flex items-center text-sm">
-                  <Info className="mr-1 h-4 w-4" />
-                  <span className="font-medium">
-                    +{totalPeople - 2} more players
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <span className="text-sm font-medium text-gray-400">
-                Tap to see details
-              </span>
-            </div>
-          )}
+        {/* Status Badge */}
+        <div
+          className={`flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusInfo.statusBgColor} ${statusInfo.statusTextColor}`}
+        >
+          {statusInfo.status}
         </div>
+
+        {/* Warning Icons */}
+        {isMemberCheckedIn && (
+          <CheckCircle className="h-4 w-4 text-green-500" />
+        )}
+        {isAvailabilityRestricted && (
+          <Ban className="h-4 w-4 text-red-600" />
+        )}
+        {isTimeRestricted && (
+          <Ban className="h-4 w-4 text-red-500" />
+        )}
+        {isFrequencyRestricted && (
+          <AlertCircle className="h-4 w-4 text-yellow-500" />
+        )}
+        {isPast && (
+          <ClockIcon className="h-4 w-4 text-gray-400" />
+        )}
       </div>
 
-      {/* Action Button - Non-clickable area */}
-      <div
-        className="p-3 pt-0"
-        onClick={(e) => e.stopPropagation()} // Prevent card click when clicking button
-      >
-        {isBooked ? (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={onCancel}
-            disabled={isButtonDisabled}
-            className="h-9 w-full text-sm font-semibold"
-          >
-            Cancel
-          </Button>
-        ) : isAvailabilityRestricted ? (
-          <div className="space-y-2">
+      {/* Right Section: Capacity and Actions */}
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        {/* Capacity Display */}
+        <div
+          className={`flex items-center justify-center gap-1 rounded-full px-2.5 py-1 font-medium ${
+            totalPeople === maxPlayers
+              ? "bg-orange-100 text-orange-700"
+              : totalPeople > 0
+                ? "bg-blue-100 text-blue-700"
+                : "bg-gray-100 text-gray-600"
+          }`}
+        >
+          <Users className="h-3.5 w-3.5" />
+          <span className="text-sm">
+            {totalPeople}/{maxPlayers}
+          </span>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {isBooked ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={onCancel}
+              disabled={isButtonDisabled}
+              className="flex h-8 items-center justify-center px-3 text-xs font-medium"
+            >
+              Cancel
+            </Button>
+          ) : isAvailabilityRestricted ? (
             <Button
               variant="outline"
               size="sm"
               disabled
-              className="h-9 w-full border-red-300 bg-red-50 text-sm text-red-500"
+              className="flex h-8 items-center justify-center border-red-300 bg-red-50 px-2 text-xs text-red-500 sm:px-2.5"
             >
-              <Ban className="mr-1 h-3 w-3" />
-              Unavailable
+              <Ban className="h-3 w-3 sm:mr-1" />
+              <span className="hidden sm:inline">Unavailable</span>
             </Button>
-            {getViolationDescriptions(["AVAILABILITY"]).map(
-              (desc: string, idx: number) => (
-                <p key={idx} className="text-center text-xs text-red-600">
-                  {desc}
-                </p>
-              ),
-            )}
-          </div>
-        ) : isTimeRestricted ? (
-          <div className="space-y-2">
+          ) : isTimeRestricted ? (
             <Button
               variant="outline"
               size="sm"
               disabled
-              className="h-9 w-full border-red-300 bg-red-50 text-sm text-red-500"
+              className="flex h-8 items-center justify-center border-red-300 bg-red-50 px-2 text-xs text-red-500 sm:px-2.5"
             >
-              <Ban className="mr-1 h-3 w-3" />
-              Restricted
+              <Ban className="h-3 w-3 sm:mr-1" />
+              <span className="hidden sm:inline">Restricted</span>
             </Button>
-            {getViolationDescriptions(["TIME"]).map(
-              (desc: string, idx: number) => (
-                <p key={idx} className="text-center text-xs text-red-600">
-                  {desc}
-                </p>
-              ),
-            )}
-          </div>
-        ) : isPast ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="h-9 w-full border-gray-300 bg-gray-50 text-sm text-gray-500"
-          >
-            Past
-          </Button>
-        ) : !isAvailable ? (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="h-9 w-full border-orange-300 bg-orange-50 text-sm text-orange-600"
-          >
-            Full
-          </Button>
-        ) : isFrequencyRestricted ? (
-          <div className="space-y-2">
+          ) : isPast ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="flex h-8 items-center justify-center border-gray-300 bg-gray-50 px-3 text-xs text-gray-500"
+            >
+              Past
+            </Button>
+          ) : !isAvailable ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="flex h-8 items-center justify-center border-orange-300 bg-orange-50 px-3 text-xs text-orange-600"
+            >
+              Full
+            </Button>
+          ) : (
             <Button
               variant="default"
               size="sm"
               onClick={onBook}
-              className="bg-org-primary hover:bg-org-primary/90 h-9 w-full text-sm font-semibold"
+              className="bg-org-primary hover:bg-org-primary/90 flex h-8 items-center justify-center px-3 text-xs font-medium"
               disabled={isButtonDisabled}
             >
-              Book Now*
+              {isFrequencyRestricted ? "Book*" : "Book"}
             </Button>
-            {getViolationDescriptions(["FREQUENCY"]).map(
-              (desc: string, idx: number) => (
-                <p key={idx} className="text-center text-xs text-yellow-700">
-                  {desc}
-                </p>
-              ),
-            )}
-          </div>
-        ) : (
-          <Button
-            variant="default"
-            size="sm"
-            onClick={onBook}
-            className="bg-org-primary hover:bg-org-primary/90 h-9 w-full text-sm font-semibold"
-            disabled={isButtonDisabled}
-          >
-            Book Now
-          </Button>
-        )}
+          )}
+        </div>
       </div>
-
-      {/* Warning Indicators */}
-      {isPast && (
-        <div className="absolute -top-1 -right-1">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-400 text-white">
-            <ClockIcon className="h-3 w-3" />
-          </div>
-        </div>
-      )}
-
-      {isAvailabilityRestricted && (
-        <div className="absolute -top-1 -right-1">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-white">
-            <Ban className="h-3 w-3" />
-          </div>
-        </div>
-      )}
-
-      {isTimeRestricted && (
-        <div className="absolute -top-1 -right-1">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white">
-            <Ban className="h-3 w-3" />
-          </div>
-        </div>
-      )}
-
-      {isFrequencyRestricted && (
-        <div className="absolute -top-1 -right-1">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-yellow-400 text-yellow-900">
-            <AlertCircle className="h-3 w-3" />
-          </div>
-        </div>
-      )}
-
-      {isMemberCheckedIn && (
-        <div className="absolute -top-1 -right-1">
-          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-green-500 text-white">
-            <CheckCircle className="h-3 w-3" />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

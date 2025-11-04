@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { AlertCircle, CalendarIcon, ClockIcon } from "lucide-react";
 import { formatDateWithDay } from "~/lib/dates";
 import { TimeBlockItem, type TimeBlockItemProps } from "./TimeBlockItem";
@@ -60,14 +60,26 @@ export function TeesheetGrid({
   isTimeBlockInPast,
 }: TeesheetGridProps) {
   const timeBlocksContainerRef = useRef<HTMLDivElement>(null);
-  const hasTimeBlocks = timeBlocks.length > 0;
+
+  // Deduplicate time blocks by ID to prevent duplicate rendering
+  const uniqueTimeBlocks = useMemo(() => {
+    const uniqueBlocks = new Map<number, ClientTimeBlock>();
+    timeBlocks.forEach(block => {
+      if (!uniqueBlocks.has(block.id)) {
+        uniqueBlocks.set(block.id, block);
+      }
+    });
+    return Array.from(uniqueBlocks.values());
+  }, [timeBlocks]);
+
+  const hasTimeBlocks = uniqueTimeBlocks.length > 0;
 
   // Auto-scroll to current time once when time blocks load
   useEffect(() => {
-    if (timeBlocks.length > 0) {
-      scrollToClosestTime(new Date(), selectedDate, timeBlocks);
+    if (uniqueTimeBlocks.length > 0) {
+      scrollToClosestTime(new Date(), selectedDate, uniqueTimeBlocks);
     }
-  }, [timeBlocks, selectedDate]);
+  }, [uniqueTimeBlocks, selectedDate]);
 
   // Simple utility to scroll to a time block on today's date
   function scrollToClosestTime(
@@ -143,10 +155,10 @@ export function TeesheetGrid({
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className="bg-org-primary/5 border-b border-gray-100 p-4">
-        <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-          <ClockIcon className="text-org-primary h-5 w-5" />
-          Tee Sheet - {formatDateWithDay(date)}
+      <div className="bg-org-primary/5 border-b border-gray-100 p-3 sm:p-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900 sm:text-base md:text-lg">
+          <ClockIcon className="text-org-primary h-5 w-5 flex-shrink-0 sm:h-6 sm:w-6" />
+          <span className="min-w-0 flex-1 truncate">Tee Sheet - {formatDateWithDay(date)}</span>
         </h3>
         {config?.disallowMemberBooking && (
           <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -158,14 +170,14 @@ export function TeesheetGrid({
 
       <div
         ref={timeBlocksContainerRef}
-        className="p-4"
+        className="px-4 pb-4"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
         aria-live="polite"
       >
         {hasTimeBlocks ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {timeBlocks.map((timeBlock) => (
+          <div className="space-y-2">
+            {uniqueTimeBlocks.map((timeBlock) => (
               <TimeBlockItem
                 key={timeBlock.id}
                 timeBlock={

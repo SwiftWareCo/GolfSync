@@ -6,6 +6,7 @@ import {
   sql,
   and,
   desc,
+  asc,
   or,
 } from "drizzle-orm";
 
@@ -59,8 +60,15 @@ export async function getEvents(options?: {
   const results = await Promise.all(
     rows.map(async (event) => {
       // Get active registrations count (approved + pending only, not rejected)
+      // Count actual participants: 1 (captain) + team members + fills
       const registrationsCount = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({
+          total: sql<number>`COALESCE(SUM(
+            1 +
+            COALESCE(array_length(team_member_ids, 1), 0) +
+            COALESCE(jsonb_array_length(fills), 0)
+          ), 0)`
+        })
         .from(eventRegistrations)
         .where(
           and(
@@ -71,7 +79,7 @@ export async function getEvents(options?: {
             ),
           ),
         )
-        .then((res) => res[0]?.count || 0);
+        .then((res) => res[0]?.total || 0);
 
       // Get pending registrations count
       const pendingRegistrationsCount = await db
@@ -114,14 +122,14 @@ export async function getUpcomingEvents(
   const today = getBCToday();
 
   const memberClassCondition = memberClass
-    ? sql`AND (member_classes IS NULL OR ${memberClass} = ANY(member_classes))`
+    ? sql`AND (member_classes IS NULL OR array_length(member_classes, 1) IS NULL OR ${memberClass} = ANY(member_classes))`
     : sql``;
 
-  const whereClause = sql`start_date >= ${today} ${memberClassCondition}`;
+  const whereClause = sql`start_date >= ${today} AND is_active = true ${memberClassCondition}`;
 
   const rows = (await db.query.events.findMany({
     where: whereClause,
-    orderBy: [desc(events.startDate)],
+    orderBy: [asc(events.startDate)],
     with: {
       details: true,
     },
@@ -131,8 +139,15 @@ export async function getUpcomingEvents(
   // Get registration counts for each event
   const results = await Promise.all(
     rows.map(async (event) => {
+      // Count actual participants: 1 (captain) + team members + fills
       const registrationsCount = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({
+          total: sql<number>`COALESCE(SUM(
+            1 +
+            COALESCE(array_length(team_member_ids, 1), 0) +
+            COALESCE(jsonb_array_length(fills), 0)
+          ), 0)`
+        })
         .from(eventRegistrations)
         .where(
           and(
@@ -143,7 +158,7 @@ export async function getUpcomingEvents(
             ),
           ),
         )
-        .then((res) => res[0]?.count || 0);
+        .then((res) => res[0]?.total || 0);
 
       return {
         ...event,
@@ -168,8 +183,15 @@ export async function getEventById(eventId: number): Promise<Event | null> {
   if (!event) return null;
 
   // Get active registration count (approved + pending only)
+  // Count actual participants: 1 (captain) + team members + fills
   const registrationsCount = await db
-    .select({ count: sql<number>`count(*)` })
+    .select({
+      total: sql<number>`COALESCE(SUM(
+        1 +
+        COALESCE(array_length(team_member_ids, 1), 0) +
+        COALESCE(jsonb_array_length(fills), 0)
+      ), 0)`
+    })
     .from(eventRegistrations)
     .where(
       and(
@@ -180,7 +202,7 @@ export async function getEventById(eventId: number): Promise<Event | null> {
         ),
       ),
     )
-    .then((res) => res[0]?.count || 0);
+    .then((res) => res[0]?.total || 0);
 
   return {
     ...event,
@@ -201,7 +223,25 @@ export async function getEventRegistrations(
     orderBy: [desc(eventRegistrations.createdAt)],
   });
 
-  return registrations as EventRegistration[];
+  // Fetch team member details for each registration
+  const registrationsWithTeamMembers = await Promise.all(
+    registrations.map(async (registration) => {
+      let teamMembers: Awaited<ReturnType<typeof db.query.members.findMany>> = [];
+      if (registration.teamMemberIds && registration.teamMemberIds.length > 0) {
+        const teamMemberDetails = await db.query.members.findMany({
+          where: sql.raw(`id = ANY(ARRAY[${registration.teamMemberIds.join(',')}])`),
+        });
+        teamMembers = teamMemberDetails;
+      }
+
+      return {
+        ...registration,
+        teamMembers,
+      };
+    })
+  );
+
+  return registrationsWithTeamMembers as EventRegistration[];
 }
 
 // Check if a member is registered for an event
@@ -212,7 +252,10 @@ export async function isMemberRegistered(
   const registration = await db.query.eventRegistrations.findFirst({
     where: and(
       eq(eventRegistrations.eventId, eventId),
-      eq(eventRegistrations.memberId, memberId),
+      or(
+        eq(eventRegistrations.memberId, memberId),
+        sql`${memberId} = ANY(team_member_ids)`,
+      ),
     ),
   });
 
@@ -222,7 +265,10 @@ export async function isMemberRegistered(
 // Get a member's event registrations
 export async function getMemberEventRegistrations(memberId: number) {
   const registrations = await db.query.eventRegistrations.findMany({
-    where: and(eq(eventRegistrations.memberId, memberId)),
+    where: or(
+      eq(eventRegistrations.memberId, memberId),
+      sql`${memberId} = ANY(team_member_ids)`,
+    ),
     with: {
       event: true,
     },
@@ -233,7 +279,8 @@ export async function getMemberEventRegistrations(memberId: number) {
 }
 
 export async function getEventsForClass(memberClass: string) {
-  const whereClause = sql`(member_classes IS NULL OR ${memberClass} = ANY(member_classes))`;
+  const today = getBCToday();
+  const whereClause = sql`start_date >= ${today} AND is_active = true AND (member_classes IS NULL OR array_length(member_classes, 1) IS NULL OR ${memberClass} = ANY(member_classes))`;
 
   const dbEvents = (await db.query.events.findMany({
     where: whereClause,
@@ -246,8 +293,15 @@ export async function getEventsForClass(memberClass: string) {
   // Get registration counts for each event
   const results = await Promise.all(
     dbEvents.map(async (event) => {
+      // Count actual participants: 1 (captain) + team members + fills
       const registrationsCount = await db
-        .select({ count: sql<number>`count(*)` })
+        .select({
+          total: sql<number>`COALESCE(SUM(
+            1 +
+            COALESCE(array_length(team_member_ids, 1), 0) +
+            COALESCE(jsonb_array_length(fills), 0)
+          ), 0)`
+        })
         .from(eventRegistrations)
         .where(
           and(
@@ -258,7 +312,7 @@ export async function getEventsForClass(memberClass: string) {
             ),
           ),
         )
-        .then((res) => res[0]?.count || 0);
+        .then((res) => res[0]?.total || 0);
 
       const pendingRegistrationsCount = await db
         .select({ count: sql<number>`count(*)` })
@@ -281,4 +335,39 @@ export async function getEventsForClass(memberClass: string) {
   );
 
   return results;
+}
+
+// Get member's registration for a specific event with team member details
+export async function getMemberRegistrationForEvent(
+  eventId: number,
+  memberId: number,
+) {
+  const registration = await db.query.eventRegistrations.findFirst({
+    where: and(
+      eq(eventRegistrations.eventId, eventId),
+      or(
+        eq(eventRegistrations.memberId, memberId),
+        sql`${memberId} = ANY(team_member_ids)`,
+      ),
+    ),
+    with: {
+      member: true,
+    },
+  });
+
+  if (!registration) return null;
+
+  // Fetch team member details if they exist
+  let teamMembers: Awaited<ReturnType<typeof db.query.members.findMany>> = [];
+  if (registration.teamMemberIds && registration.teamMemberIds.length > 0) {
+    const teamMemberDetails = await db.query.members.findMany({
+      where: sql.raw(`id = ANY(ARRAY[${registration.teamMemberIds.join(',')}])`),
+    });
+    teamMembers = teamMemberDetails;
+  }
+
+  return {
+    ...registration,
+    teamMembers,
+  };
 }

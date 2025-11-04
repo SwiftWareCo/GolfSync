@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Card,
   CardDescription,
@@ -23,6 +23,8 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import type { MemberClass } from "~/server/db/schema";
+import { useQuery } from "@tanstack/react-query";
+import { restrictionsQueryOptions } from "~/server/query-options/restrictions-query-options";
 
 export type TimeblockRestriction = {
   id: number;
@@ -63,8 +65,11 @@ export function TimeblockRestrictionsSettings({
   memberClasses,
   allMemberClasses = [],
 }: TimeblockRestrictionsSettingsProps) {
-  const [restrictions, setRestrictions] =
-    useState<TimeblockRestriction[]>(initialRestrictions);
+  // Use TanStack Query for restrictions
+  const { data: restrictions = initialRestrictions, isLoading } = useQuery(
+    restrictionsQueryOptions.all()
+  );
+
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("memberClass");
   const [selectedRestrictionId, setSelectedRestrictionId] = useState<
@@ -97,22 +102,18 @@ export function TimeblockRestrictionsSettings({
     (r) => r.restrictionCategory === "COURSE_AVAILABILITY",
   );
 
-  const handleRestrictionUpdate = (
-    updatedRestriction: TimeblockRestriction,
-  ) => {
-    setRestrictions((prev) =>
-      prev.map((r) =>
-        r.id === updatedRestriction.id ? updatedRestriction : r,
-      ),
-    );
+  // These callbacks are no longer needed as the child components
+  // will use TanStack Query mutations that automatically update the cache
+  const handleRestrictionUpdate = () => {
+    // Cache will be automatically invalidated by mutation
   };
 
-  const handleRestrictionAdd = (newRestriction: TimeblockRestriction) => {
-    setRestrictions((prev) => [...prev, newRestriction]);
+  const handleRestrictionAdd = () => {
+    // Cache will be automatically invalidated by mutation
   };
 
-  const handleRestrictionDelete = (restrictionId: number) => {
-    setRestrictions((prev) => prev.filter((r) => r.id !== restrictionId));
+  const handleRestrictionDelete = () => {
+    // Cache will be automatically invalidated by mutation
   };
 
   const handleRestrictionsSearch = (restrictionId: number) => {

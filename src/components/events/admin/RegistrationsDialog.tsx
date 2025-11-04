@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Check, Search, X, Edit, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "~/components/ui/button";
 import {
@@ -33,6 +33,8 @@ import {
 } from "~/components/ui/select";
 import { updateRegistrationStatus } from "~/server/events/actions";
 import toast from "react-hot-toast";
+import { EditRegistrationDialog } from "./EditRegistrationDialog";
+import { AddRegistrationDialog } from "./AddRegistrationDialog";
 
 interface RegistrationDialogProps {
   eventId: number;
@@ -40,6 +42,8 @@ interface RegistrationDialogProps {
   registrations: any[];
   requiresApproval: boolean;
   capacity?: number | null;
+  teamSize: number;
+  guestsAllowed: boolean;
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
@@ -50,6 +54,8 @@ export default function RegistrationsDialog({
   registrations,
   requiresApproval,
   capacity,
+  teamSize,
+  guestsAllowed,
   isOpen,
   onOpenChange,
 }: RegistrationDialogProps) {
@@ -66,15 +72,39 @@ export default function RegistrationsDialog({
     "APPROVED" | "PENDING" | "REJECTED"
   >("APPROVED");
 
+  // Dialog state for editing registration
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingRegistration, setEditingRegistration] = useState<any>(null);
+
+  // Dialog state for adding registration
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+
   // Filter registrations based on search term and status filter
   const filteredRegistrations = registrationsState.filter((reg) => {
-    const matchesSearch =
+    // Check captain's info
+    const matchesCaptain =
       reg.member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       reg.member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       reg.member.memberNumber
         ?.toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (reg.notes?.toLowerCase().includes(searchTerm.toLowerCase()));
+        .includes(searchTerm.toLowerCase());
+
+    // Check team members' info
+    const matchesTeamMember = reg.teamMembers?.some((member: any) =>
+      member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.memberNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Check fills
+    const matchesFills = reg.fills?.some((fill: any) =>
+      fill.customName?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Check notes
+    const matchesNotes = reg.notes?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesSearch = matchesCaptain || matchesTeamMember || matchesFills || matchesNotes;
 
     const matchesStatus = filterStatus === "ALL" || reg.status === filterStatus;
 
@@ -86,6 +116,27 @@ export default function RegistrationsDialog({
     APPROVED: registrationsState.filter((r) => r.status === "APPROVED").length,
     PENDING: registrationsState.filter((r) => r.status === "PENDING").length,
     REJECTED: registrationsState.filter((r) => r.status === "REJECTED").length,
+  };
+
+  // Count actual participants (captain + team members + fills)
+  const getParticipantCount = (registration: any) => {
+    return (
+      1 + // captain
+      (registration.teamMemberIds?.length || 0) +
+      (registration.fills?.length || 0)
+    );
+  };
+
+  const participantCounts = {
+    APPROVED: registrationsState
+      .filter((r) => r.status === "APPROVED")
+      .reduce((sum, r) => sum + getParticipantCount(r), 0),
+    PENDING: registrationsState
+      .filter((r) => r.status === "PENDING")
+      .reduce((sum, r) => sum + getParticipantCount(r), 0),
+    REJECTED: registrationsState
+      .filter((r) => r.status === "REJECTED")
+      .reduce((sum, r) => sum + getParticipantCount(r), 0),
   };
 
   // Open dialog to change registration status
@@ -182,13 +233,27 @@ export default function RegistrationsDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl">Event Registrations</DialogTitle>
-          <DialogDescription>
-            Manage registrations for {eventName}
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl">Event Registrations</DialogTitle>
+              <DialogDescription>
+                Manage registrations for {eventName}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div className="flex justify-end -mt-4">
+          <Button
+            size="sm"
+            onClick={() => setIsAddDialogOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add
+          </Button>
+        </div>
+
+        <div className="space-y-6 pt-4">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row">
             <div className="relative w-full sm:w-2/3">
               <Search className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
@@ -235,7 +300,7 @@ export default function RegistrationsDialog({
                 <p className="text-2xl font-bold">{statusCounts.APPROVED}</p>
                 {capacity && (
                   <p className="text-muted-foreground text-xs">
-                    {statusCounts.APPROVED} of {capacity} spots filled
+                    {participantCounts.APPROVED} of {capacity} spots filled
                   </p>
                 )}
               </div>
@@ -259,6 +324,7 @@ export default function RegistrationsDialog({
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12"></TableHead>
                     <TableHead>Member</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Registration Date</TableHead>
@@ -267,84 +333,127 @@ export default function RegistrationsDialog({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRegistrations.map((registration) => (
-                    <TableRow key={registration.id}>
-                      <TableCell>
-                        <div className="font-medium">
-                          {registration.member.firstName}{" "}
-                          {registration.member.lastName}
-                        </div>
-                        <div className="text-muted-foreground text-sm">
-                          #{registration.member.memberNumber}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            getStatusBadgeVariant(registration.status) as any
-                          }
-                        >
-                          {registration.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {format(
-                          new Date(registration.createdAt),
-                          "MMM d, yyyy",
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-[200px] truncate">
-                          {registration.notes || "—"}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          {registration.status === "PENDING" && (
-                            <>
+                  {filteredRegistrations.map((registration) => {
+                    const hasTeamMembers = registration.teamMembers && registration.teamMembers.length > 0;
+                    const hasFills = registration.fills && registration.fills.length > 0;
+                    const hasGroup = hasTeamMembers || hasFills;
+
+                    return (
+                      <TableRow key={registration.id}>
+                        <TableCell>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-gray-500 hover:text-gray-900"
+                            onClick={() => {
+                              setEditingRegistration(registration);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <div className="font-medium">
+                              {registration.member.firstName}{" "}
+                              {registration.member.lastName}
+                            </div>
+                            <div className="text-muted-foreground text-sm">
+                              #{registration.member.memberNumber}
+                            </div>
+                            {hasGroup && (
+                              <div className="mt-1.5 text-xs text-gray-500">
+                                {hasTeamMembers && (
+                                  <div className="space-y-0.5">
+                                    {registration.teamMembers.map((member: any, idx: number) => (
+                                      <div key={idx}>
+                                        {member.firstName} {member.lastName}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {hasFills && (
+                                  <div className="space-y-0.5">
+                                    {registration.fills.map((fill: any, idx: number) => (
+                                      <div key={idx} className="italic">
+                                        {fill.customName || `${fill.fillType} Fill`}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              getStatusBadgeVariant(registration.status) as any
+                            }
+                          >
+                            {registration.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {format(
+                            new Date(registration.createdAt),
+                            "MMM d, yyyy",
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="max-w-[200px] truncate">
+                            {registration.notes || "—"}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            {registration.status === "PENDING" && (
+                              <>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 border-green-500 text-green-500 hover:bg-green-50 hover:text-green-600"
+                                  onClick={() =>
+                                    openStatusDialog(registration, "APPROVED")
+                                  }
+                                >
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600"
+                                  onClick={() =>
+                                    openStatusDialog(registration, "REJECTED")
+                                  }
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                            {registration.status !== "PENDING" && (
                               <Button
-                                size="icon"
+                                size="sm"
                                 variant="outline"
-                                className="h-8 w-8 border-green-500 text-green-500 hover:bg-green-50 hover:text-green-600"
                                 onClick={() =>
-                                  openStatusDialog(registration, "APPROVED")
+                                  openStatusDialog(
+                                    registration,
+                                    registration.status as
+                                      | "APPROVED"
+                                      | "PENDING"
+                                      | "REJECTED",
+                                  )
                                 }
                               >
-                                <Check className="h-4 w-4" />
+                                Update
                               </Button>
-                              <Button
-                                size="icon"
-                                variant="outline"
-                                className="h-8 w-8 border-red-500 text-red-500 hover:bg-red-50 hover:text-red-600"
-                                onClick={() =>
-                                  openStatusDialog(registration, "REJECTED")
-                                }
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                          {registration.status !== "PENDING" && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                openStatusDialog(
-                                  registration,
-                                  registration.status as
-                                    | "APPROVED"
-                                    | "PENDING"
-                                    | "REJECTED",
-                                )
-                              }
-                            >
-                              Update
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -430,6 +539,40 @@ export default function RegistrationsDialog({
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Edit Registration Dialog */}
+      {editingRegistration && (
+        <EditRegistrationDialog
+          isOpen={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
+          registration={editingRegistration}
+          eventId={eventId}
+          eventName={eventName}
+          teamSize={teamSize}
+          guestsAllowed={guestsAllowed}
+          existingRegistrations={registrationsState}
+          onSuccess={() => {
+            // Reload the page to refresh data
+            window.location.reload();
+          }}
+        />
+      )}
+
+      {/* Add Registration Dialog */}
+      <AddRegistrationDialog
+        isOpen={isAddDialogOpen}
+        onOpenChange={setIsAddDialogOpen}
+        eventId={eventId}
+        eventName={eventName}
+        teamSize={teamSize}
+        guestsAllowed={guestsAllowed}
+        requiresApproval={requiresApproval}
+        existingRegistrations={registrationsState}
+        onSuccess={() => {
+          // Reload the page to refresh data
+          window.location.reload();
+        }}
+      />
     </Dialog>
   );
 }

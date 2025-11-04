@@ -11,6 +11,7 @@ import {
   updateTimeBlockNotes,
   removeFillFromTimeBlock,
   addFillToTimeBlock,
+  populateTimeBlocksWithRandomMembers,
 } from "~/server/teesheet/actions";
 import { addMemberToTimeBlock } from "~/server/members/actions";
 import { addGuestToTimeBlock } from "~/server/guests/actions";
@@ -20,6 +21,7 @@ import type {
   FillType,
 } from "~/app/types/TeeSheetTypes";
 import { getBCNow } from "~/lib/dates";
+import type { QueryClient } from "@tanstack/react-query";
 
 // Types
 export type TeesheetData = {
@@ -150,5 +152,24 @@ export const teesheetMutationOptions = {
   > => ({
     mutationFn: async ({ timeBlockId, fillType, customName }) =>
       addFillToTimeBlock(timeBlockId, fillType, 1, customName),
+  }),
+
+  // Populate timeblocks with random members (debug feature)
+  populateTimeblocks: (queryClient: QueryClient) => ({
+    mutationFn: async ({ teesheetId, date }: { teesheetId: number; date: string }) => {
+      const result = await populateTimeBlocksWithRandomMembers(teesheetId, date);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to populate timeblocks");
+      }
+      return result;
+    },
+    onSuccess: (_result: ActionResult, variables: { teesheetId: number; date: string }) => {
+      // Invalidate teesheet queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: queryKeys.teesheets.all() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.teesheets.byDate(variables.date) });
+    },
+    onError: (error: Error) => {
+      console.error("Failed to populate timeblocks:", error);
+    },
   }),
 };

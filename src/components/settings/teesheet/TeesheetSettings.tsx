@@ -19,12 +19,10 @@ import type {
   CustomConfig,
 } from "~/app/types/TeeSheetTypes";
 import { ConfigTypes } from "~/app/types/TeeSheetTypes";
-import {
-  createTeesheetConfig,
-  updateTeesheetConfig,
-  deleteTeesheetConfig,
-} from "~/server/settings/actions";
 import toast from "react-hot-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { settingsQueryOptions } from "~/server/query-options/settings-query-options";
+import { settingsMutations } from "~/server/query-options/settings-mutation-options";
 import {
   Tooltip,
   TooltipContent,
@@ -44,7 +42,13 @@ export function TeesheetSettings({
   initialConfigs,
   templates,
 }: TeesheetSettingsProps) {
-  const [configs, setConfigs] = useState<TeesheetConfig[]>(initialConfigs);
+  const queryClient = useQueryClient();
+
+  // Use TanStack Query for configs
+  const { data: configs = initialConfigs, isLoading } = useQuery(
+    settingsQueryOptions.teesheetConfigs()
+  );
+
   const [selectedConfig, setSelectedConfig] = useState<
     TeesheetConfig | undefined
   >(undefined);
@@ -53,6 +57,41 @@ export function TeesheetSettings({
   const [configToDelete, setConfigToDelete] = useState<
     TeesheetConfig | undefined
   >(undefined);
+
+  // Setup mutations with factory pattern
+  const createMutation = useMutation({
+    ...settingsMutations.createConfig(queryClient),
+    onSuccess: () => {
+      toast.success("Configuration created successfully");
+      handleCloseDialog();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to create configuration");
+    },
+  });
+
+  const updateMutation = useMutation({
+    ...settingsMutations.updateConfig(queryClient),
+    onSuccess: () => {
+      toast.success("Configuration updated successfully");
+      handleCloseDialog();
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update configuration");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    ...settingsMutations.deleteConfig(queryClient),
+    onSuccess: () => {
+      toast.success("Configuration deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setConfigToDelete(undefined);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete configuration");
+    },
+  });
 
   const handleCloseDialog = () => {
     setSelectedConfig(undefined);
@@ -64,133 +103,34 @@ export function TeesheetSettings({
     setIsDialogOpen(true);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!configToDelete) return;
-
-    try {
-      await deleteTeesheetConfig(configToDelete.id);
-      setConfigs(configs.filter((c) => c.id !== configToDelete.id));
-      toast.success("Configuration deleted successfully");
-      setIsDeleteDialogOpen(false);
-      setConfigToDelete(undefined);
-    } catch (error) {
-      toast.error("Failed to delete configuration");
-      console.error(error);
-    }
+    deleteMutation.mutate(configToDelete.id);
   };
 
-  const handleSaveConfig = async (configInput: TeesheetConfigInput) => {
-    try {
-      if (selectedConfig) {
-        // Update existing config
-        const result = await updateTeesheetConfig(
-          selectedConfig.id,
-          configInput,
-        );
-        if (result.success && result.data) {
-          // Keep the existing rules if no new rules are provided
-          const rules = configInput.rules
-            ? configInput.rules.map((rule) => ({
-                ...rule,
-                id: 0, // New rules will get IDs from the database
-                configId: selectedConfig.id,
-                createdAt: new Date(),
-                updatedAt: null,
-                startDate: rule.startDate ? new Date(rule.startDate) : null,
-                endDate: rule.endDate ? new Date(rule.endDate) : null,
-              }))
-            : selectedConfig.rules;
-
-          const baseConfig = {
-            ...result.data,
-            rules,
-            type: configInput.type,
-          };
-
-          const updatedConfig =
-            configInput.type === ConfigTypes.REGULAR
-              ? ({
-                  ...baseConfig,
-                  type: ConfigTypes.REGULAR,
-                  startTime: configInput.startTime!,
-                  endTime: configInput.endTime!,
-                  interval: configInput.interval!,
-                  maxMembersPerBlock: configInput.maxMembersPerBlock!,
-                } as RegularConfig)
-              : ({
-                  ...baseConfig,
-                  type: ConfigTypes.CUSTOM,
-                  templateId: configInput.templateId!,
-                } as CustomConfig);
-
-          const updatedConfigs = configs.map((c) =>
-            c.id === selectedConfig.id ? updatedConfig : c,
-          );
-          setConfigs(updatedConfigs);
-          toast.success("Configuration updated successfully");
-        } else {
-          toast.error(result.error || "Failed to update configuration");
-        }
-      } else {
-        // Create new config logic
-        if (configInput.type === ConfigTypes.REGULAR) {
-          if (
-            !configInput.startTime ||
-            !configInput.endTime ||
-            !configInput.interval ||
-            !configInput.maxMembersPerBlock
-          ) {
-            toast.error("Missing required fields for regular configuration");
-            return;
-          }
-        }
-
-        const result = await createTeesheetConfig(configInput);
-        if (result.success && result.data) {
-          // Convert input rules to full TeesheetConfigRule format
-          const rules = configInput.rules
-            ? configInput.rules.map((rule) => ({
-                ...rule,
-                id: 0,
-                configId: result.data.id,
-                createdAt: new Date(),
-                updatedAt: null,
-                startDate: rule.startDate ? new Date(rule.startDate) : null,
-                endDate: rule.endDate ? new Date(rule.endDate) : null,
-              }))
-            : [];
-
-          const baseConfig = {
-            ...result.data,
-            rules,
-            type: configInput.type,
-          };
-
-          const newConfig =
-            configInput.type === ConfigTypes.REGULAR
-              ? ({
-                  ...baseConfig,
-                  type: ConfigTypes.REGULAR,
-                  startTime: configInput.startTime!,
-                  endTime: configInput.endTime!,
-                  interval: configInput.interval!,
-                  maxMembersPerBlock: configInput.maxMembersPerBlock!,
-                } as RegularConfig)
-              : ({
-                  ...baseConfig,
-                  type: ConfigTypes.CUSTOM,
-                  templateId: configInput.templateId!,
-                } as CustomConfig);
-
-          setConfigs([...configs, newConfig]);
-          toast.success("Configuration created successfully");
-        } else {
-          toast.error(result.error || "Failed to create configuration");
-        }
+  const handleSaveConfig = (configInput: TeesheetConfigInput) => {
+    // Validate required fields for regular config
+    if (configInput.type === ConfigTypes.REGULAR) {
+      if (
+        !configInput.startTime ||
+        !configInput.endTime ||
+        !configInput.interval ||
+        !configInput.maxMembersPerBlock
+      ) {
+        toast.error("Missing required fields for regular configuration");
+        return;
       }
-      handleCloseDialog();
-    } catch (error) {
-      toast.error("An unexpected error occurred");
+    }
+
+    if (selectedConfig) {
+      // Update existing config
+      updateMutation.mutate({
+        id: selectedConfig.id,
+        data: configInput,
+      });
+    } else {
+      // Create new config
+      createMutation.mutate(configInput);
     }
   };
 
@@ -213,6 +153,7 @@ export function TeesheetSettings({
             onClick={() => handleOpenDialog()}
             variant="default"
             className="flex items-center gap-2"
+            disabled={isLoading || createMutation.isPending}
           >
             <Plus className="h-4 w-4" />
             Create New Configuration
@@ -220,8 +161,13 @@ export function TeesheetSettings({
         </CardHeader>
 
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
-            {configs.map((config) => {
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="text-gray-500">Loading configurations...</div>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {configs.map((config) => {
               const isRegularConfig = config.type === ConfigTypes.REGULAR;
               const regularConfig = isRegularConfig
                 ? (config)
@@ -262,6 +208,7 @@ export function TeesheetSettings({
                         variant="outline"
                         size="sm"
                         onClick={() => handleOpenDialog(config)}
+                        disabled={updateMutation.isPending || deleteMutation.isPending}
                       >
                         Edit
                       </Button>
@@ -272,9 +219,9 @@ export function TeesheetSettings({
                           setConfigToDelete(config);
                           setIsDeleteDialogOpen(true);
                         }}
-                        disabled={config.isSystemConfig}
+                        disabled={config.isSystemConfig || deleteMutation.isPending}
                       >
-                        Delete
+                        {deleteMutation.isPending && configToDelete?.id === config.id ? "Deleting..." : "Delete"}
                       </Button>
                     </div>
                   </div>
@@ -309,8 +256,9 @@ export function TeesheetSettings({
                   </div>
                 </div>
               );
-            })}
-          </div>
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 

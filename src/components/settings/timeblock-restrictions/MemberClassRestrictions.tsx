@@ -8,8 +8,9 @@ import { TimeblockRestrictionDialog } from "./TimeblockRestrictionDialog";
 import { type TimeblockRestriction } from "./TimeblockRestrictionsSettings";
 import type { MemberClass } from "~/server/db/schema";
 import toast from "react-hot-toast";
-import { deleteTimeblockRestriction } from "~/server/timeblock-restrictions/actions";
 import { DeleteConfirmationDialog } from "~/components/ui/delete-confirmation-dialog";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { restrictionsMutations } from "~/server/query-options/restrictions-mutation-options";
 
 interface MemberClassRestrictionsProps {
   restrictions: TimeblockRestriction[];
@@ -32,6 +33,8 @@ export function MemberClassRestrictions({
   onDialogClose,
   allMemberClasses = [],
 }: MemberClassRestrictionsProps) {
+  const queryClient = useQueryClient();
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedRestriction, setSelectedRestriction] = useState<
     TimeblockRestriction | undefined
@@ -40,6 +43,19 @@ export function MemberClassRestrictions({
   const [restrictionToDelete, setRestrictionToDelete] = useState<
     TimeblockRestriction | undefined
   >();
+
+  // Setup delete mutation with factory pattern
+  const deleteMutation = useMutation({
+    ...restrictionsMutations.delete(queryClient),
+    onSuccess: () => {
+      toast.success("Member class restriction deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setRestrictionToDelete(undefined);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete restriction");
+    },
+  });
 
   useEffect(() => {
     if (highlightId) {
@@ -68,28 +84,9 @@ export function MemberClassRestrictions({
     setIsDeleteDialogOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = () => {
     if (!restrictionToDelete) return;
-
-    try {
-      const result = await deleteTimeblockRestriction(restrictionToDelete.id);
-
-      // Check if there was an error in the result
-      if (result && "error" in result && result.error) {
-        toast.error(result.error || "Failed to delete restriction");
-        return;
-      }
-
-      // If we get here, the deletion was successful
-      toast.success("Member class restriction deleted successfully");
-      onDelete(restrictionToDelete.id);
-    } catch (error) {
-      console.error("Error deleting restriction:", error);
-      toast.error("Failed to delete restriction");
-    } finally {
-      setIsDeleteDialogOpen(false);
-      setRestrictionToDelete(undefined);
-    }
+    deleteMutation.mutate(restrictionToDelete.id);
   };
 
   const handleSuccess = (restriction: TimeblockRestriction) => {

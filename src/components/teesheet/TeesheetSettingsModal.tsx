@@ -33,14 +33,11 @@ import { Switch } from "~/components/ui/switch";
 import { Textarea } from "~/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Settings, Eye, EyeOff, Dice1, AlertCircle } from "lucide-react";
-import {
-  updateTeesheetConfigForDate,
-  updateLotterySettings,
-  updateTeesheetVisibility,
-} from "~/server/settings/actions";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import type { TeeSheet, TeesheetConfig } from "~/app/types/TeeSheetTypes";
 import type { LotterySettingsType } from "~/server/db/schema";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { settingsMutations } from "~/server/query-options/settings-mutation-options";
 
 const settingsSchema = z.object({
   configId: z.number(),
@@ -69,10 +66,20 @@ export function TeesheetSettingsModal({
   lotterySettings,
   onSuccess,
 }: TeesheetSettingsModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [configChanged, setConfigChanged] = useState(false);
   const [showConfigConfirmation, setShowConfigConfirmation] = useState(false);
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
+
+  // Setup mutations
+  const updateConfigMutation = useMutation(settingsMutations.updateConfigForDate(queryClient));
+  const updateLotteryMutation = useMutation(settingsMutations.updateLotterySettings(queryClient));
+  const updateVisibilityMutation = useMutation(settingsMutations.updateVisibility(queryClient));
+
+  const isLoading =
+    updateConfigMutation.isPending ||
+    updateLotteryMutation.isPending ||
+    updateVisibilityMutation.isPending;
 
   const form = useForm<FormData>({
     resolver: zodResolver(settingsSchema),
@@ -130,54 +137,49 @@ export function TeesheetSettingsModal({
   };
 
   const handleFormSubmit = async (data: FormData) => {
-    setIsLoading(true);
-
     try {
       const promises = [];
 
       // Update configuration if changed
       if (data.configId !== teesheet.configId) {
-        promises.push(updateTeesheetConfigForDate(teesheet.id, data.configId));
+        promises.push(
+          updateConfigMutation.mutateAsync({
+            teesheetId: teesheet.id,
+            configId: data.configId,
+          })
+        );
       }
 
       // Update lottery settings
       promises.push(
-        updateLotterySettings(teesheet.id, {
-          enabled: data.lotteryEnabled,
-          disabledMessage: data.lotteryDisabledMessage,
-        }),
+        updateLotteryMutation.mutateAsync({
+          teesheetId: teesheet.id,
+          settings: {
+            isLotteryEnabled: data.lotteryEnabled,
+            lotteryDisabledMessage: data.lotteryDisabledMessage,
+          },
+        })
       );
 
       // Update visibility settings
       promises.push(
-        updateTeesheetVisibility(
-          teesheet.id,
-          data.isPublic,
-          data.privateMessage,
-        ),
+        updateVisibilityMutation.mutateAsync({
+          teesheetId: teesheet.id,
+          isPublic: data.isPublic,
+          privateMessage: data.privateMessage,
+        })
       );
 
-      const results = await Promise.all(promises);
-
-      // Check if any operation failed
-      const hasFailure = results.some((result) => !result.success);
-
-      if (hasFailure) {
-        const failedResults = results.filter((result) => !result.success);
-        toast.error(
-          failedResults[0]?.error || "Some settings failed to update",
-        );
-        return;
-      }
+      await Promise.all(promises);
 
       toast.success("Teesheet settings updated successfully");
       onSuccess?.();
       onClose();
     } catch (error) {
       console.error("Error updating teesheet settings:", error);
-      toast.error("Failed to update teesheet settings");
-    } finally {
-      setIsLoading(false);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update teesheet settings"
+      );
     }
   };
 

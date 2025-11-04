@@ -25,6 +25,57 @@ import type {
   TeesheetConfig,
 } from "~/app/types/TeeSheetTypes";
 import { ConfigTypes } from "~/app/types/TeeSheetTypes";
+import {
+  getTeesheetConfigs,
+  getCourseInfo,
+  getTemplates,
+  getLotterySettings,
+} from "./data";
+
+// Query actions for client components
+export async function getTeesheetConfigsAction() {
+  try {
+    const configs = await getTeesheetConfigs();
+    return { success: true, data: configs };
+  } catch (error) {
+    console.error("Error fetching teesheet configs:", error);
+    return { success: false, error: "Failed to fetch teesheet configs", data: [] };
+  }
+}
+
+export async function getCourseInfoAction() {
+  try {
+    const info = await getCourseInfo();
+    // Handle the different return types from getCourseInfo
+    if (info && typeof info === 'object' && 'success' in info && !info.success) {
+      return { success: false, error: info.error as string || "Failed to load course info" };
+    }
+    return { success: true, data: info };
+  } catch (error) {
+    console.error("Error fetching course info:", error);
+    return { success: false, error: "Failed to fetch course info" };
+  }
+}
+
+export async function getTemplatesAction() {
+  try {
+    const templates = await getTemplates();
+    return { success: true, data: templates };
+  } catch (error) {
+    console.error("Error fetching templates:", error);
+    return { success: false, error: "Failed to fetch templates", data: [] };
+  }
+}
+
+export async function getLotterySettingsAction(teesheetId: number) {
+  try {
+    const settings = await getLotterySettings(teesheetId);
+    return { success: true, data: settings };
+  } catch (error) {
+    console.error("Error fetching lottery settings:", error);
+    return { success: false, error: "Failed to fetch lottery settings", data: null };
+  }
+}
 
 export async function createTeesheetConfig(data: TeesheetConfigInput) {
   try {
@@ -328,9 +379,6 @@ export async function updateTeesheetConfigForDate(
 
 // Update or create course info
 export async function updateCourseInfo(data: {
-  weatherStatus?: string;
-  forecast?: string;
-  rainfall?: string;
   notes?: string;
 }) {
   const { userId, orgId } = await auth();
@@ -346,11 +394,14 @@ export async function updateCourseInfo(data: {
     });
 
     if (existing) {
-      // Update existing record
+      // Update existing record - clear weather fields
       const updated = await db
         .update(courseInfo)
         .set({
-          ...data,
+          weatherStatus: null,
+          forecast: null,
+          rainfall: null,
+          notes: data.notes,
           lastUpdatedBy: userId,
           updatedAt: new Date(),
         })
@@ -361,13 +412,13 @@ export async function updateCourseInfo(data: {
       revalidatePath("/admin/settings");
       return { success: true };
     } else {
-      // Create new record
+      // Create new record - without weather fields
       const created = await db
         .insert(courseInfo)
         .values({
-          weatherStatus: data.weatherStatus,
-          forecast: data.forecast,
-          rainfall: data.rainfall,
+          weatherStatus: null,
+          forecast: null,
+          rainfall: null,
           notes: data.notes,
           lastUpdatedBy: userId,
         })
