@@ -1,5 +1,5 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -11,9 +11,8 @@ import { Label } from "~/components/ui/label";
 import { Button } from "~/components/ui/button";
 import toast from "react-hot-toast";
 import { NotesEditor } from "./NotesEditor";
-
-// Server actions need to be directly imported in client components
-import { updateCourseInfo } from "~/server/settings/actions";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { settingsMutations } from "~/server/query-options/settings-mutation-options";
 
 type CourseInfoProps = {
   initialData?: {
@@ -23,28 +22,23 @@ type CourseInfoProps = {
 };
 
 export function CourseInfoSettings({ initialData }: CourseInfoProps) {
-  const [isPending, startTransition] = useTransition();
-
+  const queryClient = useQueryClient();
   const [notes, setNotes] = useState(initialData?.notes || "");
+
+  // Setup mutation with factory pattern
+  const updateMutation = useMutation({
+    ...settingsMutations.updateCourseInfo(queryClient),
+    onSuccess: () => {
+      toast.success("Course info saved successfully");
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to save course info");
+    },
+  });
 
   // Save course info
   const saveChanges = () => {
-    startTransition(async () => {
-      try {
-        const result = await updateCourseInfo({
-          notes,
-        });
-
-        if (result.success) {
-          toast.success("Course info saved successfully");
-        } else {
-          toast.error(result.error || "Failed to save course info");
-        }
-      } catch (error) {
-        toast.error("An error occurred while saving");
-        console.error(error);
-      }
-    });
+    updateMutation.mutate({ notes });
   };
 
   return (
@@ -69,10 +63,10 @@ export function CourseInfoSettings({ initialData }: CourseInfoProps) {
           {/* Save Button */}
           <Button
             onClick={saveChanges}
-            disabled={isPending}
+            disabled={updateMutation.isPending}
             className="w-full sm:w-auto"
           >
-            {isPending ? "Saving..." : "Save Changes"}
+            {updateMutation.isPending ? "Saving..." : "Save Changes"}
           </Button>
         </CardContent>
       </Card>

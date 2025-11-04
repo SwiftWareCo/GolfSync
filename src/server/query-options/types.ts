@@ -32,6 +32,7 @@ export type QueryKeyFactory = {
 export type ActionResult<T = unknown> = {
   success: boolean;
   error?: string;
+  message?: string;
   data?: T;
   violations?: any[];
 };

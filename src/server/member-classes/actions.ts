@@ -4,11 +4,46 @@ import { db } from "~/server/db";
 import { memberClasses, members } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { type MemberClassInsert } from "~/server/db/schema";
+import { getMemberClasses, getAllMemberClasses, getMemberClassById } from "./data";
 
 export interface ActionResult {
   success: boolean;
   error?: string;
   data?: any;
+}
+
+// Query actions for client components
+export async function getMemberClassesAction() {
+  try {
+    const classes = await getMemberClasses();
+    return { success: true, data: classes };
+  } catch (error) {
+    console.error("Error fetching member classes:", error);
+    return { success: false, error: "Failed to fetch member classes", data: [] };
+  }
+}
+
+export async function getAllMemberClassesAction() {
+  try {
+    const classes = await getAllMemberClasses();
+    return { success: true, data: classes };
+  } catch (error) {
+    console.error("Error fetching all member classes:", error);
+    return { success: false, error: "Failed to fetch member classes", data: [] };
+  }
+}
+
+export async function getMemberClassByIdAction(id: number) {
+  try {
+    const memberClass = await getMemberClassById(id);
+    if (!memberClass) {
+      return { success: false, error: "Member class not found" };
+    }
+    return { success: true, data: memberClass };
+  } catch (error) {
+    console.error("Error fetching member class:", error);
+    return { success: false, error: "Failed to fetch member class" };
+  }
 }
 
 // Create new member class

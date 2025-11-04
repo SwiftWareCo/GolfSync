@@ -155,10 +155,10 @@ export function TeesheetGrid({
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-      <div className="bg-org-primary/5 border-b border-gray-100 p-4">
-        <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-          <ClockIcon className="text-org-primary h-5 w-5" />
-          Tee Sheet - {formatDateWithDay(date)}
+      <div className="bg-org-primary/5 border-b border-gray-100 p-3 sm:p-4">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900 sm:text-base md:text-lg">
+          <ClockIcon className="text-org-primary h-5 w-5 flex-shrink-0 sm:h-6 sm:w-6" />
+          <span className="min-w-0 flex-1 truncate">Tee Sheet - {formatDateWithDay(date)}</span>
         </h3>
         {config?.disallowMemberBooking && (
           <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
@@ -170,13 +170,13 @@ export function TeesheetGrid({
 
       <div
         ref={timeBlocksContainerRef}
-        className="p-4"
+        className="px-4 pb-4"
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
         aria-live="polite"
       >
         {hasTimeBlocks ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-2">
             {uniqueTimeBlocks.map((timeBlock) => (
               <TimeBlockItem
                 key={timeBlock.id}

@@ -35,10 +35,12 @@ export const queryKeys = {
     byDate: (date: string) => ['paceOfPlay', 'date', date] as const,
   },
 
-  // Restriction queries
+  // Restriction queries (timeblock restrictions)
   restrictions: {
     all: () => ['restrictions'] as const,
     check: (params: any) => ['restrictions', 'check', params] as const,
+    timeblocks: () => ['restrictions', 'timeblocks'] as const,
+    overrides: () => ['restrictions', 'overrides'] as const,
   },
 
   // Config queries
@@ -63,5 +65,22 @@ export const queryKeys = {
   weather: {
     all: () => ['weather'] as const,
     current: () => ['weather', 'current'] as const,
+  },
+
+  // Settings queries
+  settings: {
+    all: () => ['settings'] as const,
+    courseInfo: () => ['settings', 'courseInfo'] as const,
+    teesheetConfigs: () => ['settings', 'teesheetConfigs'] as const,
+    templates: () => ['settings', 'templates'] as const,
+    teesheetVisibility: (teesheetId: number) => ['settings', 'teesheetVisibility', teesheetId] as const,
+    lotterySettings: (teesheetId: number) => ['settings', 'lotterySettings', teesheetId] as const,
+  },
+
+  // Member classes queries
+  memberClasses: {
+    all: () => ['memberClasses'] as const,
+    active: () => ['memberClasses', 'active'] as const,
+    byId: (id: number) => ['memberClasses', 'byId', id] as const,
   },
 } as const;

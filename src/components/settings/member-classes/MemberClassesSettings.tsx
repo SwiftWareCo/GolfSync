@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -35,12 +35,10 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import {
-  createMemberClassAction,
-  updateMemberClassAction,
-  deleteMemberClassAction,
-} from "~/server/member-classes/actions";
 import type { MemberClass } from "~/server/db/schema";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { memberClassesQueryOptions } from "~/server/query-options/member-classes-query-options";
+import { memberClassesMutations } from "~/server/query-options/member-classes-mutation-options";
 
 interface MemberClassForm {
   label: string;
@@ -61,12 +59,16 @@ interface MemberClassesSettingsProps {
 export function MemberClassesSettings({
   initialMemberClasses,
 }: MemberClassesSettingsProps) {
-  const [memberClasses, setMemberClasses] =
-    useState<MemberClass[]>(initialMemberClasses);
+  const queryClient = useQueryClient();
+
+  // Use TanStack Query for member classes
+  const { data: memberClasses = initialMemberClasses, isLoading } = useQuery(
+    memberClassesQueryOptions.all()
+  );
+
   const [showDialog, setShowDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<MemberClass | null>(null);
   const [form, setForm] = useState<MemberClassForm>(initialForm);
-  const [isSaving, setIsSaving] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     memberClass: MemberClass | null;
@@ -75,53 +77,56 @@ export function MemberClassesSettings({
     memberClass: null,
   });
 
-  // Refresh member classes
-  const refreshMemberClasses = async () => {
-    try {
-      const response = await fetch("/api/member-classes");
-      if (response.ok) {
-        const data = await response.json();
-        setMemberClasses(data);
-      }
-    } catch (error) {
-      console.error("Error refreshing member classes:", error);
-    }
-  };
+  // Setup mutations with factory pattern
+  const createMutation = useMutation({
+    ...memberClassesMutations.create(queryClient),
+    onSuccess: () => {
+      toast.success("Member class created successfully");
+      setShowDialog(false);
+      setForm(initialForm);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to create member class");
+    },
+  });
+
+  const updateMutation = useMutation({
+    ...memberClassesMutations.update(queryClient),
+    onSuccess: () => {
+      toast.success("Member class updated successfully");
+      setShowDialog(false);
+      setEditingClass(null);
+      setForm(initialForm);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to update member class");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    ...memberClassesMutations.delete(queryClient),
+    onSuccess: () => {
+      toast.success("Member class deleted successfully");
+      setDeleteDialog({ open: false, memberClass: null });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to delete member class");
+    },
+  });
 
   // Handle form submission
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaving(true);
 
-    try {
-      if (editingClass) {
-        // Update existing class
-        const result = await updateMemberClassAction(editingClass.id, form);
-        if (result.success) {
-          toast.success("Member class updated successfully");
-          refreshMemberClasses();
-          setShowDialog(false);
-          setEditingClass(null);
-          setForm(initialForm);
-        } else {
-          toast.error(result.error || "Failed to update member class");
-        }
-      } else {
-        // Create new class
-        const result = await createMemberClassAction(form);
-        if (result.success) {
-          toast.success("Member class created successfully");
-          refreshMemberClasses();
-          setShowDialog(false);
-          setForm(initialForm);
-        } else {
-          toast.error(result.error || "Failed to create member class");
-        }
-      }
-    } catch (error) {
-      toast.error("An error occurred while saving");
-    } finally {
-      setIsSaving(false);
+    if (editingClass) {
+      // Update existing class
+      updateMutation.mutate({
+        id: editingClass.id,
+        data: form,
+      });
+    } else {
+      // Create new class
+      createMutation.mutate(form);
     }
   };
 
@@ -137,19 +142,8 @@ export function MemberClassesSettings({
   };
 
   // Handle delete
-  const handleDelete = async (memberClass: MemberClass) => {
-    try {
-      const result = await deleteMemberClassAction(memberClass.id);
-      if (result.success) {
-        toast.success("Member class deleted successfully");
-        refreshMemberClasses();
-      } else {
-        toast.error(result.error || "Failed to delete member class");
-      }
-    } catch (error) {
-      toast.error("An error occurred while deleting");
-    }
-    setDeleteDialog({ open: false, memberClass: null });
+  const handleDelete = (memberClass: MemberClass) => {
+    deleteMutation.mutate(memberClass.id);
   };
 
   return (
@@ -300,8 +294,11 @@ export function MemberClassesSettings({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? (
+                <Button
+                  type="submit"
+                  disabled={createMutation.isPending || updateMutation.isPending}
+                >
+                  {(createMutation.isPending || updateMutation.isPending) ? (
                     <>
                       <LoadingSpinner className="mr-2 h-4 w-4" />
                       Saving...

@@ -30,6 +30,19 @@ export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
   useEffect(() => {
     if (member && member.pushNotificationsEnabled === false) {
       const showToast = () => {
+        // Use a unique ID to prevent duplicate toasts
+        const toastId = "push-notification-prompt";
+        
+        // Check if this toast is already showing
+        const existingToasts = document.querySelectorAll('[role="status"]');
+        const isAlreadyShowing = Array.from(existingToasts).some(
+          (toast) => toast.textContent?.includes("Stay updated with course notifications")
+        );
+        
+        if (isAlreadyShowing) {
+          return;
+        }
+
         toast(
           (t) => (
             <div className="flex w-full items-center justify-between">
@@ -114,6 +127,7 @@ export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
             </div>
           ),
           {
+            id: toastId, // Use unique ID to prevent duplicates
             duration: Infinity, // Keep open until user interacts
             position: "top-center",
             style: {
