@@ -29,7 +29,13 @@
     "export-members-for-clerk": "tsx scripts/export-members-for-clerk.ts",
     "import-pace-data": "tsx scripts/import-pace-data-simple.ts",
     "check-name-mapping": "tsx scripts/check-name-mapping.ts",
-    "migrate-member-classes": "tsx scripts/run-migration.ts"
+    "migrate-member-classes": "tsx scripts/run-migration.ts",
+    "backup:all": "tsx scripts/backup-database.ts all",
+    "backup:members": "tsx scripts/backup-database.ts members",
+    "backup:teesheets": "tsx scripts/backup-database.ts teesheets",
+    "backup:lottery": "tsx scripts/backup-database.ts lottery",
+    "backup:charges": "tsx scripts/backup-database.ts charges",
+    "backup:audit": "tsx scripts/backup-database.ts audit"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.14.3",
