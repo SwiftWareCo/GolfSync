@@ -63,6 +63,11 @@ vi.mock('~/lib/lottery-utils', () => ({
   ]),
 }));
 
+// Mock auth helpers
+vi.mock('~/lib/auth-helpers', () => ({
+  requireAdmin: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { db } from '~/server/db';
 
 describe('Lottery Entry Creation', () => {

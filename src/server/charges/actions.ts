@@ -12,6 +12,8 @@ import { type PowerCartAssignmentData } from "~/app/types/ChargeTypes";
 import { revalidatePath } from "next/cache";
 import { formatCalendarDate } from "~/lib/utils";
 import { getFilteredCharges, type ChargeFilters } from "./data";
+import { requireAdmin } from "~/lib/auth-helpers";
+import { positiveIntSchema } from "~/lib/validation-schemas";
 
 // Create power cart charge
 export async function createPowerCartCharge(data: PowerCartAssignmentData) {
@@ -30,7 +32,7 @@ export async function createPowerCartCharge(data: PowerCartAssignmentData) {
 
 // Create general charge
 export async function createGeneralCharge(data: any) {
-
+  await requireAdmin();
   const charge = await db
     .insert(generalCharges)
     .values({
@@ -116,9 +118,10 @@ export async function deletePowerCartCharge(id: number) {
 // Delete a general charge
 export async function deleteGeneralCharge(id: number) {
 
-  await db
-    .delete(generalCharges)
-    .where(eq(generalCharges.id, id));
+  await requireAdmin();
+  const validatedId = positiveIntSchema.parse(id);
+
+  await db.delete(generalCharges).where(eq(generalCharges.id, validatedId));
 
   return { success: true };
 }

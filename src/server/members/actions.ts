@@ -14,6 +14,8 @@ import { searchMembers, getMemberBookingHistory } from "./data";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
 import { formatTime12Hour, formatDate } from "~/lib/dates";
 import { sendNotificationToMember } from "~/server/pwa/actions";
+import { requireAdmin } from "~/lib/auth-helpers";
+import { memberIdSchema } from "~/lib/validation-schemas";
 
 // Time block related functions
 export async function addMemberToTimeBlock(
@@ -140,6 +142,7 @@ export async function createMember(data: {
   handicap?: string;
   bagNumber?: string;
 }) {
+  await requireAdmin();
   // Handle empty date string by converting it to null
   const processedData = {
     ...data,
@@ -156,32 +159,38 @@ export async function createMember(data: {
 export async function updateMember(
   id: number,
   data: {
-    memberNumber: string;
-    firstName: string;
-    lastName: string;
-    username: string;
+    name: string;
     email: string;
-    class: string;
-    gender?: string;
+    phone: string;
+    membershipType: string;
+    membershipNumber: string;
+    joinDate: string;
     dateOfBirth?: string;
     handicap?: string;
     bagNumber?: string;
-  },
+  }
 ) {
+  await requireAdmin();
+  const validatedId = memberIdSchema.parse(id);
+
   // Handle empty date string by converting it to null
   const processedData = {
     ...data,
     dateOfBirth: data.dateOfBirth === "" ? null : data.dateOfBirth,
   };
 
-  await db.update(members).set(processedData).where(eq(members.id, id));
+  await db
+    .update(members)
+    .set(processedData)
+    .where(eq(members.id, validatedId));
 
   revalidatePath("/admin/members");
 }
 
 export async function deleteMember(id: number) {
-  await db.delete(members).where(eq(members.id, id));
-
+  await requireAdmin();
+  const validatedId = memberIdSchema.parse(id);
+  await db.delete(members).where(eq(members.id, validatedId));
   revalidatePath("/admin/members");
 }
 

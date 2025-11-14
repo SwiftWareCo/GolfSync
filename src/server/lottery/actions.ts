@@ -20,6 +20,8 @@ import type {
 } from "~/app/types/LotteryTypes";
 import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
+import { requireAdmin } from "~/lib/auth-helpers";
+import { dateStringSchema } from "~/lib/validation-schemas";
 
 export type ActionResult = {
   success: boolean;
@@ -552,6 +554,9 @@ export async function processLotteryForDate(
   date: string,
   config: TeesheetConfig,
 ): Promise<ActionResult> {
+  await requireAdmin();
+  const validatedDate = dateStringSchema.parse(date);
+
   try {
     const {
       getLotteryEntriesForDate,
@@ -817,10 +822,11 @@ export async function processLotteryForDate(
 export async function finalizeLotteryResults(
   date: string,
 ): Promise<ActionResult> {
+  await requireAdmin();
+  const validatedDate = dateStringSchema.parse(date);
   try {
     const { getLotteryEntriesForDate } = await import("~/server/lottery/data");
-    const entries = await getLotteryEntriesForDate(date);
-
+    const entries = await getLotteryEntriesForDate(validatedDate);
     const memberInserts: any[] = [];
 
     // Create timeBlockMembers records for assigned individual entries
@@ -834,7 +840,7 @@ export async function finalizeLotteryResults(
           memberInserts.push({
             timeBlockId: entry.assignedTimeBlockId,
             memberId: entry.memberId,
-            bookingDate: date,
+            bookingDate: validatedDate,
             bookingTime: timeBlock.startTime,
           });
         }
@@ -860,7 +866,7 @@ export async function finalizeLotteryResults(
             memberInserts.push({
               timeBlockId: assignedTimeBlock.id,
               memberId: memberId,
-              bookingDate: date,
+              bookingDate: validatedDate,
               bookingTime: assignedTimeBlock.startTime,
             });
           }
@@ -1424,17 +1430,19 @@ export async function createTestLotteryEntries(
 export async function clearLotteryEntriesForDate(
   date: string,
 ): Promise<ActionResult> {
+  await requireAdmin();
+  const validatedDate = dateStringSchema.parse(date);
   try {
     // Delete individual entries
     const deletedEntries = await db
       .delete(lotteryEntries)
-      .where(eq(lotteryEntries.lotteryDate, date))
+      .where(eq(lotteryEntries.lotteryDate, validatedDate))
       .returning();
 
     // Delete group entries
     const deletedGroups = await db
       .delete(lotteryGroups)
-      .where(eq(lotteryGroups.lotteryDate, date))
+      .where(eq(lotteryGroups.lotteryDate, validatedDate))
       .returning();
 
     revalidatePath("/admin/lottery");

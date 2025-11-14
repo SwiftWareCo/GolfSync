@@ -31,6 +31,8 @@ import {
   getTemplates,
   getLotterySettings,
 } from "./data";
+import { requireAdmin } from "~/lib/auth-helpers";
+import { positiveIntSchema, teesheetIdSchema } from "~/lib/validation-schemas";
 
 // Query actions for client components
 export async function getTeesheetConfigsAction() {
@@ -208,9 +210,10 @@ export async function updateTeesheetConfig(
 export async function deleteTeesheetConfig(
   configId: number,
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
+  const validatedId = positiveIntSchema.parse(configId);
   try {
-    await db.delete(teesheetConfigs).where(eq(teesheetConfigs.id, configId));
-
+    await db.delete(teesheetConfigs).where(eq(teesheetConfigs.id, validatedId));
     revalidatePath("/settings/teesheet");
     revalidatePath("/settings/teesheet/configuration");
     return { success: true };
@@ -492,12 +495,14 @@ export async function updateLotterySettings(
     disabledMessage?: string;
   },
 ): Promise<{ success: boolean; error?: string }> {
+  await requireAdmin();
+  const validatedTeesheetId = teesheetIdSchema.parse(teesheetId);
   try {
     // Check if lottery settings exist for this teesheet
     const existingSettings = await db
       .select()
       .from(lotterySettings)
-      .where(eq(lotterySettings.teesheetId, teesheetId))
+      .where(eq(lotterySettings.teesheetId, validatedTeesheetId))
       .limit(1);
 
     if (existingSettings.length > 0) {
@@ -511,11 +516,11 @@ export async function updateLotterySettings(
             "Lottery signup is disabled for this date",
           updatedAt: new Date(),
         })
-        .where(eq(lotterySettings.teesheetId, teesheetId));
+        .where(eq(lotterySettings.teesheetId, validatedTeesheetId));
     } else {
       // Create new settings
       await db.insert(lotterySettings).values({
-        teesheetId,
+        teesheetId: validatedTeesheetId,
         enabled: settings.enabled,
         disabledMessage:
           settings.disabledMessage ||
