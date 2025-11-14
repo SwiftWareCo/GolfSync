@@ -1,0 +1,99 @@
+# Load Test: Lottery Processing
+
+# Tests lottery submission and processing with 100+ entries
+
+# Target: Process 100 entries in < 10 seconds
+
+ 
+
+config:
+
+  target: "{{ $processEnvironment.LOAD_TEST_URL }}"
+
+  phases:
+
+    - duration: 30
+
+      arrivalRate: 5
+
+      name: "Submit 150 lottery entries"
+
+  processor: "./test-helpers.js"
+
+  variables:
+
+    lotteryDate: "2025-11-22"
+
+ 
+
+scenarios:
+
+  - name: "Submit Lottery Entry"
+
+    weight: 90
+
+    flow:
+
+      - function: "setAuthHeaders"
+
+      - function: "generateLotteryData"
+
+      - post:
+
+          url: "/api/lottery/submit"
+
+          json:
+
+            lotteryDate: "{{ lotteryDate }}"
+
+            preferredWindow: "{{ preferredWindow }}"
+
+            alternateWindow: "{{ alternateWindow }}"
+
+            memberId: "{{ memberId }}"
+
+          headers:
+
+            Cookie: "{{ authCookie }}"
+
+            Content-Type: "application/json"
+
+          expect:
+
+            - statusCode: 200
+
+            - hasProperty: success
+
+      - think: 1
+
+ 
+
+  - name: "Process Lottery (Admin)"
+
+    weight: 10
+
+    flow:
+
+      - function: "setAuthHeaders"
+
+      - post:
+
+          url: "/api/lottery/process"
+
+          json:
+
+            date: "{{ lotteryDate }}"
+
+          headers:
+
+            Cookie: "{{ adminAuthCookie }}"
+
+            Content-Type: "application/json"
+
+          expect:
+
+            - statusCode: 200
+
+            - durationLessThan: 10000  # Must complete in < 10 seconds
+
+      - think: 5

@@ -933,6 +933,7 @@ export const lotteryEntries = createTable(
     index("lottery_entries_member_id_idx").on(table.memberId),
     index("lottery_entries_lottery_date_idx").on(table.lotteryDate),
     index("lottery_entries_status_idx").on(table.status),
+    index("lottery_entries_date_status_idx").on(table.lotteryDate, table.status), // Composite index for lottery processing
     unique("lottery_entries_member_date_unq").on(
       table.memberId,
       table.lotteryDate,
@@ -974,6 +975,7 @@ export const lotteryGroups = createTable(
     index("lottery_groups_leader_id_idx").on(table.leaderId),
     index("lottery_groups_lottery_date_idx").on(table.lotteryDate),
     index("lottery_groups_status_idx").on(table.status),
+    index("lottery_groups_date_status_idx").on(table.lotteryDate, table.status), // Composite index for group lottery processing
     unique("lottery_groups_leader_date_unq").on(
       table.leaderId,
       table.lotteryDate,
