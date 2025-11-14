@@ -35,7 +35,10 @@
     "backup:teesheets": "tsx scripts/backup-database.ts teesheets",
     "backup:lottery": "tsx scripts/backup-database.ts lottery",
     "backup:charges": "tsx scripts/backup-database.ts charges",
-    "backup:audit": "tsx scripts/backup-database.ts audit"
+    "backup:audit": "tsx scripts/backup-database.ts audit",
+    "test:load": "cd tests/load && ./run-tests.sh",
+    "test:load:quick": "artillery quick --count 10 --num 100 ${LOAD_TEST_URL:-https://golfsync.vercel.app}",
+    "test:load:verify": "LOAD_TEST_DATE=${LOAD_TEST_DATE} node tests/load/test-helpers.js verify-bookings"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.14.3",

@@ -1,0 +1,105 @@
+# Load Test: Teesheet Viewing
+
+# Tests concurrent users viewing teesheets
+
+# Target: 100 concurrent users with < 500ms p95 response time
+
+ 
+
+config:
+
+  target: "{{ $processEnvironment.LOAD_TEST_URL }}"
+
+  phases:
+
+    - duration: 60
+
+      arrivalRate: 2
+
+      name: "Warm up"
+
+    - duration: 120
+
+      arrivalRate: 10
+
+      name: "Ramp to 100 concurrent users"
+
+    - duration: 60
+
+      arrivalRate: 10
+
+      name: "Sustained load"
+
+  processor: "./test-helpers.js"
+
+  variables:
+
+    testDate: "2025-11-20"
+
+ 
+
+scenarios:
+
+  - name: "View Teesheet API"
+
+    weight: 60
+
+    flow:
+
+      - function: "setAuthHeaders"
+
+      - get:
+
+          url: "/api/health"
+
+          expect:
+
+            - statusCode: 200
+
+      - think: 2
+
+      - get:
+
+          url: "/api/teesheet/{{ testDate }}"
+
+          headers:
+
+            Cookie: "{{ authCookie }}"
+
+          capture:
+
+            - json: "$.timeBlocks"
+
+              as: "timeBlocks"
+
+          expect:
+
+            - statusCode: 200
+
+            - hasProperty: timeBlocks
+
+      - think: 5
+
+ 
+
+  - name: "View Teesheet Page"
+
+    weight: 40
+
+    flow:
+
+      - function: "setAuthHeaders"
+
+      - get:
+
+          url: "/admin/teesheets/{{ testDate }}"
+
+          headers:
+
+            Cookie: "{{ authCookie }}"
+
+          expect:
+
+            - statusCode: 200
+
+      - think: 10
