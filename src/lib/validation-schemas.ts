@@ -736,7 +736,7 @@ export function validateFutureDate(date: string): boolean {
   const [year, month, day] = date.split("-").map(Number);
   const inputDate = new Date(year!, month! - 1, day!);
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  inputDate.setHours(0, 0, 0, 0);
   return inputDate >= today;
 }
 
