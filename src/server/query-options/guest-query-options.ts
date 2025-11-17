@@ -1,4 +1,5 @@
-import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
 import type { QueryOptions, MutationOptions, ActionResult } from "./types";
 import {
@@ -48,14 +49,13 @@ export const guestQueryOptions = {
 // Mutation Options
 export const guestMutationOptions = {
   // Create new guest
-  createGuest: (): MutationOptions<
+  createGuest: (queryClient: QueryClient): MutationOptions<
     ActionResult<Guest>,
     Error,
     GuestFormValues
   > => ({
     mutationFn: async (values: GuestFormValues) => createGuest(values),
     onSuccess: (data) => {
-      const queryClient = useQueryClient();
       // Invalidate guest searches to include the new guest in future searches
       queryClient.invalidateQueries({
         queryKey: queryKeys.guests.all(),
@@ -64,7 +64,7 @@ export const guestMutationOptions = {
   }),
 
   // Remove guest (legacy - kept for backward compatibility)
-  removeGuest: (): MutationOptions<
+  removeGuest: (queryClient: QueryClient): MutationOptions<
     ActionResult,
     Error,
     { timeBlockId: number; guestId: number }
@@ -72,7 +72,6 @@ export const guestMutationOptions = {
     mutationFn: async ({ timeBlockId, guestId }) =>
       removeGuestFromTimeBlock(timeBlockId, guestId),
     onSuccess: () => {
-      const queryClient = useQueryClient();
       // Invalidate teesheet queries to reflect the change
       queryClient.invalidateQueries({
         queryKey: queryKeys.teesheets.all(),
