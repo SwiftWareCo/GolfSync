@@ -201,7 +201,6 @@ export function ManageTemplatesDialog({
           throw new Error("Failed to update template");
         }
       }
-
       setEditingTemplate(null);
     } catch (error) {
       console.error("Template save error:", error);

@@ -241,9 +241,16 @@ export function TeesheetConfigDialog({
       // Use the selected template if available, otherwise keep existing templateId
       formData.templateId = selectedTemplate?.id || formData.templateId;
       formData.blocks = selectedTemplate?.blocks || formData.blocks;
-      // Clear schedule rules for custom configs
-      formData.hasScheduleRules = false;
-      formData.rules = [];
+      // Keep schedule rules for custom configs if enabled
+      if (!formData.hasScheduleRules) {
+        formData.rules = [];
+      } else {
+        // Ensure each rule has priority set to 1 if not specified
+        formData.rules = formData.rules.map((rule) => ({
+          ...rule,
+          priority: rule.priority || 1,
+        }));
+      }
     } else {
       // Clear template-related fields for regular configs
       formData.templateId = undefined;
@@ -267,8 +274,8 @@ export function TeesheetConfigDialog({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-5xl p-0">
-          <DialogHeader className="p-6 pb-0">
+        <DialogContent className="max-w-5xl max-h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="p-6 pb-0 shrink-0">
             <DialogTitle className="text-xl font-semibold">
               {existingConfig
                 ? "Edit Teesheet Configuration"
@@ -279,7 +286,8 @@ export function TeesheetConfigDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="p-6 pt-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col overflow-hidden flex-1">
+            <div className="p-6 pt-4 overflow-y-auto flex-1">
             <div className="grid grid-cols-2 gap-8">
               {/* Left Panel - Configuration */}
               <div className="space-y-6">
@@ -454,87 +462,83 @@ export function TeesheetConfigDialog({
                     </div>
                   )}
 
-                  {/* Schedule Rules Toggle - Only show for Regular config */}
-                  {configType === ConfigTypes.REGULAR && (
-                    <>
-                      <div className="flex items-center space-x-2">
-                        <Switch
-                          id="hasScheduleRules"
-                          checked={hasScheduleRules}
-                          onCheckedChange={(checked) =>
-                            setValue("hasScheduleRules", checked)
-                          }
-                        />
-                        <Label htmlFor="hasScheduleRules">
-                          Enable Schedule Rules
-                        </Label>
-                      </div>
+                  {/* Schedule Rules Toggle - Show for both Regular and Custom configs */}
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      id="hasScheduleRules"
+                      checked={hasScheduleRules}
+                      onCheckedChange={(checked) =>
+                        setValue("hasScheduleRules", checked)
+                      }
+                    />
+                    <Label htmlFor="hasScheduleRules">
+                      Enable Schedule Rules
+                    </Label>
+                  </div>
 
-                      {/* Schedule Rules */}
-                      {hasScheduleRules && (
+                  {/* Schedule Rules */}
+                  {hasScheduleRules && (
+                    <div className="space-y-2">
+                      <Label>Schedule Rules</Label>
+                      <div className="space-y-4 rounded-lg border p-4">
                         <div className="space-y-2">
-                          <Label>Schedule Rules</Label>
-                          <div className="space-y-4 rounded-lg border p-4">
-                            <div className="space-y-2">
-                              <Label>Days of Week</Label>
-                              <div className="grid grid-cols-4 gap-2">
-                                {[
-                                  "Sun",
-                                  "Mon",
-                                  "Tue",
-                                  "Wed",
-                                  "Thu",
-                                  "Fri",
-                                  "Sat",
-                                ].map((day, index) => (
-                                  <Button
-                                    key={day}
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className={`w-full ${watch("rules.0.daysOfWeek")?.includes(index) ? "bg-[#1e3a5f] text-white" : ""}`}
-                                    onClick={() => {
-                                      const currentDays =
-                                        watch("rules.0.daysOfWeek") || [];
-                                      if (currentDays.includes(index)) {
-                                        setValue(
-                                          "rules.0.daysOfWeek",
-                                          currentDays.filter(
-                                            (d) => d !== index,
-                                          ),
-                                        );
-                                      } else {
-                                        setValue("rules.0.daysOfWeek", [
-                                          ...currentDays,
-                                          index,
-                                        ]);
-                                      }
-                                    }}
-                                  >
-                                    {day}
-                                  </Button>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Priority (1-10)</Label>
-                              <Input
-                                type="number"
-                                min={1}
-                                max={10}
-                                {...register("rules.0.priority")}
-                                className="w-24"
-                              />
-                              <p className="text-sm text-gray-500">
-                                Higher priority configurations override lower
-                                priority ones
-                              </p>
-                            </div>
+                          <Label>Days of Week</Label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {[
+                              "Sun",
+                              "Mon",
+                              "Tue",
+                              "Wed",
+                              "Thu",
+                              "Fri",
+                              "Sat",
+                            ].map((day, index) => (
+                              <Button
+                                key={day}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className={`w-full ${watch("rules.0.daysOfWeek")?.includes(index) ? "bg-[#1e3a5f] text-white" : ""}`}
+                                onClick={() => {
+                                  const currentDays =
+                                    watch("rules.0.daysOfWeek") || [];
+                                  if (currentDays.includes(index)) {
+                                    setValue(
+                                      "rules.0.daysOfWeek",
+                                      currentDays.filter(
+                                        (d) => d !== index,
+                                      ),
+                                    );
+                                  } else {
+                                    setValue("rules.0.daysOfWeek", [
+                                      ...currentDays,
+                                      index,
+                                    ]);
+                                  }
+                                }}
+                              >
+                                {day}
+                              </Button>
+                            ))}
                           </div>
                         </div>
-                      )}
-                    </>
+
+                        <div className="space-y-2">
+                          <Label>Priority (1-10)</Label>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={10}
+                            {...register("rules.0.priority")}
+                            className="w-24"
+                          />
+                          <p className="text-sm text-gray-500">
+                            Higher priority configurations override lower
+                            priority ones
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   )}
 
                   <div className="flex items-center space-x-2 pt-2">
@@ -556,8 +560,9 @@ export function TeesheetConfigDialog({
                 <TimeBlockPreviewPanel blocks={previewBlocks} />
               </div>
             </div>
+            </div>
 
-            <DialogFooter className="mt-6 flex-row justify-end gap-2">
+            <DialogFooter className="p-6 pt-4 border-t shrink-0 flex-row justify-end gap-2">
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>

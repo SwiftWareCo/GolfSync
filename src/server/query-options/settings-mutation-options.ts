@@ -8,7 +8,12 @@ import {
   updateLotterySettings,
   updateTeesheetConfigForDate,
 } from "~/server/settings/actions";
-import type { TeesheetConfigInput } from "~/app/types/TeeSheetTypes";
+import {
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+} from "~/server/settings/template-actions";
+import type { TeesheetConfigInput, Template } from "~/app/types/TeeSheetTypes";
 import type { QueryClient } from "@tanstack/react-query";
 
 /**
@@ -199,6 +204,89 @@ export const settingsMutations = {
     },
     onError: (error: Error) => {
       console.error("Failed to update config for date:", error);
+    },
+  }),
+
+  /**
+   * Create a new template
+   */
+  createTemplate: (queryClient: QueryClient) => ({
+    mutationFn: async (data: { name: string; type: string; blocks?: any[] }) => {
+      const result = await createTemplate(data.name, data.type, {
+        blocks: data.blocks,
+      });
+      if (!result.success) {
+        throw new Error("Failed to create template");
+      }
+      // Return the created template data
+      return {
+        id: result.id,
+        name: data.name,
+        type: data.type,
+        blocks: data.blocks,
+      };
+    },
+    onSuccess: () => {
+      // Invalidate all template-related queries
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.templates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates.all() });
+    },
+    onError: (error: Error) => {
+      console.error("Failed to create template:", error);
+    },
+  }),
+
+  /**
+   * Update an existing template
+   */
+  updateTemplate: (queryClient: QueryClient) => ({
+    mutationFn: async ({ id, data }: { id: number; data: { name: string; type: string; blocks?: any[] } }) => {
+      const result = await updateTemplate(id, data.name, data.type, {
+        blocks: data.blocks,
+      });
+      if (!result.success) {
+        throw new Error("Failed to update template");
+      }
+      // Return the updated template data
+      return {
+        id,
+        name: data.name,
+        type: data.type,
+        blocks: data.blocks,
+      };
+    },
+    onSuccess: () => {
+      // Invalidate all template-related queries
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.templates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates.all() });
+      // Also invalidate configs since they may reference templates
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.teesheetConfigs() });
+    },
+    onError: (error: Error) => {
+      console.error("Failed to update template:", error);
+    },
+  }),
+
+  /**
+   * Delete a template
+   */
+  deleteTemplate: (queryClient: QueryClient) => ({
+    mutationFn: async (id: number) => {
+      const result = await deleteTemplate(id);
+      if (!result.success) {
+        throw new Error(result.error || "Failed to delete template");
+      }
+      return result;
+    },
+    onSuccess: () => {
+      // Invalidate all template-related queries
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.templates() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.templates.all() });
+      // Also invalidate configs since they may reference templates
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.teesheetConfigs() });
+    },
+    onError: (error: Error) => {
+      console.error("Failed to delete template:", error);
     },
   }),
 };

@@ -8,12 +8,17 @@ import { BagReportDialog } from "./BagReportDialog";
 import { formatTimeStringTo12Hour } from "~/lib/utils";
 
 interface ConfigInfoProps {
-  config: TeesheetConfig;
+  config: TeesheetConfig | null;
   teesheetId: number;
   timeBlocks: TimeBlockWithMembers[];
 }
 
 export function ConfigInfo({ config, timeBlocks }: ConfigInfoProps) {
+  // Handle null config
+  if (!config) {
+    return null;
+  }
+
   // Only show config details for Regular configs
   const isRegularConfig = config.type === "REGULAR";
 

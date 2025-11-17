@@ -10,7 +10,7 @@ import {
   timeBlockFills,
   templates,
 } from "~/server/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 import type {
   TeeSheet,
@@ -44,19 +44,21 @@ export async function createTimeBlocksForTeesheet(
     }
   }
 
-  // Check if blocks already exist (to handle race conditions)
-  const existingBlocks = await db.query.timeBlocks.findMany({
-    where: eq(timeBlocks.teesheetId, teesheetId),
-    limit: 1,
-  });
+  // Check if blocks already exist - if so, return them
+  // This prevents duplicates from concurrent requests
+  const existingBlockCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(timeBlocks)
+    .where(eq(timeBlocks.teesheetId, teesheetId));
 
-  // If blocks already exist, return early (another request beat us to it)
-  if (existingBlocks.length > 0) {
+  const blockCount = Number(existingBlockCount[0]?.count ?? 0);
+
+  if (blockCount > 0) {
     return await getTimeBlocksForTeesheet(teesheetId);
   }
 
-  // Delete existing time blocks for this teesheet (defensive)
-  await db.delete(timeBlocks).where(and(eq(timeBlocks.teesheetId, teesheetId)));
+  // Delete existing time blocks for this teesheet (defensive, should be 0)
+  await db.delete(timeBlocks).where(eq(timeBlocks.teesheetId, teesheetId));
 
   // For custom configurations, fetch the template and create blocks based on it
   if (config.type === ConfigTypes.CUSTOM) {
@@ -166,34 +168,64 @@ export async function getOrCreateTeesheet(
       throw new Error("Failed to retrieve existing teesheet after conflict");
     }
 
-    // For existing teesheets, use the stored config
     teesheet = existingTeesheet;
-    teesheetConfig = existingTeesheet.config as TeesheetConfig;
-  }
 
-  // Check if the teesheet has any time blocks
-  const existingBlocks = await db.query.timeBlocks.findMany({
-    where: eq(timeBlocks.teesheetId, teesheet.id),
-    limit: 1,
-  });
+    // Check if the existing teesheet's config matches the expected config for this date
+    // If not, update the teesheet to use the correct config and regenerate blocks
+    let configChanged = false;
+    if (existingTeesheet.configId !== config.id) {
+      // Update the teesheet to use the correct config
+      const [updatedTeesheet] = await db
+        .update(teesheets)
+        .set({ configId: config.id })
+        .where(eq(teesheets.id, existingTeesheet.id))
+        .returning();
 
-  // If no blocks exist, create them
-  if (existingBlocks.length === 0) {
-    try {
+      if (updatedTeesheet) {
+        teesheet = updatedTeesheet;
+      }
+
+      // Delete old blocks since config changed
+      await db.delete(timeBlocks).where(eq(timeBlocks.teesheetId, existingTeesheet.id));
+
+      // Force recreation of blocks with new config
+      teesheetConfig = config;
+      configChanged = true;
+
+      // Create new blocks immediately
       await createTimeBlocksForTeesheet(teesheet.id, teesheetConfig, formattedDate);
-    } catch (error) {
-      // If time blocks were created by another concurrent request, that's okay
-      // Check again if blocks now exist
-      const blocksAfterError = await db.query.timeBlocks.findMany({
+    } else {
+      // Config matches, use the existing config
+      teesheetConfig = existingTeesheet.config as TeesheetConfig;
+    }
+
+    // Only check for missing blocks if config didn't just change
+    // (if config changed, we already created blocks above)
+    if (!configChanged) {
+      const existingBlocks = await db.query.timeBlocks.findMany({
         where: eq(timeBlocks.teesheetId, teesheet.id),
         limit: 1,
       });
 
-      // Only throw error if blocks still don't exist
-      if (blocksAfterError.length === 0) {
-        throw error;
+      // If no blocks exist, create them
+      if (existingBlocks.length === 0) {
+        try {
+          await createTimeBlocksForTeesheet(teesheet.id, teesheetConfig, formattedDate);
+        } catch (error) {
+          // If time blocks were created by another concurrent request, that's okay
+          // Check again if blocks now exist
+          const blocksAfterError = await db.query.timeBlocks.findMany({
+            where: eq(timeBlocks.teesheetId, teesheet.id),
+            limit: 1,
+          });
+
+          // Only throw error if blocks still don't exist
+          if (blocksAfterError.length === 0) {
+            throw error;
+          }
+          // Otherwise, blocks were created by another request, continue normally
+        }
       }
-      // Otherwise, blocks were created by another request, continue normally
     }
   }
 

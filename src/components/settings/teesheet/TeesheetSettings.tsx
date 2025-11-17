@@ -43,11 +43,7 @@ export function TeesheetSettings({
   templates,
 }: TeesheetSettingsProps) {
   const queryClient = useQueryClient();
-
-  // Use TanStack Query for configs
-  const { data: configs = initialConfigs, isLoading } = useQuery(
-    settingsQueryOptions.teesheetConfigs()
-  );
+  const [configs, setConfigs] = useState<TeesheetConfig[]>(initialConfigs);
 
   const [selectedConfig, setSelectedConfig] = useState<
     TeesheetConfig | undefined
@@ -61,9 +57,15 @@ export function TeesheetSettings({
   // Setup mutations with factory pattern
   const createMutation = useMutation({
     ...settingsMutations.createConfig(queryClient),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Configuration created successfully");
       handleCloseDialog();
+      // Refetch configs
+      const queryFn = settingsQueryOptions.teesheetConfigs().queryFn;
+      if (queryFn) {
+        const result = await queryFn();
+        setConfigs(result);
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to create configuration");
@@ -72,9 +74,15 @@ export function TeesheetSettings({
 
   const updateMutation = useMutation({
     ...settingsMutations.updateConfig(queryClient),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Configuration updated successfully");
       handleCloseDialog();
+      // Refetch configs
+      const queryFn = settingsQueryOptions.teesheetConfigs().queryFn;
+      if (queryFn) {
+        const result = await queryFn();
+        setConfigs(result);
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to update configuration");
@@ -83,10 +91,16 @@ export function TeesheetSettings({
 
   const deleteMutation = useMutation({
     ...settingsMutations.deleteConfig(queryClient),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Configuration deleted successfully");
       setIsDeleteDialogOpen(false);
       setConfigToDelete(undefined);
+      // Refetch configs
+      const queryFn = settingsQueryOptions.teesheetConfigs().queryFn;
+      if (queryFn) {
+        const result = await queryFn();
+        setConfigs(result);
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message || "Failed to delete configuration");
@@ -153,7 +167,7 @@ export function TeesheetSettings({
             onClick={() => handleOpenDialog()}
             variant="default"
             className="flex items-center gap-2"
-            disabled={isLoading || createMutation.isPending}
+            disabled={createMutation.isPending}
           >
             <Plus className="h-4 w-4" />
             Create New Configuration
@@ -161,13 +175,8 @@ export function TeesheetSettings({
         </CardHeader>
 
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="text-gray-500">Loading configurations...</div>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {configs.map((config) => {
+          <div className="grid gap-4 md:grid-cols-2">
+            {configs.map((config) => {
               const isRegularConfig = config.type === ConfigTypes.REGULAR;
               const regularConfig = isRegularConfig
                 ? (config)
@@ -256,9 +265,8 @@ export function TeesheetSettings({
                   </div>
                 </div>
               );
-              })}
-            </div>
-          )}
+            })}
+          </div>
         </CardContent>
       </Card>
 

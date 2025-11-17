@@ -99,7 +99,6 @@ export async function getConfigForDate(date: Date): Promise<TeesheetConfig> {
   await initializeDefaultConfigs();
 
   // Use UTC date for consistent day of week calculation
-
   const dayOfWeek = date.getUTCDay();
   const formattedDate = format(date, "yyyy-MM-dd");
 
@@ -172,9 +171,6 @@ export async function getConfigForDate(date: Date): Promise<TeesheetConfig> {
     });
 
     if (!config) {
-      console.error(
-        "[getConfigForDate] Configuration not found for recurring rule",
-      );
       throw new Error("Configuration not found");
     }
 
@@ -210,10 +206,6 @@ export async function getConfigForDate(date: Date): Promise<TeesheetConfig> {
   );
 
   if (!weekdayConfig) {
-    console.error(
-      "[getConfigForDate] No matching system configuration found for day:",
-      dayOfWeek,
-    );
     throw new Error("No matching system configuration found");
   }
 

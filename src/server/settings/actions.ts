@@ -160,22 +160,14 @@ export async function updateTeesheetConfig(
       throw new Error("Failed to update configuration");
     }
 
-    // If isActive status changed, update all associated rules
-    if (data.isActive !== undefined) {
-      await db
-        .update(teesheetConfigRules)
-        .set({ isActive: data.isActive })
-        .where(eq(teesheetConfigRules.configId, id));
-    }
+    // Update the rules - ALWAYS delete existing rules first, then create new ones if provided
+    // This ensures that if rules are removed, they get deleted from the database
+    await db
+      .delete(teesheetConfigRules)
+      .where(eq(teesheetConfigRules.configId, id));
 
-    // Update the rules if provided
+    // Then create new rules if provided
     if (data.rules && data.rules.length > 0) {
-      // First delete existing rules
-      await db
-        .delete(teesheetConfigRules)
-        .where(eq(teesheetConfigRules.configId, id));
-
-      // Then create new rules
       const rules = await Promise.all(
         data.rules.map((rule) =>
           db
@@ -186,7 +178,7 @@ export async function updateTeesheetConfig(
               startDate: rule.startDate,
               endDate: rule.endDate,
               priority: rule.priority,
-              isActive: data.isActive ?? rule.isActive, // Use config's isActive if provided
+              isActive: data.isActive ?? rule.isActive ?? true,
             })
             .returning(),
         ),
