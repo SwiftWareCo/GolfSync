@@ -18,9 +18,7 @@ export default async function AdminLayout({
   return (
     <div className={GeistSans.variable}>
       <div className="min-h-screen bg-org-secondary">
-        <Navigation
-
-        />
+        <Navigation/>
         <main className="container mx-auto px-4 py-8 pt-24">{children}</main>
       </div>
     </div>
