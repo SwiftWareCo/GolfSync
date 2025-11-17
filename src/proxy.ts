@@ -2,7 +2,6 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/api/cron/update-weather"]);
-const isSignInRoute = createRouteMatcher(["/sign-in(.*)"]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isMemberRoute = createRouteMatcher(["/members(.*)"]);
 const isPaceOfPlayRoute = createRouteMatcher(["/members/pace-of-play(.*)"]);
@@ -15,16 +14,6 @@ export default clerkMiddleware(async (auth, req) => {
     // Check user types using metadata
     const isAdmin = (sessionClaims as any)?.publicMetadata?.isAdmin === true;
     const isMember = (sessionClaims as any)?.publicMetadata?.isMember === true;
-
-    // Redirect authenticated users away from sign-in page
-    if (isSignInRoute(req) && sessionClaims) {
-      if (isAdmin) {
-        return NextResponse.redirect(new URL("/admin", req.url));
-      }
-      if (isMember) {
-        return NextResponse.redirect(new URL("/members", req.url));
-      }
-    }
 
     // Redirect root path based on user role
     if (isRootRoute(req)) {
