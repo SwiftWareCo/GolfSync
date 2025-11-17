@@ -13,6 +13,11 @@ import { getCourseInfo } from "~/server/settings/data";
 import { PageHeader } from "~/components/ui/page-header";
 import { OverridesSettings } from "~/components/settings/overrides/OverridesSettings";
 import { MemberClassesSettings } from "~/components/settings/member-classes/MemberClassesSettings";
+import { NotificationDashboard } from "~/components/admin/notifications/NotificationDashboard";
+import {
+  getPushNotificationStats,
+  getMembersCountByClass,
+} from "~/server/pwa/data";
 
 type CourseInfoType = {
   id?: number;
@@ -55,6 +60,18 @@ export default async function SettingsPage() {
   // Get all member classes (including inactive for admin)
   const allMemberClasses = await getAllMemberClasses();
 
+  // Get notification data
+  const [statsResult, classCountsResult] = await Promise.all([
+    getPushNotificationStats(),
+    getMembersCountByClass([]),
+  ]);
+
+  const notificationStats = statsResult.success ? statsResult.stats! : null;
+  const notificationMemberClasses = memberClasses.map((mc) => mc.label);
+  const notificationClassCounts = classCountsResult.success
+    ? classCountsResult.classCounts || []
+    : [];
+
   return (
     <div className="w-full space-y-6">
       {/* Header */}
@@ -66,7 +83,7 @@ export default async function SettingsPage() {
       {/* Tabbed Interface */}
       <Tabs defaultValue="teesheet" className="w-full">
         <div className="mb-6 flex justify-center">
-          <TabsList className="flex w-full max-w-[1000px]">
+          <TabsList className="flex w-full max-w-[1200px] flex-wrap">
             <TabsTrigger value="teesheet" className="flex-1">
               Teesheet Settings
             </TabsTrigger>
@@ -78,6 +95,9 @@ export default async function SettingsPage() {
             </TabsTrigger>
             <TabsTrigger value="overrides" className="flex-1">
               Override Records
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="flex-1">
+              Notifications
             </TabsTrigger>
             <TabsTrigger value="courseInfo" className="flex-1">
               Course Info
@@ -110,6 +130,15 @@ export default async function SettingsPage() {
         <TabsContent value="overrides" className="mt-4">
           {/* Override Records */}
           <OverridesSettings initialOverrides={timeblockOverrides} />
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-4">
+          {/* Push Notifications */}
+          <NotificationDashboard
+            stats={notificationStats}
+            memberClasses={notificationMemberClasses}
+            classCounts={notificationClassCounts}
+          />
         </TabsContent>
 
         <TabsContent value="courseInfo" className="mt-4">

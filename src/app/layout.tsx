@@ -19,7 +19,7 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider telemetry={false}>
       <html lang="en" className={GeistSans.variable}>
         <body>
           <QueryProvider>

@@ -14,7 +14,6 @@ export default async function Navigation() {
       href: "/admin/charges",
       count: pendingCounts.total > 0 ? pendingCounts.total : undefined,
     },
-    { name: "Notifications", href: "/admin/notifications" },
     { name: "Settings", href: "/admin/settings" },
   ];
 

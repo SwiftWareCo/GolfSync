@@ -60,17 +60,17 @@ const NavigationClient = ({
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`relative rounded-full px-6 py-2.5 text-sm font-medium transition-all duration-200 ${
+                      className={`relative flex items-center whitespace-nowrap rounded-full px-6 py-2.5 text-sm font-medium transition-all duration-200 ${
                         isActive
                           ? "bg-white/20 text-white shadow-lg"
                           : "text-white/80 hover:bg-white/15 hover:text-white"
                       }`}
                     >
-                      {item.name}
+                      <span>{item.name}</span>
                       {item.count !== undefined && item.count > 0 && (
                         <Badge
                           variant="secondary"
-                          className={`-mr-1 ml-2 transition-colors ${
+                          className={`ml-2 shrink-0 transition-colors ${
                             isActive
                               ? "bg-white/30 text-white"
                               : "bg-white/20 text-white"
