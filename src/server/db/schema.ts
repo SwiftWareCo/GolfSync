@@ -1163,3 +1163,11 @@ export type TimeblockGuestInsert = typeof timeBlockGuests.$inferInsert;
 
 export type TimeblockMember = typeof timeBlockMembers.$inferSelect;
 export type TimeblockMemberInsert = typeof timeBlockMembers.$inferInsert;
+
+export type LotterySettings = typeof lotterySettings.$inferSelect;
+
+export type Guest = typeof guests.$inferSelect;
+export type GuestInsert = typeof guests.$inferInsert;
+
+export type Member = typeof members.$inferSelect;
+export type MemberInsert = typeof members.$inferInsert;

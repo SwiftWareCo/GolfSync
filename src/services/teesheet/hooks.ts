@@ -7,7 +7,7 @@ export function useTeesheet(date: string) {
   return useQuery({
     queryKey: teesheetKeys.detail(date),
     queryFn: () => getTeesheet(date),
-    refetchInterval: 30000, // Poll every 30 seconds
+    refetchInterval: 15000, 
   });
 }
 

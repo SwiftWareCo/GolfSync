@@ -5,7 +5,8 @@ export async function getTeesheet(date: string) {
   if (!response.ok) {
     throw new Error("Failed to fetch teesheet");
   }
-  return response.json();
+  const result = await response.json()
+  return result.data;
 }
 
 export async function populateTeesheet(teesheetId: number, date: string) {

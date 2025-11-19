@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,9 +7,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
-import { type Member } from "~/app/types/MemberTypes";
-import { type TimeBlockMemberView } from "~/app/types/TeeSheetTypes";
-import { type TimeBlockGuest } from "~/app/types/GuestTypes";
+import { type Member, type Guest } from "~/server/db/schema";
 import {
   User,
   Mail,
@@ -26,33 +23,56 @@ import {
 import { useClerk } from "@clerk/nextjs";
 import { NotificationPreferences } from "./NotificationPreferences";
 
-type AccountData = Member | TimeBlockMemberView | TimeBlockGuest | null;
+// Full TimeBlockMember with nested member relation
+type TimeBlockMemberFull = {
+  id: number;
+  timeBlockId: number;
+  memberId: number;
+  checkedIn: boolean;
+  bookingDate: string;
+  bookingTime: string;
+  bagNumber: string | null;
+  createdAt: Date;
+  member: Member;
+};
+
+// Full TimeBlockGuest with nested guest and invitedByMember relations
+type TimeBlockGuestFull = {
+  id: number;
+  timeBlockId: number;
+  guestId: number;
+  invitedByMemberId: number;
+  checkedIn: boolean;
+  bookingDate: string;
+  bookingTime: string;
+  createdAt: Date;
+  guest: Guest;
+  invitedByMember: Member;
+};
+
+type AccountData = TimeBlockMemberFull | TimeBlockGuestFull;
 
 interface AccountDialogProps {
-  member: AccountData;
+  player: AccountData;
   isOpen: boolean;
   onClose: () => void;
-  isMember: boolean;
+  accessFromMember?: boolean;
 }
 
 // Type guard functions
-const isMemberData = (data: AccountData): data is Member => {
-  return data !== null;
+const isMember = (data: AccountData): data is TimeBlockMemberFull => {
+  return "member" in data && data.member !== undefined;
 };
 
-const isTimeBlockMember = (data: AccountData): data is TimeBlockMemberView => {
-  return data !== null && "username" in data;
-};
-
-const isGuest = (data: AccountData): data is TimeBlockGuest => {
-  return data !== null && "invitedByMember" in data;
+const isGuest = (data: AccountData): data is TimeBlockGuestFull => {
+  return "guest" in data && data.guest !== undefined;
 };
 
 export function AccountDialog({
-  member,
+  player,
   isOpen,
   onClose,
-  isMember,
+  accessFromMember,
 }: AccountDialogProps) {
   const { signOut } = useClerk();
 
@@ -62,10 +82,8 @@ export function AccountDialog({
     });
   };
 
-  if (!member) return null;
-
-  const isGuestAccount = isGuest(member);
-  const isMemberAccount = isMemberData(member) || isTimeBlockMember(member);
+  const isGuestAccount = isGuest(player);
+  const isMemberAccount = isMember(player);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -92,16 +110,18 @@ export function AccountDialog({
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-gray-600">Name</p>
                     <p className="truncate text-sm font-semibold sm:text-base">
-                      {member.firstName} {member.lastName}
+                      {isMemberAccount
+                        ? `${player.member.firstName} ${player.member.lastName}`
+                        : `${player.guest.firstName} ${player.guest.lastName}`}
                     </p>
                   </div>
                 </div>
 
                 {/* Member-specific fields */}
-                {isMemberAccount && !isGuestAccount && (
+                {isMemberAccount && (
                   <>
                     {/* Username */}
-                    {"username" in member && (
+                    {player.member.username && (
                       <div className="flex items-center gap-2">
                         <Hash className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -109,14 +129,14 @@ export function AccountDialog({
                             Username
                           </p>
                           <p className="truncate text-sm font-medium">
-                            {member.username}
+                            {player.member.username}
                           </p>
                         </div>
                       </div>
                     )}
 
                     {/* Email */}
-                    {"email" in member && (
+                    {player.member.email && (
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -124,14 +144,14 @@ export function AccountDialog({
                             Email
                           </p>
                           <p className="truncate text-sm font-medium">
-                            {member.email}
+                            {player.member.email}
                           </p>
                         </div>
                       </div>
                     )}
 
                     {/* Member Number */}
-                    {"memberNumber" in member && (
+                    {player.member.memberNumber && (
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -139,14 +159,14 @@ export function AccountDialog({
                             Member #
                           </p>
                           <p className="text-sm font-medium">
-                            {member.memberNumber}
+                            {player.member.memberNumber}
                           </p>
                         </div>
                       </div>
                     )}
 
                     {/* Member Class */}
-                    {"class" in member && member.class && (
+                    {player.member.class && (
                       <div className="flex items-center gap-2">
                         <Trophy className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -154,8 +174,70 @@ export function AccountDialog({
                             Member Class
                           </p>
                           <Badge variant="outline" className="mt-1 text-xs">
-                            {member.class}
+                            {player.member.class}
                           </Badge>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Gender */}
+                    {player.member.gender && (
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-600">
+                            Gender
+                          </p>
+                          <p className="text-sm font-medium">
+                            {player.member.gender}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Date of Birth */}
+                    {player.member.dateOfBirth && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-600">
+                            Date of Birth
+                          </p>
+                          <p className="text-sm font-medium">
+                            {new Date(
+                              player.member.dateOfBirth,
+                            ).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Handicap */}
+                    {player.member.handicap && (
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-600">
+                            Handicap
+                          </p>
+                          <Badge variant="secondary" className="mt-1 text-xs">
+                            {player.member.handicap}
+                          </Badge>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bag Number */}
+                    {player.member.bagNumber && (
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-600">
+                            Bag #
+                          </p>
+                          <p className="text-sm font-medium">
+                            {player.member.bagNumber}
+                          </p>
                         </div>
                       </div>
                     )}
@@ -166,7 +248,7 @@ export function AccountDialog({
                 {isGuestAccount && (
                   <>
                     {/* Email */}
-                    {member.email && (
+                    {player.guest.email && (
                       <div className="flex items-center gap-2">
                         <Mail className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -174,27 +256,29 @@ export function AccountDialog({
                             Email
                           </p>
                           <p className="truncate text-sm font-medium">
-                            {member.email}
+                            {player.guest.email}
                           </p>
                         </div>
                       </div>
                     )}
 
                     {/* Phone */}
-                    {member.phone && (
+                    {player.guest.phone && (
                       <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-medium text-gray-600">
                             Phone
                           </p>
-                          <p className="text-sm font-medium">{member.phone}</p>
+                          <p className="text-sm font-medium">
+                            {player.guest.phone}
+                          </p>
                         </div>
                       </div>
                     )}
 
                     {/* Invited By */}
-                    {member.invitedByMember && (
+                    {player.invitedByMember && (
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -202,10 +286,10 @@ export function AccountDialog({
                             Invited By
                           </p>
                           <p className="text-sm font-medium">
-                            {member.invitedByMember.firstName}{" "}
-                            {member.invitedByMember.lastName}
+                            {player.invitedByMember.firstName}{" "}
+                            {player.invitedByMember.lastName}
                             <span className="ml-1 text-xs text-gray-500">
-                              (#{member.invitedByMember.memberNumber})
+                              (#{player.invitedByMember.memberNumber})
                             </span>
                           </p>
                         </div>
@@ -217,86 +301,14 @@ export function AccountDialog({
             </CardContent>
           </Card>
 
-          {/* Additional Info Card - Only for members with extra data */}
-          {isMemberAccount && !isGuestAccount && (
-            <Card>
-              <CardContent className="pt-3 pb-3">
-                <h3 className="mb-2 text-sm font-medium text-gray-900">
-                  Additional Information
-                </h3>
-                <div className="space-y-3">
-                  {/* Gender */}
-                  {"gender" in member && member.gender && (
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-gray-600">
-                          Gender
-                        </p>
-                        <p className="text-sm font-medium">{member.gender}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Date of Birth */}
-                  {"dateOfBirth" in member && member.dateOfBirth && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-gray-600">
-                          Date of Birth
-                        </p>
-                        <p className="text-sm font-medium">
-                          {new Date(member.dateOfBirth).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Handicap */}
-                  {"handicap" in member && member.handicap && (
-                    <div className="flex items-center gap-2">
-                      <Trophy className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-gray-600">
-                          Handicap
-                        </p>
-                        <Badge variant="secondary" className="mt-1 text-xs">
-                          {member.handicap}
-                        </Badge>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Bag Number */}
-                  {"bagNumber" in member && member.bagNumber && (
-                    <div className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-gray-600">
-                          Bag #
-                        </p>
-                        <p className="text-sm font-medium">
-                          {member.bagNumber}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Notification Preferences - Only for members */}
-          {isMember && isMemberAccount && !isGuestAccount && (
-            <NotificationPreferences />
-          )}
+          {/* Notification Preferences - Only for players */}
+          {isMemberAccount && accessFromMember && <NotificationPreferences />}
 
           {/* Action Buttons */}
           <div className="sticky bottom-0 flex justify-between bg-white pt-2">
             <div className="flex gap-2">
-              {/* Sign Out Button - Only for members */}
-              {isMember && (
+              {/* Sign Out Button - Only for players */}
+              {isMemberAccount && accessFromMember && (
                 <Button
                   variant="outline"
                   onClick={handleSignOut}

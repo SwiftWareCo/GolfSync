@@ -164,10 +164,7 @@ export async function replaceTimeBlocks(
   }
 }
 
-/**
- * Server action to fetch teesheet data for client-side navigation
- * This can be called from client components with SWR
- */
+// TO BE REMOVED
 export async function getTeesheetDataAction(
   dateString: string,
 ): Promise<TeesheetDataResult> {
@@ -243,7 +240,6 @@ export async function removeTimeBlockMember(
       };
     }
 
-    revalidatePath(`/teesheet`);
     return { success: true };
   } catch (error) {
     console.error("Error removing time block member:", error);
@@ -277,7 +273,6 @@ export async function removeTimeBlockGuest(
       };
     }
 
-    revalidatePath(`/teesheet`);
     return { success: true };
   } catch (error) {
     console.error("Error removing time block guest:", error);

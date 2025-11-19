@@ -12,13 +12,14 @@ import {
   type TimeblockMember,
   type TimeblockGuest,
   type TimeblockFill,
+  type LotterySettings,
 } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
 
 import { type TemplateBlock } from "~/app/types/TeeSheetTypes";
 import { getConfigForDate } from "~/server/settings/data";
 import { generateTimeBlocks } from "~/lib/utils";
-import { getDateForDB, parseDate } from "~/lib/dates";
+import { parseDate } from "~/lib/dates";
 
 type TimeBlockWithRelations = Timeblocks & {
   timeBlockMembers: TimeblockMember[];
@@ -94,6 +95,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
   teesheet: Teesheet;
   config: TeesheetConfig;
   timeBlocks: TimeBlockWithRelations[];
+  lotterySettings: LotterySettings | null;
 }> {
   // 1. Check if teesheet exists WITH timeblocks already loaded
   const existingTeesheet = await db.query.teesheets.findFirst({
@@ -110,6 +112,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
           paceOfPlay: true,
         },
       },
+      lotterySettings: true,
     },
   });
 
@@ -119,6 +122,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
       teesheet: existingTeesheet,
       config: existingTeesheet.config as TeesheetConfig,
       timeBlocks: existingTeesheet.timeBlocks as TimeBlockWithRelations[],
+      lotterySettings: existingTeesheet.lotterySettings,
     };
   } else {
     const date = parseDate(dateString);
@@ -146,6 +150,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
       teesheet: newTeesheet,
       config,
       timeBlocks: hydratedBlocks,
+      lotterySettings: null,
     };
   }
 }
