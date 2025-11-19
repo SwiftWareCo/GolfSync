@@ -700,12 +700,6 @@ export async function populateTimeBlocksWithRandomMembers(
 
     await Promise.all(promises);
 
-    // Revalidate the page to show the new data
-    revalidatePath(`/admin`);
-    revalidatePath(`/admin/pace-of-play`);
-    revalidatePath(`/admin/pace-of-play/turn`);
-    revalidatePath(`/admin/pace-of-play/finish`);
-
     return {
       success: true,
       message: `Successfully populated timeblocks with random members`,

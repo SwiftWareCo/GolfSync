@@ -40,7 +40,8 @@ import type {
   TimeWindow,
   LotteryEntryFormData,
 } from "~/app/types/LotteryTypes";
-import type { TeesheetConfig, FillType } from "~/app/types/TeeSheetTypes";
+import type { FillType } from "~/app/types/TeeSheetTypes";
+import { TeesheetConfig } from "~/server/db/schema";
 import { FillTypes } from "~/app/types/TeeSheetTypes";
 import {
   calculateDynamicTimeWindows,
@@ -80,7 +81,9 @@ export function AdminLotteryEntryForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [organizer, setOrganizer] = useState<SearchMember | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<SearchMember[]>([]);
-  const [fills, setFills] = useState<Array<{ id: string; fillType: FillType; customName?: string }>>([]);
+  const [fills, setFills] = useState<
+    Array<{ id: string; fillType: FillType; customName?: string }>
+  >([]);
 
   // Calculate dynamic time windows based on config
   const timeWindows = calculateDynamicTimeWindows(config);
@@ -202,7 +205,13 @@ export function AdminLotteryEntryForm({
         preferredWindow: data.preferredWindow as TimeWindow,
         alternateWindow: data.alternateWindow as TimeWindow | undefined,
         memberIds: data.memberIds,
-        fills: fills.length > 0 ? fills.map(f => ({ fillType: f.fillType, customName: f.customName })) : undefined,
+        fills:
+          fills.length > 0
+            ? fills.map((f) => ({
+                fillType: f.fillType,
+                customName: f.customName,
+              }))
+            : undefined,
       };
 
       const result = await submitLotteryEntry(organizer.id, formData);
@@ -386,8 +395,10 @@ export function AdminLotteryEntryForm({
                       <div className="flex-1">
                         <div className="font-medium">
                           {fill.fillType === FillTypes.GUEST && "Guest Fill"}
-                          {fill.fillType === FillTypes.RECIPROCAL && "Reciprocal Fill"}
-                          {fill.fillType === FillTypes.CUSTOM && (fill.customName || "Custom Fill")}
+                          {fill.fillType === FillTypes.RECIPROCAL &&
+                            "Reciprocal Fill"}
+                          {fill.fillType === FillTypes.CUSTOM &&
+                            (fill.customName || "Custom Fill")}
                         </div>
                         <div className="text-sm text-gray-500">Fill</div>
                       </div>
@@ -409,7 +420,10 @@ export function AdminLotteryEntryForm({
                       <div className="text-sm font-medium text-gray-700">
                         Add Fills (Optional)
                       </div>
-                      <LotteryFillSelector onAddFill={addFill} isDisabled={totalPlayers >= 4} />
+                      <LotteryFillSelector
+                        onAddFill={addFill}
+                        isDisabled={totalPlayers >= 4}
+                      />
                     </div>
                   )}
                 </div>
@@ -566,8 +580,13 @@ interface LotteryFillSelectorProps {
   isDisabled: boolean;
 }
 
-function LotteryFillSelector({ onAddFill, isDisabled }: LotteryFillSelectorProps) {
-  const [selectedFillType, setSelectedFillType] = useState<FillType>(FillTypes.GUEST);
+function LotteryFillSelector({
+  onAddFill,
+  isDisabled,
+}: LotteryFillSelectorProps) {
+  const [selectedFillType, setSelectedFillType] = useState<FillType>(
+    FillTypes.GUEST,
+  );
   const [customFillName, setCustomFillName] = useState("");
 
   const handleAddFill = () => {
@@ -578,7 +597,7 @@ function LotteryFillSelector({ onAddFill, isDisabled }: LotteryFillSelectorProps
 
     onAddFill(
       selectedFillType,
-      selectedFillType === FillTypes.CUSTOM ? customFillName : undefined
+      selectedFillType === FillTypes.CUSTOM ? customFillName : undefined,
     );
 
     // Reset form
@@ -615,7 +634,10 @@ function LotteryFillSelector({ onAddFill, isDisabled }: LotteryFillSelectorProps
       <Button
         type="button"
         onClick={handleAddFill}
-        disabled={isDisabled || (selectedFillType === FillTypes.CUSTOM && !customFillName.trim())}
+        disabled={
+          isDisabled ||
+          (selectedFillType === FillTypes.CUSTOM && !customFillName.trim())
+        }
         variant="outline"
         size="sm"
         className="w-full"

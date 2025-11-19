@@ -22,10 +22,11 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { BagReportDialog } from "~/components/settings/teesheet/BagReportDialog";
-import type { Template } from "~/app/types/TeeSheetTypes";
 import type { TeesheetConfig } from "~/server/db/schema";
 import { TeesheetSettingsModal } from "../TeesheetSettingsModal";
 import type { Teesheet } from "~/server/db/schema";
+import { AdminLotteryEntryModal } from "~/components/lottery/AdminLotteryEntryModal";
+import { usePopulateTeesheet } from "~/services/teesheet/hooks";
 
 interface SidebarActionsProps {
   teesheet: Teesheet;
@@ -50,6 +51,9 @@ export function SidebarActions({
   // Dialog states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBagReportOpen, setIsBagReportOpen] = useState(false);
+  const [isLotteryEntryModalOpen, setIsLotteryEntryModalOpen] = useState(false);
+
+  const populateMutation = usePopulateTeesheet();
 
   const handleReturnToToday = () => {
     router.push(`/admin/${today}`);
@@ -60,7 +64,7 @@ export function SidebarActions({
   };
 
   const handleCreateEntry = () => {
-    router.push(`/admin/lottery/${dateString}`);
+    setIsLotteryEntryModalOpen(true);
   };
 
   const handleTurnCheckIn = () => {
@@ -76,21 +80,19 @@ export function SidebarActions({
     console.log("Two-day view");
   };
 
-  const handleAutoPopulate = () => {
-    // TODO: Implement auto-populate
-    console.log("Auto-populate");
+  const handleAutoPopulate = async () => {
+    populateMutation.mutate({ teesheetId: teesheet.id, date: dateString });
   };
-  
 
   const handleSettings = () => {
     setIsSettingsOpen(true);
   };
 
   const buttonLabelClasses =
-    "text-sm font-medium text-gray-700 opacity-0 max-w-0 overflow-hidden whitespace-nowrap transition-all duration-200 group-hover:opacity-100 group-hover:max-w-xs group-hover:ml-2";
+    "text-sm font-medium opacity-0 max-w-0 overflow-hidden whitespace-nowrap transition-all duration-200 group-hover:opacity-100 group-hover:max-w-xs group-hover:ml-2";
 
   const sidebarButtonClasses =
-    "w-full h-10 flex items-center justify-center rounded-md text-gray-600 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-org-primary focus-visible:ring-offset-2 overflow-hidden px-0 group-hover:justify-start group-hover:px-3";
+    "w-full hover:bg-org-primary! hover:text-white! h-10 flex items-center justify-center rounded-md text-gray-600 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-org-primary focus-visible:ring-offset-2 overflow-hidden px-0 group-hover:justify-start group-hover:px-3 ";
 
   return (
     <>
@@ -172,9 +174,12 @@ export function SidebarActions({
           onClick={handleAutoPopulate}
           title="Auto-Populate"
           className={sidebarButtonClasses}
+          disabled={populateMutation.isPending}
         >
           <Zap className="h-5 w-5 shrink-0" />
-          <span className={buttonLabelClasses}>Auto</span>
+          <span className={buttonLabelClasses}>
+            {populateMutation.isPending ? "Populating..." : "Auto"}
+          </span>
         </Button>
 
         {/* Bag Report */}
@@ -215,6 +220,13 @@ export function SidebarActions({
           />
         </DialogContent>
       </Dialog>
+
+      <AdminLotteryEntryModal
+        open={isLotteryEntryModalOpen}
+        onOpenChange={setIsLotteryEntryModalOpen}
+        teesheet={teesheet}
+        config={config}
+      />
 
       <BagReportDialog
         timeBlocks={timeBlocks}

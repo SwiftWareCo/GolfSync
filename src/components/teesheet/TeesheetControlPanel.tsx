@@ -28,8 +28,8 @@ import {
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import { updateTeesheetConfigForDate } from "~/server/settings/actions";
 import toast from "react-hot-toast";
-import type { TeeSheet, TeesheetConfig } from "~/app/types/TeeSheetTypes";
-import { AdminLotteryEntryForm } from "~/components/lottery/AdminLotteryEntryForm";
+import type { Teesheet, TeesheetConfig } from "~/server/db/schema";
+import { AdminLotteryEntryModal } from "~/components/lottery/AdminLotteryEntryModal";
 import { TeesheetSettingsModal } from "./TeesheetSettingsModal";
 import { getBCToday, formatDate, parseDate } from "~/lib/dates";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,7 +41,7 @@ const isDev =
   process.env.NODE_ENV === "production";
 
 interface TeesheetControlPanelProps {
-  teesheet: TeeSheet;
+  teesheet: Teesheet;
   availableConfigs: TeesheetConfig[];
   lotterySettings?: any;
   isAdmin?: boolean;
@@ -74,7 +74,8 @@ export function TeesheetControlPanel({
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   // Setup populate mutation with factory pattern
-  const mutationOptions = teesheetMutationOptions.populateTimeblocks(queryClient);
+  const mutationOptions =
+    teesheetMutationOptions.populateTimeblocks(queryClient);
   const populateMutation = useMutation({
     ...mutationOptions,
     onSuccess: (result, variables) => {
@@ -94,7 +95,6 @@ export function TeesheetControlPanel({
       toast.error(error.message || "Failed to populate timeblocks");
     },
   });
-
 
   const handleConfirmConfigChange = async () => {
     if (!pendingConfigId) return;
@@ -244,7 +244,9 @@ export function TeesheetControlPanel({
             className="bg-yellow-50 shadow-sm hover:bg-yellow-100 hover:text-yellow-800"
           >
             <Bug className="mr-2 h-4 w-4" />
-            {populateMutation.isPending ? "Populating..." : "Auto-Populate (Debug)"}
+            {populateMutation.isPending
+              ? "Populating..."
+              : "Auto-Populate (Debug)"}
           </Button>
         )}
       </div>
@@ -260,35 +262,23 @@ export function TeesheetControlPanel({
         Teesheet Settings
       </Button>
 
-      {/* Admin Lottery Entry Dialog */}
-      <Dialog
-        open={showAdminEntryDialog}
-        onOpenChange={setShowAdminEntryDialog}
-      >
-        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-          <DialogHeader className="sr-only">
-            <DialogTitle>Create Lottery Entry</DialogTitle>
-            <DialogDescription>
-              Create a lottery entry for any member
-            </DialogDescription>
-          </DialogHeader>
-          {(() => {
-            const currentConfig = availableConfigs.find(
-              (c) => c.id === teesheet.configId,
-            );
-            if (!currentConfig) return null;
+      {/* Admin Lottery Entry Modal */}
+      {(() => {
+        const currentConfig = availableConfigs.find(
+          (c) => c.id === teesheet.configId,
+        );
+        if (!currentConfig) return null;
 
-            return (
-              <AdminLotteryEntryForm
-                lotteryDate={teesheet.date}
-                config={currentConfig}
-                onSuccess={() => setShowAdminEntryDialog(false)}
-                onCancel={() => setShowAdminEntryDialog(false)}
-              />
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+        return (
+          <AdminLotteryEntryModal
+            open={showAdminEntryDialog}
+            onOpenChange={setShowAdminEntryDialog}
+            teesheet={teesheet}
+            config={currentConfig}
+            onSuccess={() => setShowAdminEntryDialog(false)}
+          />
+        );
+      })()}
 
       {/* Configuration Change Confirmation Dialog */}
       <ConfirmationDialog

@@ -2,6 +2,7 @@
 
 import { Timeblocks } from "~/server/db/schema";
 import { formatTime12Hour } from "~/lib/dates";
+import { useTeesheet } from "~/services/teesheet/hooks";
 
 interface TeesheetTableProps {
   teesheetId: number;
@@ -10,8 +11,19 @@ interface TeesheetTableProps {
 }
 
 export function TeesheetTable({
-  TimeBlocks,
+  teesheetId,
+  dateString,
+  TimeBlocks: initialTimeBlocks,
 }: TeesheetTableProps) {
+  const { data: queryResult } = useTeesheet(dateString);
+
+  // Use the fresh data from the query if available, otherwise fall back to initial server props
+  const timeBlocks =
+    queryResult?.success && queryResult.data?.timeBlocks
+      ? queryResult.data.timeBlocks
+      : initialTimeBlocks;
+
+  console.log(timeBlocks);
   return (
     <div className="rounded-lg bg-white shadow">
       <div className="rounded-lg border shadow">
@@ -28,14 +40,16 @@ export function TeesheetTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {TimeBlocks.map((block) => (
+            {timeBlocks.map((block: any) => (
               <tr key={block.id} className="transition-colors hover:bg-gray-50">
                 <td className="px-3 py-3 text-sm font-medium whitespace-nowrap text-gray-900">
                   {formatTime12Hour(block.startTime)}
                 </td>
                 <td className="px-3 py-3 text-sm text-gray-600">
                   <div className="text-gray-400 italic">
-                    No players assigned yet
+                    {block.members && block.members.length > 0
+                      ? `${block.members.length} players assigned`
+                      : "No players assigned yet"}
                   </div>
                 </td>
                 <td className="px-2 py-3 text-center">
