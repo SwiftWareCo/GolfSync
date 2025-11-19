@@ -1,5 +1,5 @@
 import "server-only";
-import { getOrCreateTeesheet } from "~/server/teesheet/data";
+import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { getTimeBlocksForTeesheet } from "~/server/teesheet/data";
 import { db } from "~/server/db";
 import { timeBlockMembers, members, lotterySettings } from "~/server/db/schema";
@@ -26,7 +26,7 @@ export async function getMemberTeesheetData(date: Date, id: string) {
   const member = await getMemberData(id);
 
   // Get or create teesheet for the date
-  const { teesheet, config } = await getOrCreateTeesheet(date);
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
 
   // Get time blocks with all members
   const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
@@ -53,7 +53,7 @@ export async function getMemberTeesheet(date: Date) {
   const member = await getMemberData();
 
   // Get or create teesheet for the date
-  const { teesheet, config } = await getOrCreateTeesheet(date);
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
 
   // Get time blocks with all members
   const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
@@ -134,7 +134,7 @@ export async function getMemberTeesheetDataWithRestrictions(
 
   // Get or create teesheet for the date
   // This now returns the full config with rules
-  const { teesheet, config } = await getOrCreateTeesheet(date);
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
 
   // Get time blocks with all members
   const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);

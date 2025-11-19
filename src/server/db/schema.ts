@@ -179,7 +179,6 @@ export const teesheetConfigRulesRelations = relations(
   }),
 );
 
-// Add new templates table
 export const templates = createTable(
   "templates",
   {
@@ -1129,6 +1128,20 @@ export const weatherCache = createTable("weather_cache", {
 });
 
 // Type exports for weather cache
+
+
+export type Teesheet = typeof teesheets.$inferSelect;
+export type TeesheetConfig = typeof teesheetConfigs.$inferSelect;
+export type TeesheetConfigRule = typeof teesheetConfigRules.$inferSelect;
+
+
+export type Timeblocks = typeof timeBlocks.$inferSelect;
+export type TimeblockInsert = typeof timeBlocks.$inferInsert;
+
+export type Templates = typeof templates.$inferSelect;
+export type TemplateInsert = typeof templates.$inferInsert;
+
+
 export type WeatherCache = typeof weatherCache.$inferSelect;
 export type WeatherCacheInsert = typeof weatherCache.$inferInsert;
 
@@ -1139,3 +1152,14 @@ export type MemberClassInsert = typeof memberClasses.$inferInsert;
 // Type exports for lottery settings
 export type LotterySettingsType = typeof lotterySettings.$inferSelect;
 export type LotterySettingsInsert = typeof lotterySettings.$inferInsert;
+
+export type PaceOfPlay = typeof paceOfPlay.$inferSelect;
+
+export type TimeblockFill = typeof timeBlockFills.$inferSelect;
+export type TimeblockFillInsert = typeof timeBlockFills.$inferInsert; 
+
+export type TimeblockGuest = typeof timeBlockGuests.$inferSelect;
+export type TimeblockGuestInsert = typeof timeBlockGuests.$inferInsert;
+
+export type TimeblockMember = typeof timeBlockMembers.$inferSelect;
+export type TimeblockMemberInsert = typeof timeBlockMembers.$inferInsert;

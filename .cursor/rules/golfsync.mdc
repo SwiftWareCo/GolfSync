@@ -11,6 +11,3 @@ alwaysApply: true
 - refer to other similar sections of app to ensure consistency
 - use ui components in components folder whenever possible for styling
 - refer to [schema.ts](mdc:src/server/db/schema.ts) when doing anything with database to gain proper understanding of what needs to be updated
-- always place databse functions in correct data.ts folder or actions.ts folder depending on what schemas being updated
-- any function defined in a data.ts file canot be used in components marked with use client directive. only functions that are actions can, otherwise we must fetch in parent server compnent and pass down to client components.
-- DO NOT FETCH IN COMPONENTS MARKED WITH USE CLIENT

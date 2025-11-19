@@ -69,10 +69,38 @@ export interface TimeBlockMemberView {
   checkedInAt?: Date | null;
 }
 
+// Database relation types from Drizzle ORM
+export interface TimeBlockMemberRelation {
+  memberId: number;
+  timeBlockId: number;
+  bookingDate: string;
+  bookingTime: string;
+  bagNumber: string | null;
+  checkedIn: boolean;
+  checkedInAt: Date | null;
+  member: TimeBlockMemberView;
+}
+
+export interface TimeBlockGuestRelation {
+  guestId: number;
+  timeBlockId: number;
+  checkedIn: boolean;
+  checkedInAt: Date | null;
+  invitedByMember: {
+    id: number;
+    firstName: string;
+    lastName: string;
+  } | null;
+  guest: TimeBlockGuest;
+}
+
 export interface TimeBlockWithMembers extends TimeBlock {
-  members: TimeBlockMemberView[];
-  guests: TimeBlockGuest[];
-  fills: TimeBlockFill[];
+  timeBlockMembers?: TimeBlockMemberRelation[];
+  timeBlockGuests?: TimeBlockGuestRelation[];
+  fills?: TimeBlockFill[];
+  // Keep old properties for backwards compatibility
+  members?: TimeBlockMemberView[];
+  guests?: TimeBlockGuest[];
   notes?: string | null;
   date?: string;
 }
@@ -142,23 +170,6 @@ interface BaseConfig {
   updatedAt: Date | null;
   rules: TeesheetConfigRule[];
 }
-
-// Regular sequential tee times config
-export interface RegularConfig extends BaseConfig {
-  type: ConfigTypes.REGULAR;
-  startTime: string;
-  endTime: string;
-  interval: number;
-  maxMembersPerBlock: number;
-}
-
-// Custom block configuration
-export interface CustomConfig extends BaseConfig {
-  type: ConfigTypes.CUSTOM;
-  templateId: number;
-}
-
-export type TeesheetConfig = RegularConfig | CustomConfig;
 
 export interface TeesheetConfigInput {
   name: string;

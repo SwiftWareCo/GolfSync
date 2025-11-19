@@ -1,9 +1,8 @@
 import {
-  getOrCreateTeesheet,
+  getTeesheetWithTimeBlocks,
   getTimeBlocksForTeesheet,
 } from "~/server/teesheet/data";
 import { TeesheetPageClient } from "~/components/teesheet/TeesheetPageClient";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { getTeesheetConfigs, getLotterySettings } from "~/server/settings/data";
 import { getAllPaceOfPlayForDate } from "~/server/pace-of-play/actions";
 import { getBCToday, parseDate } from "~/lib/dates";
@@ -15,81 +14,50 @@ interface PageProps {
 }
 
 export default async function AdminPage({ searchParams }: PageProps) {
-  try {
-    // Get the date parameter as a string
-    const params = await searchParams;
+  const params = await searchParams;
+  const dateString = params?.date ?? getBCToday();
+  const date = parseDate(dateString);
 
-    // If no date provided, use today in BC timezone
-    const dateString = params?.date ?? getBCToday();
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
 
-    // Parse the string into a Date object (will be in BC timezone)
-    const date = parseDate(dateString);
+  const [timeBlocks, availableConfigs, paceOfPlayData, lotterySettings] =
+    await Promise.all([
+      getTimeBlocksForTeesheet(teesheet.id).catch((error) => {
+        console.error("timeBlocks failed", error);
+        return [];
+      }),
+      getTeesheetConfigs().then((configs) => {
+        if (!Array.isArray(configs)) throw new Error("Invalid configs payload");
+        return configs;
+      }),
+      getAllPaceOfPlayForDate(date).catch((error) => {
+        console.error("paceOfPlay failed", error);
+        return [];
+      }),
+      getLotterySettings(teesheet.id).catch((error) => {
+        console.error("lotterySettings failed", error);
+        return null;
+      }),
+    ]);
 
-    // Get teesheet data - pass the Date object
-    const { teesheet, config } = await getOrCreateTeesheet(date);
+  const initialData = {
+    teesheet,
+    config,
+    timeBlocks,
+    availableConfigs,
+    paceOfPlayData,
+    lotterySettings,
+  };
 
-    if (!teesheet) {
-      return (
-        <div className="container mx-auto p-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Error</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-red-500">Failed to load teesheet</p>
-            </CardContent>
-          </Card>
-        </div>
-      );
-    }
+  return (
+    <div>
+      {/* Admin Teesheet Page */}
 
-    const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
-    const configsResult = await getTeesheetConfigs();
-
-    // Fetch pace of play data for all time blocks - pass the Date object
-    const paceOfPlayData = await getAllPaceOfPlayForDate(date);
-
-    // Fetch lottery settings for the settings modal
-    const lotterySettings = await getLotterySettings(teesheet.id);
-
-    if (!Array.isArray(configsResult)) {
-      throw new Error("Failed to load configurations");
-    }
-
-    // Pass the initial data to the client component for SWR optimization
-    const initialData = {
-      teesheet,
-      config,
-      timeBlocks,
-      availableConfigs: configsResult,
-      paceOfPlayData,
-      lotterySettings,
-    };
-
-    return (
       <TeesheetPageClient
         initialDate={date}
         initialData={initialData}
         isAdmin={true}
       />
-    );
-  } catch (error) {
-    console.error("Error in AdminPage:", error);
-    return (
-      <div className="container mx-auto p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Error</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-red-500">
-              {error instanceof Error
-                ? error.message
-                : "Failed to load teesheet data. Please try again later."}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+    </div>
+  );
 }

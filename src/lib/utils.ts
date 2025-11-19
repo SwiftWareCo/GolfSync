@@ -280,28 +280,41 @@ export function getMemberClassStyling(className?: string | null) {
   return classMap[classUpper] || defaultStyle;
 }
 
-interface TimeBlockGeneratorParams {
-  startTime: string;
-  endTime: string;
-  interval: number;
-}
 
-export function generateTimeBlocks({
-  startTime,
-  endTime,
-  interval,
-}: TimeBlockGeneratorParams): string[] {
-  const blocks: string[] = [];
-  let currentTime = new Date(`2000-01-01T${startTime}`);
-  const endDateTime = new Date(`2000-01-01T${endTime}`);
+export function generateTimeBlocks(
+  startTime: string,
+  endTime: string,
+  intervalMinutes: number,
+): string[] {
+  const [startHour, startMin] = startTime.split(":").map(Number);
+  const [endHour, endMin] = endTime.split(":").map(Number);
 
-  while (currentTime <= endDateTime) {
-    blocks.push(currentTime.toTimeString().slice(0, 5));
-    currentTime = new Date(currentTime.getTime() + interval * 60000);
+  if(startHour === undefined || startMin === undefined || endHour === undefined || endMin === undefined) {
+    throw new Error("Time must be in HH:MM format");
   }
 
+  // Validate by checking if parsing succeeded
+  if (isNaN(startHour) || isNaN(startMin) || isNaN(endHour) || isNaN(endMin)) {
+    throw new Error("Time must be in HH:MM format");
+  }
+
+  // 9 *60 = 540 
+  //end hour = 19 * 60 = 1140
+  const blocks: string[] = [];
+  let totalMinutes = startHour * 60 + startMin;
+  const endTotalMinutes = endHour * 60 + endMin;
+
+  while (totalMinutes <= endTotalMinutes) {
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    blocks.push(
+      `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+    );
+    totalMinutes += intervalMinutes;
+  }
   return blocks;
 }
+
 
 /**
  * Formats a date in YYYY-MM-DD format

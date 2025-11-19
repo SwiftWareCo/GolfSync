@@ -9,9 +9,8 @@ import type {
 } from "~/app/types/TeeSheetTypes";
 import type { TimeBlockGuest } from "~/app/types/GuestTypes";
 import type { TimeBlockWithPaceOfPlay } from "~/app/types/PaceOfPlayTypes";
-import type { PaceOfPlayRecord } from "~/server/pace-of-play/data";
 import { type Template, ConfigTypes } from "~/app/types/TeeSheetTypes";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfig } from "~/server/db/schema";
 import { TimeBlock as TimeBlockComponent } from "~/components/timeblock/TimeBlock";
 import { TeesheetGeneralNotes } from "./TeesheetGeneralNotes";
 import { TimeBlockNote } from "~/components/timeblock/TimeBlockNotes";
@@ -58,7 +57,6 @@ export const TeesheetView = memo(function TeesheetView({
   isAdmin = true,
   mutations,
 }: TeesheetViewProps) {
-
   // Restriction handling hook
   const {
     violations,
@@ -87,8 +85,8 @@ export const TeesheetView = memo(function TeesheetView({
   // Memoized computations for performance
   const sortedTimeBlocks = useMemo(() => {
     // Deduplicate time blocks by ID to prevent duplicate rendering
-    const uniqueBlocks = new Map<number, typeof timeBlocks[0]>();
-    timeBlocks.forEach(block => {
+    const uniqueBlocks = new Map<number, (typeof timeBlocks)[0]>();
+    timeBlocks.forEach((block) => {
       if (!uniqueBlocks.has(block.id)) {
         uniqueBlocks.set(block.id, block);
       }
@@ -227,16 +225,24 @@ export const TeesheetView = memo(function TeesheetView({
           return;
         }
 
-        const members = timeBlock.members || [];
-        const guests = timeBlock.guests || [];
+        const members =
+          timeBlock.timeBlockMembers?.map((tbm: any) => ({
+            ...tbm.member,
+            checkedIn: tbm.checkedIn,
+          })) || [];
+        const guests =
+          timeBlock.timeBlockGuests?.map((tbg: any) => ({
+            ...tbg.guest,
+            checkedIn: tbg.checkedIn,
+          })) || [];
 
         // Determine if we should check in or check out
         // If everyone is checked in, then check them out; otherwise check them in
         const allCheckedIn =
           members.length > 0 &&
           guests.length > 0 &&
-          members.every((m) => m.checkedIn) &&
-          guests.every((g) => g.checkedIn);
+          members.every((m: any) => m.checkedIn) &&
+          guests.every((g: any) => g.checkedIn);
 
         const shouldCheckIn = !allCheckedIn;
 
@@ -419,7 +425,7 @@ export const TeesheetView = memo(function TeesheetView({
               if (config?.type === ConfigTypes.CUSTOM) {
                 const customConfig = config;
                 const template = templates?.find(
-                  (t) => t.id === customConfig.templateId,
+                  (t) => t.id === customConfig?.templateId,
                 );
                 if (template?.blocks) {
                   templateBlock =
@@ -437,8 +443,20 @@ export const TeesheetView = memo(function TeesheetView({
                       startTime: block.startTime,
                       endTime: block.endTime,
                       date: block.date || teesheet.date,
-                      members: block.members || [],
-                      guests: block.guests || [],
+                      members:
+                        block.timeBlockMembers?.map((tbm: any) => ({
+                          ...tbm.member,
+                          checkedIn: tbm.checkedIn,
+                        })) ||
+                        block.members ||
+                        [],
+                      guests:
+                        block.timeBlockGuests?.map((tbg: any) => ({
+                          ...tbg.guest,
+                          checkedIn: tbg.checkedIn,
+                        })) ||
+                        block.guests ||
+                        [],
                       displayName:
                         block.displayName || templateBlock?.displayName,
                     }}
@@ -476,7 +494,10 @@ export const TeesheetView = memo(function TeesheetView({
                           timeBlockId={block.id}
                           initialNote={block.notes || ""}
                           onSaveNotes={async (timeBlockId, notes) => {
-                            const success = await handleSaveNotes(timeBlockId, notes);
+                            const success = await handleSaveNotes(
+                              timeBlockId,
+                              notes,
+                            );
                             if (success) {
                               toggleTimeBlockNoteEdit(null);
                             }
@@ -493,7 +514,9 @@ export const TeesheetView = memo(function TeesheetView({
                         <td colSpan={3} className="p-0">
                           <TimeBlockNote
                             notes={block.notes}
-                            onEditClick={() => toggleTimeBlockNoteEdit(block.id)}
+                            onEditClick={() =>
+                              toggleTimeBlockNoteEdit(block.id)
+                            }
                             timeBlockId={block.id}
                             onSaveNotes={handleSaveNotes}
                           />

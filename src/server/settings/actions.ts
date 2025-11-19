@@ -18,11 +18,10 @@ import {
 } from "~/server/db/schema";
 
 import { revalidatePath } from "next/cache";
-import { createTimeBlocksForTeesheet } from "~/server/teesheet/data";
+import { replaceTimeBlocks } from "~/server/teesheet/actions";
 import { auth } from "@clerk/nextjs/server";
 import type {
   TeesheetConfigInput,
-  TeesheetConfig,
 } from "~/app/types/TeeSheetTypes";
 import { ConfigTypes } from "~/app/types/TeeSheetTypes";
 import {
@@ -346,19 +345,11 @@ export async function updateTeesheetConfigForDate(
         .where(inArray(lotteryGroups.assignedTimeBlockId, timeBlockIdArray));
     }
 
-    // Now delete existing time blocks
-    await db.delete(timeBlocks).where(eq(timeBlocks.teesheetId, teesheetId));
-
-    // Create new time blocks with the new config
-    const fullConfig = {
-      ...config,
-      rules: config.rules.map((rule) => ({
-        ...rule,
-        startDate: rule.startDate ? new Date(rule.startDate) : null,
-        endDate: rule.endDate ? new Date(rule.endDate) : null,
-      })),
-    } as TeesheetConfig;
-    await createTimeBlocksForTeesheet(teesheetId, fullConfig, teesheet.date);
+    // Replace time blocks with the new config
+    const replaceResult = await replaceTimeBlocks(teesheetId, config);
+    if (!replaceResult.success) {
+      return { success: false, error: replaceResult.error || "Failed to replace time blocks" };
+    }
 
     // Revalidate paths
     revalidatePath(`/teesheet`);

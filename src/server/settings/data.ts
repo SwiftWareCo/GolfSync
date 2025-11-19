@@ -12,7 +12,7 @@ import {
   timeBlocks,
   timeBlockMembers,
 } from "~/server/db/schema";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfig } from "~/server/db/schema";
 import { ConfigTypes } from "~/app/types/TeeSheetTypes";
 import { format } from "date-fns";
 import type { LotterySettingsType } from "~/server/db/schema";

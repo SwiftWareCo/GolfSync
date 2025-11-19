@@ -14,19 +14,23 @@ import {
   timeblockRestrictions,
   lotteryEntries,
   lotteryGroups,
+  templates,
+  type TeesheetConfig,
 } from "~/server/db/schema";
 import { and, eq, sql, gte, lte, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { initializePaceOfPlay } from "~/server/pace-of-play/actions";
-import type { FillType } from "~/app/types/TeeSheetTypes";
+import type { FillType, TemplateBlock, ConfigTypes } from "~/app/types/TeeSheetTypes";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
 import {
-  getOrCreateTeesheet,
+  getTeesheetWithTimeBlocks,
   getTimeBlocksForTeesheet,
 } from "~/server/teesheet/data";
 import { getTeesheetConfigs, getLotterySettings } from "~/server/settings/data";
 import { getAllPaceOfPlayForDate } from "~/server/pace-of-play/actions";
 import { parseDate } from "~/lib/dates";
+import { generateTimeBlocks } from "~/lib/utils";
+import { ConfigTypes as ConfigTypesEnum } from "~/app/types/TeeSheetTypes";
 
 type ActionResult = {
   success: boolean;
@@ -53,6 +57,114 @@ type TeesheetDataResult = {
 };
 
 /**
+ * Server action to create or replace time blocks for a teesheet
+ * Handles both custom template-based and regular interval-based configurations
+ */
+export async function replaceTimeBlocks(
+  teesheetId: number,
+  config: TeesheetConfig,
+): Promise<ActionResult> {
+  try {
+    // First, delete all existing time blocks for this teesheet
+    await db
+      .delete(timeBlocks)
+      .where(eq(timeBlocks.teesheetId, teesheetId));
+
+    // For custom configurations, fetch the template and create blocks based on it
+    if (config.type === ConfigTypesEnum.CUSTOM) {
+      if (!config.templateId) {
+        return {
+          success: false,
+          error: "Custom configuration missing templateId",
+        };
+      }
+
+      const template = await db.query.templates.findFirst({
+        where: eq(templates.id, config.templateId),
+      });
+
+      if (!template) {
+        return {
+          success: false,
+          error: "Template not found",
+        };
+      }
+
+      try {
+        const templateBlocks = template.blocks as TemplateBlock[];
+
+        // Create blocks based on template
+        const blocks = templateBlocks.map((block, index) => ({
+          teesheetId,
+          startTime: block.startTime,
+          endTime: block.startTime, // For template blocks, end time is same as start time
+          maxMembers: block.maxPlayers,
+          displayName: block.displayName,
+          sortOrder: index, // Use the index to maintain order
+        }));
+
+        if (blocks.length > 0) {
+          await db.insert(timeBlocks).values(blocks);
+        }
+      } catch (error) {
+        return {
+          success: false,
+          error: "Failed to create template blocks",
+        };
+      }
+    } else {
+      // For regular configurations, generate blocks based on start time, end time, and interval
+      if (
+        !config.startTime ||
+        !config.endTime ||
+        !config.interval
+      ) {
+        return {
+          success: false,
+          error:
+            "Invalid regular configuration: missing startTime, endTime, or interval",
+        };
+      }
+
+      const timeBlocksArray = generateTimeBlocks(
+        config.startTime,
+        config.endTime,
+        config.interval,
+      );
+
+      const blocksToInsert = timeBlocksArray.map((time, index) => ({
+        teesheetId,
+        startTime: time,
+        endTime: time, // For regular blocks, end time is same as start time
+        maxMembers: config.maxMembersPerBlock || 4,
+        sortOrder: index,
+      }));
+
+      if (blocksToInsert.length > 0) {
+        try {
+          await db.insert(timeBlocks).values(blocksToInsert);
+        } catch (error) {
+          return {
+            success: false,
+            error: "Failed to create regular blocks",
+          };
+        }
+      }
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/teesheet");
+    return { success: true };
+  } catch (error) {
+    console.error("Error replacing time blocks:", error);
+    return {
+      success: false,
+      error: "Failed to replace time blocks",
+    };
+  }
+}
+
+/**
  * Server action to fetch teesheet data for client-side navigation
  * This can be called from client components with SWR
  */
@@ -64,7 +176,7 @@ export async function getTeesheetDataAction(
     const date = parseDate(dateString);
 
     // Get teesheet data - same logic as the admin page
-    const { teesheet, config } = await getOrCreateTeesheet(date);
+    const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
 
     if (!teesheet) {
       return {

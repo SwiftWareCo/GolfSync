@@ -290,29 +290,6 @@ export function getDayOfWeek(date: Date | string): number {
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Generates time blocks for tee times (in 24h format)
- */
-export function generateTimeBlocks(
-  startTime: string,
-  endTime: string,
-  intervalMinutes: number,
-): string[] {
-  if (!/^\d{2}:\d{2}$/.test(startTime) || !/^\d{2}:\d{2}$/.test(endTime)) {
-    throw new Error("Time must be in HH:MM format");
-  }
-
-  const blocks: string[] = [];
-  let currentTime = new Date(`2000-01-01T${startTime}`);
-  const endDateTime = new Date(`2000-01-01T${endTime}`);
-
-  while (currentTime <= endDateTime) {
-    blocks.push(format(currentTime, "HH:mm"));
-    currentTime = new Date(currentTime.getTime() + intervalMinutes * 60000);
-  }
-
-  return blocks;
-}
 
 /**
  * Formats an array of day numbers (0-6) to readable text
