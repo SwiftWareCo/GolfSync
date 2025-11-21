@@ -35,22 +35,6 @@ export async function getTimeblockRestrictions(): Promise<ResultType<any[]>> {
   }
 }
 
-/**
- * Get a list of all unique member classes in the organization
- */
-export async function getMemberClasses(): Promise<ResultType<string[]>> {
-  try {
-
-    const result = await db
-      .selectDistinct({ class: members.class })
-      .from(members)
-
-    return result.map((row) => row.class);
-  } catch (error) {
-    console.error("Error getting member classes:", error);
-    return { success: false, error: "Failed to get member classes" };
-  }
-}
 
 // Get timeblock restrictions by category
 export async function getTimeblockRestrictionsByCategory(

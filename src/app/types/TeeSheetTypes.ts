@@ -144,8 +144,6 @@ export interface TeesheetConfigRuleInput {
   daysOfWeek: number[] | null;
   startDate: string | null;
   endDate: string | null;
-  priority: number;
-  isActive: boolean;
 }
 
 export interface TeesheetConfigRule

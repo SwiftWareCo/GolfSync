@@ -1,4 +1,5 @@
 import "server-only";
+import { cacheTag } from "next/cache";
 import { db } from "~/server/db";
 import { and, eq, or, desc, isNull, lte, gte, sql } from "drizzle-orm";
 
@@ -11,11 +12,12 @@ import {
   lotteryGroups,
   timeBlocks,
   timeBlockMembers,
+  type TeesheetConfigWithRules,
 } from "~/server/db/schema";
 import type { TeesheetConfig } from "~/server/db/schema";
 import { ConfigTypes } from "~/app/types/TeeSheetTypes";
-import { format } from "date-fns";
 import type { LotterySettingsType } from "~/server/db/schema";
+import { getDayOfWeek } from "~/lib/dates";
 
 export async function initializeDefaultConfigs() {
   try {
@@ -68,19 +70,15 @@ export async function initializeDefaultConfigs() {
 
     const weekendConfig = { ...weekendConfigDb, rules: [] } as TeesheetConfig;
 
-    // Create rules with lowest priority (0)
+    // Create rules for system configs
     await db.insert(teesheetConfigRules).values([
       {
         configId: weekdayConfig.id,
         daysOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
-        priority: 0,
-        isActive: true,
       },
       {
         configId: weekendConfig.id,
         daysOfWeek: [0, 6], // Sat-Sun
-        priority: 0,
-        isActive: true,
       },
     ]);
   } catch (error) {
@@ -94,185 +92,155 @@ export async function initializeDefaultConfigs() {
   }
 }
 
-export async function getConfigForDate(date: Date): Promise<TeesheetConfig> {
-  // First ensure we have default configs
+/**
+ * Helper: Find config with specific date rule matching the given date
+ */
+function findConfigBySpecificDate(
+  configs: TeesheetConfigWithRules[],
+  dateString: string,
+): TeesheetConfigWithRules | null {
+  for (const config of configs) {
+    const matchingRule = config.rules.filter(
+      (rule) => rule.startDate === dateString && rule.endDate === dateString,
+    )[0];
+
+    if (matchingRule) {
+      return config;
+    }
+  }
+  return null;
+}
+
+/**
+ * Helper: Find config with recurring rule matching the given date and day of week
+ */
+function findConfigByRecurring(
+  configs: TeesheetConfigWithRules[],
+  dateString: string,
+  dayOfWeek: number,
+): TeesheetConfigWithRules | null {
+  for (const config of configs) {
+    const matchingRule = config.rules.filter((rule) => {
+      // Must have day of week match
+      if (!rule.daysOfWeek?.includes(dayOfWeek)) return false;
+
+      // Check start date (null or before/equal to target date)
+      if (rule.startDate !== null && rule.startDate > dateString) return false;
+
+      // Check end date (null or after/equal to target date)
+      if (rule.endDate !== null && rule.endDate < dateString) return false;
+
+      return true;
+    })[0];
+
+    if (matchingRule) {
+      return config;
+    }
+  }
+  return null;
+}
+
+/**
+ * Helper: Find system config matching the given day of week
+ */
+function findSystemConfig(
+  configs: TeesheetConfigWithRules[],
+  dayOfWeek: number,
+): TeesheetConfigWithRules | null {
+  return (
+    configs
+      .filter((config) => config.isSystemConfig)
+      .find((config) =>
+        config.rules?.some((rule) => rule.daysOfWeek?.includes(dayOfWeek)),
+      ) || null
+  );
+}
+
+/**
+ * Get the configuration for a specific date
+ * Uses a single database query and filters in-memory for optimal performance
+ *
+ * @param dateString - Date in YYYY-MM-DD format (BC timezone)
+ * @returns Config with rules for the specified date
+ */
+export async function getConfigForDate(
+  dateString: string,
+): Promise<TeesheetConfigWithRules> {
+  // Ensure default configs exist
   await initializeDefaultConfigs();
 
-  // Use UTC date for consistent day of week calculation
+  const dayOfWeek = getDayOfWeek(dateString); // BC timezone day of week
 
-  const dayOfWeek = date.getUTCDay();
-  const formattedDate = format(date, "yyyy-MM-dd");
-
-  // First check for specific date rules
-  const specificDateRules = await db.query.teesheetConfigRules.findMany({
-    where: and(
-      eq(teesheetConfigRules.isActive, true),
-      eq(teesheetConfigRules.startDate, formattedDate),
-      eq(teesheetConfigRules.endDate, formattedDate),
-    ),
-    orderBy: desc(teesheetConfigRules.priority),
-    limit: 1,
-  });
-
-  if (specificDateRules.length > 0 && specificDateRules[0]) {
-    const config = await db.query.teesheetConfigs.findFirst({
-      where: and(
-        eq(teesheetConfigs.id, specificDateRules[0].configId),
-        eq(teesheetConfigs.isActive, true),
-      ),
-      with: {
-        rules: true,
-      },
-    });
-
-    if (!config) {
-      console.error(
-        "[getConfigForDate] Configuration not found for specific date rule",
-      );
-      throw new Error("Configuration not found");
-    }
-
-    return {
-      ...config,
-      rules: config.rules.map((rule) => ({
-        ...rule,
-        startDate: rule.startDate ? new Date(rule.startDate) : null,
-        endDate: rule.endDate ? new Date(rule.endDate) : null,
-      })),
-    } as TeesheetConfig;
-  }
-
-  // Then check for recurring day rules
-  const recurringRules = await db.query.teesheetConfigRules.findMany({
-    where: and(
-      eq(teesheetConfigRules.isActive, true),
-      sql`${dayOfWeek} = ANY(${teesheetConfigRules.daysOfWeek})`,
-      or(
-        isNull(teesheetConfigRules.startDate),
-        lte(teesheetConfigRules.startDate, formattedDate),
-      ),
-      or(
-        isNull(teesheetConfigRules.endDate),
-        gte(teesheetConfigRules.endDate, formattedDate),
-      ),
-    ),
-    orderBy: desc(teesheetConfigRules.priority),
-    limit: 1,
-  });
-
-  if (recurringRules.length > 0 && recurringRules[0]) {
-    const config = await db.query.teesheetConfigs.findFirst({
-      where: and(
-        eq(teesheetConfigs.id, recurringRules[0].configId),
-        eq(teesheetConfigs.isActive, true),
-      ),
-      with: {
-        rules: true,
-      },
-    });
-
-    if (!config) {
-      console.error(
-        "[getConfigForDate] Configuration not found for recurring rule",
-      );
-      throw new Error("Configuration not found");
-    }
-
-    return {
-      ...config,
-      rules: config.rules.map((rule) => ({
-        ...rule,
-        startDate: rule.startDate ? new Date(rule.startDate) : null,
-        endDate: rule.endDate ? new Date(rule.endDate) : null,
-      })),
-    } as TeesheetConfig;
-  }
-
-  // If no specific or recurring rules found, fall back to system configs
-  const systemConfigs = await db.query.teesheetConfigs.findMany({
-    where: and(
-      eq(teesheetConfigs.isSystemConfig, true),
-      eq(teesheetConfigs.isActive, true),
-    ),
+  // Single query: Fetch all active configs with their rules
+  const allConfigs = await db.query.teesheetConfigs.findMany({
+    where: eq(teesheetConfigs.isActive, true),
     with: {
       rules: true,
     },
   });
 
-  if (systemConfigs.length === 0) {
-    console.error("[getConfigForDate] No system configurations found");
-    throw new Error("No system configurations found");
+  // Priority 1: Check for specific date rules (highest priority)
+  const specificDateConfig = findConfigBySpecificDate(allConfigs, dateString);
+  if (specificDateConfig) {
+    return specificDateConfig;
   }
 
-  // Find the appropriate system config based on day of week
-  const weekdayConfig = systemConfigs.find((config) =>
-    config.rules?.some((rule) => rule.daysOfWeek?.includes(dayOfWeek)),
+  // Priority 2: Check for recurring day rules
+  const recurringConfig = findConfigByRecurring(
+    allConfigs,
+    dateString,
+    dayOfWeek,
   );
+  if (recurringConfig) {
+    return recurringConfig;
+  }
 
-  if (!weekdayConfig) {
+  // Priority 3: Fall back to system config
+  const systemConfig = findSystemConfig(allConfigs, dayOfWeek);
+  if (!systemConfig) {
     console.error(
-      "[getConfigForDate] No matching system configuration found for day:",
+      "[getConfigForDate] No matching configuration found for date:",
+      dateString,
+      "dayOfWeek:",
       dayOfWeek,
     );
     throw new Error("No matching system configuration found");
   }
 
-  return {
-    ...weekdayConfig,
-    rules: weekdayConfig.rules.map((rule) => ({
-      ...rule,
-      startDate: rule.startDate ? new Date(rule.startDate) : null,
-      endDate: rule.endDate ? new Date(rule.endDate) : null,
-    })),
-  } as TeesheetConfig;
+  return systemConfig;
 }
 
-export async function getTeesheetConfigs(): Promise<TeesheetConfig[]> {
-  try {
-    const configs = await db.query.teesheetConfigs.findMany({
-      with: {
-        rules: true,
-      },
-      orderBy: (teesheetConfigs, { asc }) => [asc(teesheetConfigs.name)],
-    });
+export async function getTeesheetConfigs(): Promise<TeesheetConfigWithRules[]> {
+  "use cache";
+  const configs = await db.query.teesheetConfigs.findMany({
+    with: { rules: true },
+    orderBy: (teesheetConfigs, { asc }) => [asc(teesheetConfigs.name)],
+  });
 
-    return configs.map((config) => ({
-      ...config,
-      rules: config.rules.map((rule) => ({
-        ...rule,
-        startDate: rule.startDate ? new Date(rule.startDate) : null,
-        endDate: rule.endDate ? new Date(rule.endDate) : null,
-      })),
-    })) as TeesheetConfig[];
-  } catch (error) {
-    console.error("Error fetching teesheet configs:", error);
-    return [];
-  }
+  cacheTag("teesheet-configs");
+  return configs;
 }
 
 // Get course info for the current organization
 export async function getCourseInfo() {
-  try {
-    const info = await db.query.courseInfo.findFirst({});
+  const info = await db.query.courseInfo.findFirst({});
 
-    return info ?? null;
-  } catch (error) {
-    console.error("Error fetching course info:", error);
-    return { success: false, error: "Error fetching course info" };
+  if (!info) {
+    throw new Error("Course info not found");
   }
+
+  return info;
 }
 
 export async function getTemplates() {
-  try {
-    const templateList = await db.query.templates.findMany({
-      orderBy: desc(templates.updatedAt),
-    });
+  const templateList = await db.query.templates.findMany({
+    orderBy: desc(templates.updatedAt),
+  });
 
-    return templateList;
-  } catch (error) {
-    console.error("Error fetching templates:", error);
-    return [];
+  if (!templateList) {
+    return "Error fetching templates";
   }
+  return templateList;
 }
 
 /**

@@ -57,7 +57,7 @@ export default async function LotteryManagementPage({ params }: PageProps) {
     getLotteryStatsForDate(date),
     getLotteryEntriesForDate(date),
     getAvailableTimeBlocksForDate(date),
-    getConfigForDate(lotteryDate),
+    getConfigForDate(date),
     getActiveTimeRestrictionsForDate(date),
     getTeesheetDataAction(date),
   ]);

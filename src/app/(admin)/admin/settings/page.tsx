@@ -1,12 +1,13 @@
+import { Suspense } from "react";
 import { getTeesheetConfigs, getTemplates } from "~/server/settings/data";
 import { TeesheetSettings } from "~/components/settings/teesheet/TeesheetSettings";
+import { TemplateManagement } from "~/components/settings/teesheet/TemplateManagement";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
-  getMemberClasses,
   getTimeblockRestrictions,
   getTimeblockOverrides,
 } from "~/server/timeblock-restrictions/data";
-import { getAllMemberClasses } from "~/server/member-classes/data";
+import { getMemberClasses, getAllMemberClasses } from "~/server/member-classes/data";
 import { TimeblockRestrictionsSettings } from "~/components/settings/timeblock-restrictions/TimeblockRestrictionsSettings";
 import { CourseInfoSettings } from "~/components/settings/course-info/CourseInfoSettings";
 import { getCourseInfo } from "~/server/settings/data";
@@ -18,50 +19,73 @@ import {
   getPushNotificationStats,
   getMembersCountByClass,
 } from "~/server/pwa/data";
+import {
+  ConfigurationsSkeleton,
+  TemplatesSkeleton,
+  RestrictionsSkeleton,
+  MemberClassesSkeleton,
+  OverridesSkeleton,
+  NotificationsSkeleton,
+  CourseInfoSkeleton,
+} from "~/components/settings/skeletons";
 
-type CourseInfoType = {
-  id?: number;
-  notes?: string;
-};
+async function ConfigurationsTab() {
+  const [teesheetConfigs, templates] = await Promise.all([
+    getTeesheetConfigs(),
+    getTemplates(),
+  ]);
 
-export default async function SettingsPage() {
-  const teesheetResult = await getTeesheetConfigs();
-  const teesheetConfigs = "success" in teesheetResult ? [] : teesheetResult;
+  return (
+    <TeesheetSettings
+      configs={teesheetConfigs}
+      templates={templates as any[]}
+    />
+  );
+}
 
+async function TemplatesTab() {
   const templates = await getTemplates();
+  return <TemplateManagement initialTemplates={templates as any[]} />;
+}
 
-  const memberClassesResult = await getMemberClasses();
-  const memberClasses =
-    "success" in memberClassesResult ? [] : memberClassesResult;
+async function RestrictionsTab() {
+  const [memberClasses, timeblockRestrictionsResult, allMemberClasses] =
+    await Promise.all([
+      getMemberClasses(),
+      getTimeblockRestrictions(),
+      getAllMemberClasses(),
+    ]);
 
-  // Get course info
-  const courseInfoResult = await getCourseInfo();
+  const timeblockRestrictions = "success" in timeblockRestrictionsResult
+    ? []
+    : timeblockRestrictionsResult;
 
-  // Transform the data to match expected format
-  let courseInfo: CourseInfoType | undefined = undefined;
+  return (
+    <TimeblockRestrictionsSettings
+      initialRestrictions={timeblockRestrictions}
+      memberClasses={memberClasses}
+      allMemberClasses={allMemberClasses}
+    />
+  );
+}
 
-  if (courseInfoResult && !("success" in courseInfoResult)) {
-    courseInfo = {
-      id: courseInfoResult.id,
-      notes: courseInfoResult.notes ?? undefined,
-    };
-  }
-
-  // Get timeblock restrictions
-  const timeblockRestrictionsResult = await getTimeblockRestrictions();
-  const timeblockRestrictions =
-    "success" in timeblockRestrictionsResult ? [] : timeblockRestrictionsResult;
-
-  // Get timeblock overrides
-  const timeblockOverridesResult = await getTimeblockOverrides();
-  const timeblockOverrides =
-    "success" in timeblockOverridesResult ? [] : timeblockOverridesResult;
-
-  // Get all member classes (including inactive for admin)
+async function MemberClassesTab() {
   const allMemberClasses = await getAllMemberClasses();
+  return <MemberClassesSettings initialMemberClasses={allMemberClasses} />;
+}
 
-  // Get notification data
-  const [statsResult, classCountsResult] = await Promise.all([
+async function OverridesTab() {
+  const timeblockOverridesResult = await getTimeblockOverrides();
+  const timeblockOverrides = "success" in timeblockOverridesResult
+    ? []
+    : timeblockOverridesResult;
+
+  return <OverridesSettings initialOverrides={timeblockOverrides} />;
+}
+
+async function NotificationsTab() {
+  const [memberClasses, statsResult, classCountsResult] = await Promise.all([
+    getMemberClasses(),
     getPushNotificationStats(),
     getMembersCountByClass([]),
   ]);
@@ -73,6 +97,21 @@ export default async function SettingsPage() {
     : [];
 
   return (
+    <NotificationDashboard
+      stats={notificationStats}
+      memberClasses={notificationMemberClasses}
+      classCounts={notificationClassCounts}
+    />
+  );
+}
+
+async function CourseInfoTab() {
+  const courseInfo = await getCourseInfo();
+  return <CourseInfoSettings courseInfo={courseInfo} />;
+}
+
+export default function SettingsPage() {
+  return (
     <div className="w-full space-y-6">
       {/* Header */}
       <PageHeader
@@ -81,11 +120,14 @@ export default async function SettingsPage() {
       />
 
       {/* Tabbed Interface */}
-      <Tabs defaultValue="teesheet" className="w-full">
+      <Tabs defaultValue="configurations" className="w-full">
         <div className="mb-6 flex justify-center">
           <TabsList className="flex w-full max-w-[1200px] flex-wrap">
-            <TabsTrigger value="teesheet" className="flex-1">
-              Teesheet Settings
+            <TabsTrigger value="configurations" className="flex-1">
+              Configurations
+            </TabsTrigger>
+            <TabsTrigger value="templates" className="flex-1">
+              Templates
             </TabsTrigger>
             <TabsTrigger value="restrictions" className="flex-1">
               Timeblock Restrictions
@@ -105,45 +147,46 @@ export default async function SettingsPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="teesheet" className="mt-4">
-          {/* Teesheet Settings */}
-          <TeesheetSettings
-            initialConfigs={teesheetConfigs}
-            templates={templates as any[]}
-          />
+        <TabsContent value="configurations" className="mt-4">
+          <Suspense fallback={<ConfigurationsSkeleton />}>
+            <ConfigurationsTab />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="templates" className="mt-4">
+          <Suspense fallback={<TemplatesSkeleton />}>
+            <TemplatesTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="restrictions" className="mt-4">
-          {/* Timeblock Restrictions */}
-          <TimeblockRestrictionsSettings
-            initialRestrictions={timeblockRestrictions}
-            memberClasses={memberClasses}
-            allMemberClasses={allMemberClasses}
-          />
+          <Suspense fallback={<RestrictionsSkeleton />}>
+            <RestrictionsTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="memberClasses" className="mt-4">
-          {/* Member Classes */}
-          <MemberClassesSettings initialMemberClasses={allMemberClasses} />
+          <Suspense fallback={<MemberClassesSkeleton />}>
+            <MemberClassesTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="overrides" className="mt-4">
-          {/* Override Records */}
-          <OverridesSettings initialOverrides={timeblockOverrides} />
+          <Suspense fallback={<OverridesSkeleton />}>
+            <OverridesTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="notifications" className="mt-4">
-          {/* Push Notifications */}
-          <NotificationDashboard
-            stats={notificationStats}
-            memberClasses={notificationMemberClasses}
-            classCounts={notificationClassCounts}
-          />
+          <Suspense fallback={<NotificationsSkeleton />}>
+            <NotificationsTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="courseInfo" className="mt-4">
-          {/* Course Info Settings */}
-          <CourseInfoSettings initialData={courseInfo} />
+          <Suspense fallback={<CourseInfoSkeleton />}>
+            <CourseInfoTab />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>

@@ -13,17 +13,15 @@ import toast from "react-hot-toast";
 import { NotesEditor } from "./NotesEditor";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { settingsMutations } from "~/server/query-options/settings-mutation-options";
+import type { CourseInfo } from "~/server/db/schema";
 
 type CourseInfoProps = {
-  initialData?: {
-    id?: number;
-    notes?: string;
-  };
+  courseInfo?: CourseInfo;
 };
 
-export function CourseInfoSettings({ initialData }: CourseInfoProps) {
+export function CourseInfoSettings({ courseInfo }: CourseInfoProps) {
   const queryClient = useQueryClient();
-  const [notes, setNotes] = useState(initialData?.notes || "");
+  const [notes, setNotes] = useState(courseInfo?.notes ?? "");
 
   // Setup mutation with factory pattern
   const updateMutation = useMutation({

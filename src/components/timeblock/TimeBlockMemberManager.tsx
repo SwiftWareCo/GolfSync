@@ -6,7 +6,7 @@ import { TimeBlockPageHeader } from "./TimeBlockPageHeader";
 import { TimeBlockHeader } from "./TimeBlockHeader";
 import { useTeesheetMutations } from "~/hooks/useTeesheetMutations";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { memberQueryOptions, guestQueryOptions, queryKeys, teesheetQueryOptions } from "~/server/query-options";
+import { memberQueryOptions, guestQueryOptions, queryKeys } from "~/server/query-options";
 import {
   searchMembersAction,
   addMemberToTimeBlock,

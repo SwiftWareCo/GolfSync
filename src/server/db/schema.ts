@@ -146,8 +146,6 @@ export const teesheetConfigRules = createTable(
     daysOfWeek: integer("days_of_week").array(), // [1,2,3,4] for Mon-Thu
     startDate: date("start_date"), // null for recurring
     endDate: date("end_date"), // null for recurring
-    priority: integer("priority").notNull().default(0),
-    isActive: boolean("is_active").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -1109,6 +1107,7 @@ export const systemMaintenance = createTable(
   ],
 );
 
+
 // Weather Cache table
 export const weatherCache = createTable("weather_cache", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -1127,12 +1126,17 @@ export const weatherCache = createTable("weather_cache", {
     .notNull(),
 });
 
-// Type exports for weather cache
-
+// Helper type to export db schemas with relations
+export type WithRelations<T, R> = T & R;
 
 export type Teesheet = typeof teesheets.$inferSelect;
 export type TeesheetConfig = typeof teesheetConfigs.$inferSelect;
 export type TeesheetConfigRule = typeof teesheetConfigRules.$inferSelect;
+
+export type TeesheetConfigWithRules = WithRelations<
+  TeesheetConfig,
+  { rules: TeesheetConfigRule[] }
+>;
 
 
 export type Timeblocks = typeof timeBlocks.$inferSelect;
@@ -1141,6 +1145,8 @@ export type TimeblockInsert = typeof timeBlocks.$inferInsert;
 export type Templates = typeof templates.$inferSelect;
 export type TemplateInsert = typeof templates.$inferInsert;
 
+export type CourseInfo = typeof courseInfo.$inferSelect;
+export type CourseInfoInsert = typeof courseInfo.$inferInsert;
 
 export type WeatherCache = typeof weatherCache.$inferSelect;
 export type WeatherCacheInsert = typeof weatherCache.$inferInsert;

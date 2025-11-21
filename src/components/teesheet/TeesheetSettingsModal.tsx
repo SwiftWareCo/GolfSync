@@ -77,9 +77,9 @@ export function TeesheetSettingsModal({
   }, [teesheet, lotterySettings]);
 
   // Setup mutations
-  const updateConfigMutation = useMutation(
-    settingsMutations.updateConfigForDate(queryClient)
-  );
+  const updateConfigMutation = () => {
+    //TODO: implement timeblcok granular changes instead?
+  };
   const updateLotteryMutation = useMutation(
     settingsMutations.updateLotterySettings(queryClient)
   );
@@ -88,7 +88,6 @@ export function TeesheetSettingsModal({
   );
 
   const isLoading =
-    updateConfigMutation.isPending ||
     updateLotteryMutation.isPending ||
     updateVisibilityMutation.isPending;
 
@@ -103,16 +102,6 @@ export function TeesheetSettingsModal({
 
     try {
       const promises = [];
-
-      // Update configuration if changed
-      if (configChanged) {
-        promises.push(
-          updateConfigMutation.mutateAsync({
-            teesheetId: teesheet.id,
-            configId: formData.configId,
-          })
-        );
-      }
 
       // Update lottery settings
       promises.push(

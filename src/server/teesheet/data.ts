@@ -19,7 +19,6 @@ import { eq, asc } from "drizzle-orm";
 import { type TemplateBlock } from "~/app/types/TeeSheetTypes";
 import { getConfigForDate } from "~/server/settings/data";
 import { generateTimeBlocks } from "~/lib/utils";
-import { parseDate } from "~/lib/dates";
 
 type TimeBlockWithRelations = Timeblocks & {
   timeBlockMembers: TimeblockMember[];
@@ -125,8 +124,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
       lotterySettings: existingTeesheet.lotterySettings,
     };
   } else {
-    const date = parseDate(dateString);
-    const config = await getConfigForDate(date);
+    const config = await getConfigForDate(dateString);
 
     const [newTeesheet] = await db
       .insert(teesheets)

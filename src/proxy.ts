@@ -27,8 +27,15 @@ export default clerkMiddleware(async (auth, req) => {
     }
 
     // If trying to access admin route without admin permission, redirect to sign-in
-    if (isAdminRoute(req) && !isAdmin) {
-      return NextResponse.redirect(new URL("/sign-in", req.url));
+    if (isAdminRoute(req)) {
+      if (!isAdmin) {
+        return NextResponse.redirect(new URL("/sign-in", req.url));
+      }
+      // Redirect /admin to /admin/[date]
+      if (req.nextUrl.pathname === "/admin") {
+        const today = new Date().toISOString().split("T")[0];
+        return NextResponse.redirect(new URL(`/admin/${today}`, req.url));
+      }
     }
 
     // Allow admins to access pace-of-play routes in member section

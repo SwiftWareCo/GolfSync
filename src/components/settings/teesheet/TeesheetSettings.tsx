@@ -10,19 +10,10 @@ import {
 } from "~/components/ui/card";
 import { Calendar, Plus, Shield } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { TeesheetConfigDialog } from "./TeesheetConfigDialog";
-import type {
-  TeesheetConfig,
-  TeesheetConfigInput,
-  RegularConfig,
-  Template,
-  CustomConfig,
-} from "~/app/types/TeeSheetTypes";
-import { ConfigTypes } from "~/app/types/TeeSheetTypes";
+import { CreateConfigDialog } from "./CreateConfigDialog";
+import { EditConfigDialog } from "./EditConfigDialog";
+import type { Template } from "~/app/types/TeeSheetTypes";
 import toast from "react-hot-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { settingsQueryOptions } from "~/server/query-options/settings-query-options";
-import { settingsMutations } from "~/server/query-options/settings-mutation-options";
 import {
   Tooltip,
   TooltipContent,
@@ -32,105 +23,55 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { formatTimeStringTo12Hour } from "~/lib/utils";
 import { DeleteConfirmationDialog } from "~/components/ui/delete-confirmation-dialog";
+import { TeesheetConfigRule, TeesheetConfigWithRules } from "~/server/db/schema";
+import {
+  deleteTeesheetConfig,
+  createTeesheetConfigAction,
+  updateTeesheetConfigAction,
+} from "~/server/settings/actions";
 
 interface TeesheetSettingsProps {
-  initialConfigs: TeesheetConfig[];
+  configs: TeesheetConfigWithRules[];
   templates: Template[];
 }
 
 export function TeesheetSettings({
-  initialConfigs,
+  configs,
   templates,
 }: TeesheetSettingsProps) {
-  const queryClient = useQueryClient();
+  // Dialog state: null = closed, config object = editing, "create" = creating new
+  const [dialogState, setDialogState] = useState<TeesheetConfigWithRules | "create" | null>(null);
+  const [deletingConfig, setDeletingConfig] = useState<TeesheetConfigWithRules | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Use TanStack Query for configs
-  const { data: configs = initialConfigs, isLoading } = useQuery(
-    settingsQueryOptions.teesheetConfigs()
-  );
-
-  const [selectedConfig, setSelectedConfig] = useState<
-    TeesheetConfig | undefined
-  >(undefined);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [configToDelete, setConfigToDelete] = useState<
-    TeesheetConfig | undefined
-  >(undefined);
-
-  // Setup mutations with factory pattern
-  const createMutation = useMutation({
-    ...settingsMutations.createConfig(queryClient),
-    onSuccess: () => {
-      toast.success("Configuration created successfully");
-      handleCloseDialog();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to create configuration");
-    },
-  });
-
-  const updateMutation = useMutation({
-    ...settingsMutations.updateConfig(queryClient),
-    onSuccess: () => {
-      toast.success("Configuration updated successfully");
-      handleCloseDialog();
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to update configuration");
-    },
-  });
-
-  const deleteMutation = useMutation({
-    ...settingsMutations.deleteConfig(queryClient),
-    onSuccess: () => {
-      toast.success("Configuration deleted successfully");
-      setIsDeleteDialogOpen(false);
-      setConfigToDelete(undefined);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to delete configuration");
-    },
-  });
+  const isCreating = dialogState === "create";
+  const isEditing = dialogState !== null && dialogState !== "create";
+  const editingConfig = isEditing ? (dialogState as TeesheetConfigWithRules) : null;
 
   const handleCloseDialog = () => {
-    setSelectedConfig(undefined);
-    setIsDialogOpen(false);
+    setDialogState(null);
   };
 
-  const handleOpenDialog = (config?: TeesheetConfig) => {
-    setSelectedConfig(config);
-    setIsDialogOpen(true);
+  const handleOpenCreateDialog = () => {
+    setDialogState("create");
   };
 
-  const handleDelete = () => {
-    if (!configToDelete) return;
-    deleteMutation.mutate(configToDelete.id);
+  const handleOpenEditDialog = (config: TeesheetConfigWithRules) => {
+    setDialogState(config);
   };
 
-  const handleSaveConfig = (configInput: TeesheetConfigInput) => {
-    // Validate required fields for regular config
-    if (configInput.type === ConfigTypes.REGULAR) {
-      if (
-        !configInput.startTime ||
-        !configInput.endTime ||
-        !configInput.interval ||
-        !configInput.maxMembersPerBlock
-      ) {
-        toast.error("Missing required fields for regular configuration");
-        return;
-      }
-    }
-
-    if (selectedConfig) {
-      // Update existing config
-      updateMutation.mutate({
-        id: selectedConfig.id,
-        data: configInput,
-      });
-    } else {
-      // Create new config
-      createMutation.mutate(configInput);
+  const handleDelete = async (configId: number) => {
+    try {
+      setIsLoading(true);
+      await deleteTeesheetConfig(configId);
+      toast.success("Configuration deleted successfully");
+      setDeletingConfig(null);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete configuration",
+      );
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -150,10 +91,9 @@ export function TeesheetSettings({
             </div>
           </div>
           <Button
-            onClick={() => handleOpenDialog()}
+            onClick={handleOpenCreateDialog}
             variant="default"
             className="flex items-center gap-2"
-            disabled={isLoading || createMutation.isPending}
           >
             <Plus className="h-4 w-4" />
             Create New Configuration
@@ -161,17 +101,8 @@ export function TeesheetSettings({
         </CardHeader>
 
         <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8">
-              <div className="text-gray-500">Loading configurations...</div>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {configs.map((config) => {
-              const isRegularConfig = config.type === ConfigTypes.REGULAR;
-              const regularConfig = isRegularConfig
-                ? (config)
-                : null;
+          <div className="grid gap-4 md:grid-cols-2">
+            {configs.map((config: TeesheetConfigWithRules) => {
 
               return (
                 <div
@@ -196,7 +127,7 @@ export function TeesheetSettings({
                             <TooltipContent>
                               <p>
                                 This is a system configuration that cannot be
-                                deleted or deactivated
+                                deleted
                               </p>
                             </TooltipContent>
                           </Tooltip>
@@ -207,34 +138,39 @@ export function TeesheetSettings({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenDialog(config)}
-                        disabled={updateMutation.isPending || deleteMutation.isPending}
+                        onClick={() => handleOpenEditDialog(config)}
                       >
                         Edit
                       </Button>
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => {
-                          setConfigToDelete(config);
-                          setIsDeleteDialogOpen(true);
-                        }}
-                        disabled={config.isSystemConfig || deleteMutation.isPending}
+                        onClick={() => setDeletingConfig(config)}
+                        disabled={
+                          config.isSystemConfig || isLoading
+                        }
                       >
-                        {deleteMutation.isPending && configToDelete?.id === config.id ? "Deleting..." : "Delete"}
+                        {isLoading
+                          ? "Deleting..."
+                          : "Delete"}
                       </Button>
                     </div>
                   </div>
                   <div className="text-sm text-gray-500">
-                    {isRegularConfig && regularConfig ? (
+                    {config.type === "REGULAR" ? (
                       <>
                         <p>
                           Hours:{" "}
-                          {formatTimeStringTo12Hour(regularConfig.startTime)} -{" "}
-                          {formatTimeStringTo12Hour(regularConfig.endTime)}
+                          {formatTimeStringTo12Hour(
+                            config.startTime as string,
+                          )}{" "}
+                          -{" "}
+                          {formatTimeStringTo12Hour(
+                            config.endTime as string,
+                          )}
                         </p>
-                        <p>Interval: {regularConfig.interval} minutes</p>
-                        <p>Max Players: {regularConfig.maxMembersPerBlock}</p>
+                        <p>Interval: {config.interval} minutes</p>
+                        <p>Max Players: {config.maxMembersPerBlock}</p>
                       </>
                     ) : (
                       <p>Custom block configuration</p>
@@ -242,7 +178,7 @@ export function TeesheetSettings({
                     <p>Status: {config.isActive ? "Active" : "Inactive"}</p>
                     <p>
                       Applied to:{" "}
-                      {config.rules?.map((rule) =>
+                      {config.rules?.map((rule: TeesheetConfigRule) =>
                         rule.daysOfWeek
                           ?.map(
                             (day) =>
@@ -256,27 +192,43 @@ export function TeesheetSettings({
                   </div>
                 </div>
               );
-              })}
-            </div>
-          )}
+            })}
+          </div>
         </CardContent>
       </Card>
 
-      <TeesheetConfigDialog
-        isOpen={isDialogOpen}
+      <CreateConfigDialog
+        isOpen={isCreating}
         onClose={handleCloseDialog}
-        onSave={handleSaveConfig}
-        existingConfig={selectedConfig}
-        templates={templates}
+        action={createTeesheetConfigAction}
+        templates={templates as any}
+        onSuccess={handleCloseDialog}
       />
 
+      {editingConfig && (
+        <EditConfigDialog
+          isOpen={isEditing}
+          onClose={handleCloseDialog}
+          action={updateTeesheetConfigAction}
+          config={editingConfig}
+          templates={templates as any}
+          onSuccess={handleCloseDialog}
+        />
+      )}
+
       <DeleteConfirmationDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-        onConfirm={handleDelete}
+        open={deletingConfig !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeletingConfig(null);
+        }}
+        onConfirm={() => {
+          if (deletingConfig) {
+            handleDelete(deletingConfig.id);
+          }
+        }}
         title="Delete Configuration"
         description="This action cannot be undone and will permanently delete this configuration."
-        itemName={configToDelete?.name}
+        itemName={deletingConfig?.name}
       />
     </>
   );

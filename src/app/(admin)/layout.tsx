@@ -1,7 +1,6 @@
 import "~/styles/globals.css";
 import { GeistSans } from "geist/font/sans";
 import { type Metadata } from "next";
-import Navigation from "~/components/Navigation";
 
 export const metadata: Metadata = {
   title: "GolfSync",
@@ -10,15 +9,18 @@ export const metadata: Metadata = {
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
+import { getPendingChargesCount } from "~/server/charges/data";
+import NavigationClient from "~/components/NavigationClient";
+
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-
+  const pendingCounts = await getPendingChargesCount();
 
   return (
     <div className={GeistSans.variable}>
-      <div className="min-h-screen bg-org-secondary">
-        <Navigation/>
+      <div className="bg-org-secondary min-h-screen">
+          <NavigationClient chargesCount={pendingCounts.total} />
         <main className="container mx-auto px-4 py-8 pt-24">{children}</main>
       </div>
     </div>

@@ -42,19 +42,6 @@ type FillActionResult = ActionResult & {
   fill?: typeof timeBlockFills.$inferSelect;
 };
 
-type TeesheetDataResult = {
-  success: boolean;
-  error?: string;
-  data?: {
-    teesheet: any;
-    config: any;
-    timeBlocks: any[];
-    availableConfigs: any[];
-    paceOfPlayData: any[];
-    lotterySettings?: any;
-    date: string;
-  };
-};
 
 /**
  * Server action to create or replace time blocks for a teesheet
@@ -160,59 +147,6 @@ export async function replaceTimeBlocks(
     return {
       success: false,
       error: "Failed to replace time blocks",
-    };
-  }
-}
-
-// TO BE REMOVED
-export async function getTeesheetDataAction(
-  dateString: string,
-): Promise<TeesheetDataResult> {
-  try {
-    // Parse the date string into a Date object (BC timezone)
-    const date = parseDate(dateString);
-
-    // Get teesheet data - same logic as the admin page
-    const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
-
-    if (!teesheet) {
-      return {
-        success: false,
-        error: "Failed to load teesheet",
-      };
-    }
-
-    const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
-    const configsResult = await getTeesheetConfigs();
-    const paceOfPlayData = await getAllPaceOfPlayForDate(date);
-    const lotterySettings = await getLotterySettings(teesheet.id);
-
-    if (!Array.isArray(configsResult)) {
-      return {
-        success: false,
-        error: "Failed to load configurations",
-      };
-    }
-
-    // Return the same data structure as the server-side page
-    return {
-      success: true,
-      data: {
-        teesheet,
-        config,
-        timeBlocks,
-        availableConfigs: configsResult,
-        paceOfPlayData,
-        lotterySettings,
-        date: date.toISOString(), // Include the date for client-side use
-      },
-    };
-  } catch (error) {
-    console.error("Error in getTeesheetDataAction:", error);
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to load teesheet data",
     };
   }
 }

@@ -1,8 +1,6 @@
-import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
-import type { QueryOptions, MutationOptions, ActionResult } from "./types";
+import type { MutationOptions, ActionResult } from "./types";
 import {
-  getTeesheetDataAction,
   removeTimeBlockMember,
   removeTimeBlockGuest,
   checkInMember,
@@ -32,24 +30,6 @@ export type TeesheetData = {
   paceOfPlayData: any[];
   lotterySettings?: any;
   date: string;
-};
-
-// Query Options
-export const teesheetQueryOptions = {
-  // Get teesheet data by date
-  byDate: (date: string) =>
-    queryOptions({
-      queryKey: queryKeys.teesheets.byDate(date),
-      queryFn: async (): Promise<TeesheetData> => {
-        const result = await getTeesheetDataAction(date);
-        if (!result.success || !result.data) {
-          throw new Error(result.error || "Failed to load teesheet data");
-        }
-        return result.data;
-      },
-      staleTime: 2 * 60 * 1000, // 2 minutes - balance between freshness and performance
-      gcTime: 5 * 60 * 1000, // 5 minutes
-    }),
 };
 
 // Mutation Options
