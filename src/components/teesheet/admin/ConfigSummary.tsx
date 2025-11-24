@@ -22,7 +22,7 @@ export function ConfigSummary({ config, timeBlocks, dateString }: ConfigSummaryP
     );
   }
 
-  const maxMembers = config.maxMembersPerBlock || "N/A";
+  const maxMembers = 4;
 
   return (
     <Card>

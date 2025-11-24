@@ -24,7 +24,6 @@ export const teesheetConfigs = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     name: varchar("name", { length: 50 }).notNull(),
-    maxMembersPerBlock: integer("max_members_per_block"),
     isActive: boolean("is_active").notNull().default(true),
     // Scheduling: when this config applies
     daysOfWeek: integer("days_of_week").array(), // [1,2,3,4,5] for Mon-Fri, null = always
@@ -52,7 +51,7 @@ export const configBlocks = createTable(
       .notNull(),
     displayName: varchar("display_name", { length: 100 }),
     startTime: varchar("start_time", { length: 5 }).notNull(),
-    maxPlayers: integer("max_players").notNull(),
+    maxPlayers: integer("max_players").notNull().default(4),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
@@ -67,7 +66,6 @@ export const configBlocks = createTable(
     unique("config_blocks_config_sort_unq").on(table.configId, table.sortOrder),
   ],
 );
-
 
 // Define relations for config blocks
 export const configBlocksRelations = relations(configBlocks, ({ one }) => ({
@@ -86,17 +84,36 @@ export const teesheetConfigsRelations = relations(
 );
 
 export const teesheetConfigSelectSchema = createSelectSchema(teesheetConfigs);
-export const teesheetConfigSchema = createInsertSchema(teesheetConfigs);
+export const teesheetConfigInsertSchema = createInsertSchema(teesheetConfigs);
 export const teesheetConfigUpdateSchema = createUpdateSchema(teesheetConfigs);
 
 export const configBlockSelectSchema = createSelectSchema(configBlocks);
-export const configBlockSchema = createInsertSchema(configBlocks);
+export const configBlockInsertSchema = createInsertSchema(configBlocks);
 export const configBlockUpdateSchema = createUpdateSchema(configBlocks);
 
 export type TeesheetConfig = z.infer<typeof teesheetConfigSelectSchema>;
 export type ConfigBlock = z.infer<typeof configBlockSelectSchema>;
 
+export type TeesheetConfigInsert = z.infer<typeof teesheetConfigInsertSchema>;
+export type ConfigBlockInsert = z.infer<typeof configBlockInsertSchema>;
+
 export type TeesheetConfigWithBlocks = WithRelations<
   TeesheetConfig,
   { blocks: ConfigBlock[] }
+>;
+
+// Schema for blocks with string or number IDs (for UI editing/generation)
+export const configBlockWithIdSchema = configBlockInsertSchema
+  .omit({ id: true })
+  .extend({
+    id: z.union([z.string(), z.number()]),
+  });
+
+export const TeesheetConfigWithBlocksInsertSchema =
+  teesheetConfigInsertSchema.extend({
+    blocks: z.array(configBlockWithIdSchema),
+  });
+
+export type TeesheetConfigWithBlocksInsert = z.infer<
+  typeof TeesheetConfigWithBlocksInsertSchema
 >;

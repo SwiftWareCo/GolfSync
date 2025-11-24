@@ -9,10 +9,7 @@ import {
   timeblockOverrides,
   timeBlockMembers,
 } from "~/server/db/schema";
-import {
-  formatDateToYYYYMMDD,
-  formatDisplayTime,
-} from "~/lib/utils";
+import { formatDateToYYYYMMDD, formatTimeString } from "~/lib/utils";
 import { format } from "date-fns";
 
 type ResultType<T> = { success: false; error: string } | T;
@@ -20,7 +17,6 @@ type ResultType<T> = { success: false; error: string } | T;
 // Get all timeblock restrictions for the current organization
 export async function getTimeblockRestrictions(): Promise<ResultType<any[]>> {
   try {
-
     const restrictions = await db.query.timeblockRestrictions.findMany({
       orderBy: [
         timeblockRestrictions.restrictionCategory,
@@ -35,13 +31,11 @@ export async function getTimeblockRestrictions(): Promise<ResultType<any[]>> {
   }
 }
 
-
 // Get timeblock restrictions by category
 export async function getTimeblockRestrictionsByCategory(
   category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY",
 ): Promise<ResultType<any[]>> {
   try {
-
     const restrictions = await db.query.timeblockRestrictions.findMany({
       where: eq(timeblockRestrictions.restrictionCategory, category),
       orderBy: [timeblockRestrictions.name],
@@ -59,7 +53,6 @@ export async function getTimeblockRestrictionById(
   id: number,
 ): Promise<ResultType<any>> {
   try {
-
     const restriction = await db.query.timeblockRestrictions.findFirst({
       where: eq(timeblockRestrictions.id, id),
     });
@@ -98,7 +91,6 @@ export async function checkBatchTimeblockRestrictions(params: {
   >
 > {
   try {
-
     const { timeBlocks, memberId, memberClass, guestId } = params;
     const results: Array<{
       timeBlockId: number;
@@ -247,7 +239,7 @@ export async function checkBatchTimeblockRestrictions(params: {
                     restrictionCategory: "MEMBER_CLASS",
                     memberClass,
                     type: "TIME",
-                    message: `Booking time (${formatDisplayTime(bookingTime)}) is within restricted hours (${restriction.startTime ? formatDisplayTime(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatDisplayTime(restriction.endTime) : "23:59"})`,
+                    message: `Booking time (${formatTimeString(bookingTime)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
                     canOverride: restriction.canOverride,
                   });
                 }
@@ -345,7 +337,7 @@ export async function checkBatchTimeblockRestrictions(params: {
                     restrictionDescription: restriction.description,
                     restrictionCategory: "GUEST",
                     type: "TIME",
-                    message: `Guest booking time (${formatDisplayTime(bookingTime)}) is within restricted hours (${restriction.startTime ? formatDisplayTime(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatDisplayTime(restriction.endTime) : "23:59"})`,
+                    message: `Guest booking time (${formatTimeString(bookingTime)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
                     canOverride: restriction.canOverride,
                   });
                 }
@@ -417,7 +409,6 @@ export async function getTimeblockOverrides(params?: {
   searchTerm?: string;
 }): Promise<ResultType<any[]>> {
   try {
-
     // Start with the base query conditions
     const conditions = [];
 

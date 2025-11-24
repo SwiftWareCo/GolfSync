@@ -280,7 +280,6 @@ export function getMemberClassStyling(className?: string | null) {
   return classMap[classUpper] || defaultStyle;
 }
 
-
 export function generateTimeBlocks(
   startTime: string,
   endTime: string,
@@ -289,7 +288,12 @@ export function generateTimeBlocks(
   const [startHour, startMin] = startTime.split(":").map(Number);
   const [endHour, endMin] = endTime.split(":").map(Number);
 
-  if(startHour === undefined || startMin === undefined || endHour === undefined || endMin === undefined) {
+  if (
+    startHour === undefined ||
+    startMin === undefined ||
+    endHour === undefined ||
+    endMin === undefined
+  ) {
     throw new Error("Time must be in HH:MM format");
   }
 
@@ -298,7 +302,7 @@ export function generateTimeBlocks(
     throw new Error("Time must be in HH:MM format");
   }
 
-  // 9 *60 = 540 
+  // 9 *60 = 540
   //end hour = 19 * 60 = 1140
   const blocks: string[] = [];
   let totalMinutes = startHour * 60 + startMin;
@@ -314,7 +318,6 @@ export function generateTimeBlocks(
   }
   return blocks;
 }
-
 
 /**
  * Formats a date in YYYY-MM-DD format
@@ -332,54 +335,11 @@ export function formatDateToYYYYMMDD(date: Date | string): string {
 }
 
 /**
- * Formats a display time from HH:MM to user-friendly format (e.g., "2:30 PM")
- */
-export function formatDisplayTime(time: string): string {
-  const parts = time.split(":");
-  const hours = parseInt(parts[0] || "0", 10);
-  const minutes = parseInt(parts[1] || "0", 10);
-
-  const date = new Date();
-  date.setHours(hours, minutes, 0, 0);
-  return format(date, "h:mm a");
-}
-
-/**
  * Formats a date for display in user-friendly format (e.g., "May 7th, 2025")
  */
 export function formatDisplayDate(date: Date | string): string {
   const dateObj = typeof date === "string" ? new Date(date) : date;
   return format(dateObj, "MMMM do, yyyy");
-}
-
-/**
- * Formats a date and time for display (e.g., "May 7th 7:00 AM, 2025")
- */
-export function formatDisplayDateTime(
-  date: Date | string,
-  time?: string,
-): string {
-  const dateObj = typeof date === "string" ? new Date(date) : date;
-
-  if (time) {
-    // If time is provided as a separate HH:MM string
-    return `${format(dateObj, "MMMM do")} ${formatDisplayTime(time)}, ${format(dateObj, "yyyy")}`;
-  }
-
-  // Otherwise format the date object with its time component
-  return format(dateObj, "MMMM do h:mm a, yyyy");
-}
-
-/**
- * Formats a month for display (e.g., "May 2025")
- */
-export function formatDisplayMonth(date: Date | string): string {
-  const dateObj = typeof date === "string" ? new Date(date) : date;
-  return format(dateObj, "MMMM yyyy");
-}
-
-export function formatTimeBlockTime(date: Date): string {
-  return format(date, "HH:mm");
 }
 
 export function getOrganizationColors(theme?: {
@@ -410,47 +370,6 @@ export function getOrganizationColors(theme?: {
       secondary: secondaryColor,
     },
   };
-}
-/**
- * Checks if a timeblock is in the past based on its date and time
- * @param date The date of the timeblock in "YYYY-MM-DD" format or Date object
- * @param time The time of the timeblock in "HH:MM" format (optional)
- * @returns true if the timeblock is in the past
- */
-export function checkTimeBlockInPast(
-  date: Date | string,
-  time?: string,
-): boolean {
-  const now = new Date();
-
-  // Handle date parameter to ensure consistent timezone handling
-  let blockDate: Date;
-  if (typeof date === "string") {
-    // Parse the YYYY-MM-DD format manually to ensure proper local date
-    const dateParts = date.split("-");
-    const year = parseInt(dateParts[0] || "0", 10);
-    const month = parseInt(dateParts[1] || "0", 10) - 1; // JS months are 0-indexed
-    const day = parseInt(dateParts[2] || "0", 10);
-
-    blockDate = new Date(year, month, day);
-  } else {
-    // Create a new date with just the year, month, and day components
-    // to avoid timezone issues
-    blockDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  }
-
-  // If time is provided, set the hours and minutes
-  if (time) {
-    const timeParts = time.split(":");
-    const hours = parseInt(timeParts[0] || "0", 10);
-    const minutes = parseInt(timeParts[1] || "0", 10);
-    blockDate.setHours(hours, minutes, 0, 0);
-  } else {
-    // If no time provided, set to start of day (midnight)
-    blockDate.setHours(0, 0, 0, 0);
-  }
-
-  return blockDate < now;
 }
 
 /**
@@ -676,33 +595,30 @@ export function formatDateStringToWords(
   return `${dayNames[h]}, ${monthNames[month - 1]} ${day}, ${year}`;
 }
 
-/**
- * Simple function to get time in 12-hour format from 24-hour time string
- * @param timeString Time string in "HH:MM" 24-hour format
- * @returns Time in "h:MM AM/PM" format
- */
-export function formatTimeStringTo12Hour(
-  timeString: string | undefined,
-): string {
-  if (!timeString || !/^\d{2}:\d{2}$/.test(timeString)) {
-    return timeString || ""; // Return original or empty string if undefined
+
+export function formatTimeString(time: string): string {
+  if (!time) {
+    return "";
   }
 
-  const parts = timeString.split(":");
-  const hourStr = parts[0] || "";
-  const minuteStr = parts[1] || "";
-
-  if (!hourStr || !minuteStr) {
-    return timeString; // Return original if any part is missing
+  const parts = time.split(":");
+  if (parts.length !== 2) {
+    return time; // Not HH:MM format, return as-is
   }
 
-  const hour = parseInt(hourStr, 10);
+  const [hoursStr = "0", minutesStr = "0"] = parts;
 
-  // Convert to 12-hour format
-  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-  const ampm = hour >= 12 ? "PM" : "AM";
+  const hours = parseInt(hoursStr, 10);
+  const minutes = parseInt(minutesStr, 10);
 
-  return `${hour12}:${minuteStr} ${ampm}`;
+  // If parsing failed, return original
+  if (isNaN(hours) || isNaN(minutes)) {
+    return time;
+  }
+
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return format(date, "h:mm a");
 }
 
 /**

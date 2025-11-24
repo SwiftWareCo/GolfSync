@@ -10,7 +10,7 @@ import {
 } from "~/components/ui/dialog";
 import { Card, CardContent } from "~/components/ui/card";
 import { Calendar, Clock, MessageSquare } from "lucide-react";
-import { formatDateStringToWords, formatTimeStringTo12Hour } from "~/lib/utils";
+import { formatDateStringToWords, formatTimeString } from "~/lib/utils";
 import { formatTime12Hour } from "~/lib/dates";
 import { PaceOfPlayStatus } from "~/components/pace-of-play/PaceOfPlayStatus";
 import type {
@@ -86,7 +86,7 @@ export function PaceOfPlayHistoryDialog({
           <div className="max-h-[60vh] space-y-3 overflow-y-auto">
             {history.map((item) => {
               const formattedDate = formatDateStringToWords(item.date);
-              const formattedTeeTime = formatTimeStringTo12Hour(item.startTime);
+              const formattedTeeTime = formatTimeString(item.startTime);
 
               return (
                 <Card key={item.id} className="overflow-hidden">
@@ -108,7 +108,7 @@ export function PaceOfPlayHistoryDialog({
                       <div className="grid grid-cols-3 gap-2 rounded-md bg-gray-50 p-2 text-xs">
                         <div className="space-y-1">
                           <p className="font-medium">Tee Time</p>
-                          <p>{formatTimeStringTo12Hour(item.startTime)}</p>
+                          <p>{formatTimeString(item.startTime)}</p>
                         </div>
                         <div className="space-y-1">
                           <p className="font-medium">Turn</p>

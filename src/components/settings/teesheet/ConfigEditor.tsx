@@ -1,20 +1,30 @@
 "use client";
 
-import { useForm, type UseFormReturn, type FieldErrors } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { teesheetConfigSchema } from "~/server/db/schema/teesheetConfigs.schema";
 import { useActionState, useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
+import { CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { ConfigPreview } from "./ConfigPreview";
-import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
+import type {
+  TeesheetConfigWithBlocks,
+  TeesheetConfigWithBlocksInsert,
+  ConfigBlockInsert,
+} from "~/server/db/schema";
 import {
-  createTeesheetConfigAction,
-  updateTeesheetConfigAction,
+  createTeesheetConfig,
+  updateTeesheetConfig,
 } from "~/server/settings/actions";
 import toast from "react-hot-toast";
+import { TeesheetConfigWithBlocksInsertSchema } from "~/server/db/schema/teesheetConfigs.schema";
+import { startTransition } from "react";
+import { CardContent, Card } from "~/components/ui/card";
+import { Zap } from "lucide-react";
+
+type BlockWithId = Omit<ConfigBlockInsert, "id"> & { id: string | number };
 
 interface ConfigEditorProps {
   mode: "create" | "edit";
@@ -23,203 +33,315 @@ interface ConfigEditorProps {
   onCancel: () => void;
 }
 
+function generateBlocks(
+  startTime: string,
+  endTime: string,
+  interval: number,
+  displayName?: string,
+): BlockWithId[] {
+  const blocks: BlockWithId[] = [];
+  const timeParts = startTime.split(":");
+  const startHour = Number(timeParts[0]);
+  const startMin = Number(timeParts[1]);
+
+  const endTimeParts = endTime.split(":");
+  const endHour = Number(endTimeParts[0]);
+  const endMin = Number(endTimeParts[1]);
+
+  const startMinutes = startHour * 60 + startMin;
+  const endMinutes = endHour * 60 + endMin;
+
+  let currentMinutes = startMinutes;
+  let sortOrder = 0;
+
+  while (currentMinutes < endMinutes) {
+    const hour = Math.floor(currentMinutes / 60);
+    const min = currentMinutes % 60;
+    const timeStr = `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+
+    blocks.push({
+      id: `block-${Date.now()}-${sortOrder}`,
+      startTime: timeStr,
+      maxPlayers: 4,
+      sortOrder,
+      displayName: displayName || undefined,
+      configId: 0, // temporary, will be set by server
+    });
+
+    currentMinutes += interval;
+    sortOrder++;
+  }
+
+  return blocks;
+}
+
 export function ConfigEditor({
   mode,
   config,
   onSuccess,
   onCancel,
 }: ConfigEditorProps) {
-  const form = useForm({
-    resolver: zodResolver(teesheetConfigSchema),
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<TeesheetConfigWithBlocksInsert>({
+    resolver: zodResolver(TeesheetConfigWithBlocksInsertSchema),
     defaultValues: {
       name: config?.name || "",
-      startTime: config?.startTime || "08:00",
-      endTime: config?.endTime || "17:00",
-      interval: config?.interval || 30,
-      maxMembersPerBlock: config?.maxMembersPerBlock || 4,
-      isActive: config?.isActive ?? true,
-      disallowMemberBooking: config?.disallowMemberBooking ?? false,
+      blocks: config?.blocks || [],
+      daysOfWeek: config?.daysOfWeek || [],
+      isActive: config?.isActive || false,
     },
   });
 
+  const blocks = watch("blocks");
+
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
-    config?.rules?.[0]?.daysOfWeek || []
+    config?.daysOfWeek || [],
   );
 
-  const actionToUse =
-    mode === "create" ? createTeesheetConfigAction : updateTeesheetConfigAction;
-  const [, action, isPending] = useActionState(actionToUse, null);
+  // Generator state (uncontrolled inputs)
+  const [generatorState, setGeneratorState] = useState({
+    startTime: "08:00",
+    endTime: "18:00",
+    interval: 15,
+    displayName: "",
+  });
 
-  const handleSubmit = async (data: any) => {
-    try {
-      if (mode === "edit" && config) {
-        await action({ id: config.id, ...data });
-      } else {
-        await action(data);
-      }
-      toast.success(
-        mode === "create"
-          ? "Configuration created successfully"
-          : "Configuration updated successfully"
-      );
-      onSuccess();
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Failed to save configuration"
-      );
+  const actionToUse =
+    mode === "create" ? createTeesheetConfig : updateTeesheetConfig;
+
+  const [error, action, isPending] = useActionState(actionToUse, null);
+
+  const handleGenerate = () => {
+    if (
+      !generatorState.startTime ||
+      !generatorState.endTime ||
+      !generatorState.interval
+    ) {
+      toast.error("Please fill in all required fields");
+      return;
     }
+
+    const newBlocks = generateBlocks(
+      generatorState.startTime,
+      generatorState.endTime,
+      generatorState.interval,
+      generatorState.displayName || undefined,
+    );
+
+    setValue("blocks", newBlocks);
+    toast.success(`Generated ${newBlocks.length} blocks`);
   };
 
+  const onSubmit = handleSubmit(
+    async (data: TeesheetConfigWithBlocksInsert) => {
+      try {
+        if (mode === "edit" && config) {
+          startTransition(async () => {
+            await action({ id: config.id, ...data, daysOfWeek });
+          });
+        } else {
+          startTransition(async () => {
+            await action({ ...data, daysOfWeek });
+          });
+        }
+        toast.success(
+          mode === "create"
+            ? "Configuration created successfully"
+            : "Configuration updated successfully",
+        );
+        onSuccess();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to save configuration",
+        );
+      }
+    },
+  );
+
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-      {/* Left Panel - Form Inputs */}
-      <div className="space-y-6 overflow-y-auto pr-4">
-        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+    <div className="grid grid-cols-3 gap-8">
+      {/* Left Panel - Form (1 column) */}
+
+      <div className="overflow-y-auto p-2">
+        <div className="mb-6 border-b pb-6">
+          {mode === "create" ? (
+            <div>
+              <h2 className="text-org-primary mb-2 text-xl leading-none font-semibold tracking-tight">
+                Create New Configuration
+              </h2>
+              <p className="text-sm text-gray-500">
+                Set up a new teesheet configuration
+              </p>
+            </div>
+          ) : (
+            <div>
+              <h2 className="text-org-primary mb-2 text-xl leading-none font-semibold tracking-tight">
+                Edit: {config?.name}
+              </h2>
+              <p className="text-sm text-gray-500">
+                Modify this teesheet configuration
+              </p>
+            </div>
+          )}
+        </div>
+        <form onSubmit={onSubmit} className="space-y-6">
           {/* Configuration Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Configuration Name</Label>
             <Input
               id="name"
               placeholder="e.g., Morning Shotgun"
-              {...form.register("name")}
+              {...register("name")}
               className="w-full"
             />
-            {form.formState.errors.name && (
+            {errors.name && (
               <span className="text-xs text-red-500">
-                {form.formState.errors.name.message as string}
+                {errors.name.message as string}
               </span>
             )}
           </div>
+          {/* Generator Section - Top */}
+          <div>
+            <h3 className="mb-3 text-sm font-semibold">Generate Blocks</h3>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="genStartTime" className="text-xs">
+                    Start
+                  </Label>
+                  <Input
+                    id="genStartTime"
+                    type="time"
+                    value={generatorState.startTime}
+                    onChange={(e) =>
+                      setGeneratorState({
+                        ...generatorState,
+                        startTime: e.target.value,
+                      })
+                    }
+                    className="text-sm"
+                  />
+                </div>
 
-          {/* Time Settings */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="startTime">Start Time</Label>
-              <Input
-                id="startTime"
-                type="time"
-                {...form.register("startTime")}
-              />
-              {form.formState.errors.startTime && (
-                <span className="text-xs text-red-500">
-                  {form.formState.errors.startTime.message as string}
-                </span>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="endTime">End Time</Label>
-              <Input
-                id="endTime"
-                type="time"
-                {...form.register("endTime")}
-              />
-              {form.formState.errors.endTime && (
-                <span className="text-xs text-red-500">
-                  {form.formState.errors.endTime.message as string}
-                </span>
-              )}
-            </div>
-          </div>
+                <div className="space-y-2">
+                  <Label htmlFor="genEndTime" className="text-xs">
+                    End
+                  </Label>
+                  <Input
+                    id="genEndTime"
+                    type="time"
+                    value={generatorState.endTime}
+                    onChange={(e) =>
+                      setGeneratorState({
+                        ...generatorState,
+                        endTime: e.target.value,
+                      })
+                    }
+                    className="text-sm"
+                  />
+                </div>
+              </div>
 
-          {/* Interval & Max Players */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="interval">Interval (minutes)</Label>
-              <Input
-                id="interval"
-                type="number"
-                min={5}
-                max={60}
-                {...form.register("interval", { valueAsNumber: true })}
-              />
-              {form.formState.errors.interval && (
-                <span className="text-xs text-red-500">
-                  {form.formState.errors.interval.message as string}
-                </span>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="maxMembersPerBlock">Max Players per Block</Label>
-              <Input
-                id="maxMembersPerBlock"
-                type="number"
-                {...form.register("maxMembersPerBlock", { valueAsNumber: true })}
-              />
-              {form.formState.errors.maxMembersPerBlock && (
-                <span className="text-xs text-red-500">
-                  {form.formState.errors.maxMembersPerBlock.message as string}
-                </span>
-              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="genInterval" className="text-xs">
+                    Interval (min)
+                  </Label>
+                  <Input
+                    id="genInterval"
+                    type="number"
+                    min={5}
+                    max={60}
+                    value={generatorState.interval}
+                    onChange={(e) =>
+                      setGeneratorState({
+                        ...generatorState,
+                        interval: parseInt(e.target.value) || 15,
+                      })
+                    }
+                    className="text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="genDisplayName" className="text-xs">
+                    Display Name
+                  </Label>
+                  <Input
+                    id="genDisplayName"
+                    type="text"
+                    placeholder="Optional"
+                    value={generatorState.displayName}
+                    onChange={(e) =>
+                      setGeneratorState({
+                        ...generatorState,
+                        displayName: e.target.value,
+                      })
+                    }
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleGenerate}
+                className="w-full"
+              >
+                <Zap className="mr-2 h-4 w-4" />
+                Generate
+              </Button>
             </div>
           </div>
 
           {/* Days of Week */}
           <div className="space-y-2">
             <Label>Days of Week</Label>
-            <div className="grid grid-cols-4 gap-2">
-              {[
-                "Sun",
-                "Mon",
-                "Tue",
-                "Wed",
-                "Thu",
-                "Fri",
-                "Sat",
-              ].map((day, index) => {
-                const isSelected = daysOfWeek.includes(index);
-                return (
-                  <Button
-                    key={day}
-                    type="button"
-                    variant={isSelected ? "default" : "outline"}
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      if (isSelected) {
-                        setDaysOfWeek(daysOfWeek.filter((d) => d !== index));
-                      } else {
-                        setDaysOfWeek([...daysOfWeek, index]);
-                      }
-                    }}
-                  >
-                    {day}
-                  </Button>
-                );
-              })}
+            <div className="grid grid-cols-7 gap-1">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                (day, index) => {
+                  const isSelected = daysOfWeek.includes(index);
+                  return (
+                    <Button
+                      key={day}
+                      type="button"
+                      variant={isSelected ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        if (isSelected) {
+                          setDaysOfWeek(daysOfWeek.filter((d) => d !== index));
+                        } else {
+                          setDaysOfWeek([...daysOfWeek, index]);
+                        }
+                      }}
+                    >
+                      {day}
+                    </Button>
+                  );
+                },
+              )}
             </div>
           </div>
 
           {/* Toggles */}
-          <div className="space-y-3 border-t pt-4">
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="isActive"
-                checked={form.watch("isActive")}
-                onCheckedChange={(checked) =>
-                  form.setValue("isActive", checked)
-                }
-              />
-              <Label htmlFor="isActive">Active</Label>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="disallowMemberBooking"
-                checked={form.watch("disallowMemberBooking")}
-                onCheckedChange={(checked) =>
-                  form.setValue("disallowMemberBooking", checked)
-                }
-              />
-              <Label htmlFor="disallowMemberBooking">
-                Disable Member Booking
-              </Label>
-            </div>
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="isActive"
+              onCheckedChange={(checked) => setValue("isActive", checked)}
+            />
+            <Label htmlFor="isActive">Active</Label>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-2 border-t pt-6">
+          <div className="flex gap-2 pt-4">
             <Button
               type="button"
               variant="outline"
@@ -229,29 +351,23 @@ export function ConfigEditor({
             >
               Cancel
             </Button>
-            <Button
-              type="submit"
-              disabled={isPending}
-              className="flex-1"
-            >
+            <Button type="submit" disabled={isPending} className="flex-1">
               {isPending
                 ? "Saving..."
                 : mode === "create"
-                  ? "Create Configuration"
-                  : "Update Configuration"}
+                  ? "Create"
+                  : "Update"}
             </Button>
           </div>
         </form>
       </div>
 
-      {/* Right Panel - Live Preview */}
-      <div className="hidden overflow-y-auto pr-4 lg:block">
-        <ConfigPreview control={form.control} blocks={config?.blocks || []} />
-      </div>
-
-      {/* Mobile Preview - Below Form */}
-      <div className="block lg:hidden">
-        <ConfigPreview control={form.control} blocks={config?.blocks || []} />
+      {/* Right Panel - Blocks Preview (2 columns) */}
+      <div className="col-span-2 overflow-y-auto">
+        <ConfigPreview
+          blocks={blocks}
+          onBlocksChange={(newBlocks) => setValue("blocks", newBlocks)}
+        />
       </div>
     </div>
   );

@@ -4,8 +4,11 @@ import React, { useEffect } from "react";
 import { X, UserIcon, Users, CheckCircle } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { type TimeBlockMemberView, type TimeBlockFill } from "~/app/types/TeeSheetTypes";
-import { formatDisplayTime } from "~/lib/utils";
+import {
+  type TimeBlockMemberView,
+  type TimeBlockFill,
+} from "~/app/types/TeeSheetTypes";
+import { formatTimeString } from "~/lib/utils";
 
 type ClientTimeBlock = {
   id: number;
@@ -49,7 +52,7 @@ export function PlayerDetailsDrawer({
 
   const totalPeople = timeBlock.members.length + (timeBlock.fills?.length || 0);
   const maxPlayers = timeBlock.maxMembersPerBlock || 4;
-  const startTimeDisplay = formatDisplayTime(timeBlock.startTime);
+  const startTimeDisplay = formatTimeString(timeBlock.startTime);
 
   return (
     <>
@@ -72,7 +75,7 @@ export function PlayerDetailsDrawer({
         <div className="flex items-center justify-between border-b border-gray-200 p-4">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-org-primary" />
+              <Users className="text-org-primary h-5 w-5" />
               <h3 className="text-lg font-semibold text-gray-900">
                 {startTimeDisplay} Tee Time
               </h3>

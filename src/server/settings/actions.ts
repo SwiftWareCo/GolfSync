@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath, updateTag } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { generateTimeBlocks } from "~/lib/utils";
+import type { TeesheetConfigWithBlocksInsert } from "~/server/db/schema";
 
 export async function deleteTeesheetConfig(
   previousState: any,
@@ -158,163 +159,21 @@ export async function updateLotterySettings(
  * FormData wrapper for creating teesheet configs
  * Blocks can be generated from startTime/endTime/interval or added individually
  */
-export async function createTeesheetConfigAction(
+export async function createTeesheetConfig(
   previousState: any,
-  formData: FormData,
+  data: TeesheetConfigWithBlocksInsert
 ) {
-  const name = formData.get("name") as string;
-  const isActive = formData.get("isActive") === "true";
-  const disallowMemberBooking = formData.get("disallowMemberBooking") === "true";
-  const maxMembersPerBlock = formData.get("maxMembersPerBlock") as string;
-
-  if (!name || !maxMembersPerBlock) {
-    throw new Error("Name and max members are required");
-  }
-
-  try {
-    // Create the config
-    const [newConfig] = await db
-      .insert(teesheetConfigs)
-      .values({
-        name,
-        isActive,
-        disallowMemberBooking,
-        maxMembersPerBlock: parseInt(maxMembersPerBlock, 10),
-      })
-      .returning();
-
-    if (!newConfig) {
-      throw new Error("Failed to create config");
-    }
-    const configId = newConfig.id;
-
-    // Check if auto-generating blocks from startTime/endTime/interval
-    const startTime = formData.get("startTime") as string | null;
-    const endTime = formData.get("endTime") as string | null;
-    const interval = formData.get("interval") as string | null;
-
-    if (startTime && endTime && interval) {
-      // Generate and insert config blocks immediately
-      const timeBlocksArray = generateTimeBlocks(startTime, endTime, parseInt(interval, 10));
-      if (timeBlocksArray.length > 0) {
-        const blocksToInsert = timeBlocksArray.map((blockStartTime, index) => ({
-          configId,
-          displayName: null,
-          startTime: blockStartTime,
-          maxPlayers: parseInt(maxMembersPerBlock, 10),
-          sortOrder: index,
-        }));
-
-        await db.insert(configBlocks).values(blocksToInsert);
-      }
-    }
-
-    // Update scheduling fields if provided
-    const daysOfWeekStr = formData.get("daysOfWeek");
-    const configStartDate = formData.get("startDate") as string | null;
-    const configEndDate = formData.get("endDate") as string | null;
-
-    if (daysOfWeekStr || configStartDate || configEndDate) {
-      const updateData: any = {};
-      if (daysOfWeekStr && typeof daysOfWeekStr === "string") {
-        updateData.daysOfWeek = JSON.parse(daysOfWeekStr);
-      }
-      if (configStartDate) updateData.startDate = configStartDate;
-      if (configEndDate) updateData.endDate = configEndDate;
-
-      await db
-        .update(teesheetConfigs)
-        .set(updateData)
-        .where(eq(teesheetConfigs.id, configId));
-    }
-
-    revalidatePath("/admin/settings");
-    updateTag("teesheet-configs");
-    return { success: true, configId };
-  } catch (error) {
-    console.error("Error creating config:", error);
-    throw error;
-  }
+  
+console.log(data);
 }
 
 /**
  * FormData wrapper for updating teesheet configs
  */
-export async function updateTeesheetConfigAction(
+export async function updateTeesheetConfig(
   previousState: any,
-  formData: FormData,
+  data: TeesheetConfigWithBlocksInsert
+
 ) {
-  const configIdStr = formData.get("configId") as string;
-  const name = formData.get("name") as string;
-  const isActive = formData.get("isActive") === "true";
-  const disallowMemberBooking = formData.get("disallowMemberBooking") === "true";
-  const maxMembersPerBlock = formData.get("maxMembersPerBlock") as string;
 
-  if (!configIdStr || !name || !maxMembersPerBlock) {
-    throw new Error("Config ID, name, and max members are required");
-  }
-
-  const configId = parseInt(configIdStr, 10);
-
-  try {
-    // Update the config
-    await db
-      .update(teesheetConfigs)
-      .set({
-        name,
-        isActive,
-        disallowMemberBooking,
-        maxMembersPerBlock: parseInt(maxMembersPerBlock, 10),
-      })
-      .where(eq(teesheetConfigs.id, configId));
-
-    // Check if regenerating blocks from startTime/endTime/interval
-    const startTime = formData.get("startTime") as string | null;
-    const endTime = formData.get("endTime") as string | null;
-    const interval = formData.get("interval") as string | null;
-
-    if (startTime && endTime && interval) {
-      // Regenerate blocks
-      await db.delete(configBlocks).where(eq(configBlocks.configId, configId));
-
-      const timeBlocksArray = generateTimeBlocks(startTime, endTime, parseInt(interval, 10));
-      if (timeBlocksArray.length > 0) {
-        const blocksToInsert = timeBlocksArray.map((blockStartTime, index) => ({
-          configId,
-          displayName: null,
-          startTime: blockStartTime,
-          maxPlayers: parseInt(maxMembersPerBlock, 10),
-          sortOrder: index,
-        }));
-
-        await db.insert(configBlocks).values(blocksToInsert);
-      }
-    }
-
-    // Update scheduling fields if provided
-    const daysOfWeekStr = formData.get("daysOfWeek");
-    const configStartDate = formData.get("startDate") as string | null;
-    const configEndDate = formData.get("endDate") as string | null;
-
-    if (daysOfWeekStr || configStartDate || configEndDate) {
-      const updateData: any = {};
-      if (daysOfWeekStr && typeof daysOfWeekStr === "string") {
-        updateData.daysOfWeek = JSON.parse(daysOfWeekStr);
-      }
-      if (configStartDate) updateData.startDate = configStartDate;
-      if (configEndDate) updateData.endDate = configEndDate;
-
-      await db
-        .update(teesheetConfigs)
-        .set(updateData)
-        .where(eq(teesheetConfigs.id, configId));
-    }
-
-    revalidatePath("/admin/settings");
-    updateTag("teesheet-configs");
-    return { success: true, configId };
-  } catch (error) {
-    console.error("Error updating config:", error);
-    throw error;
-  }
 }

@@ -13,7 +13,7 @@ import { auth } from "@clerk/nextjs/server";
 import {
   formatDisplayDate,
   formatDateToYYYYMMDD,
-  formatDisplayTime,
+  formatTimeString,
   formatCalendarDate,
   preserveDate,
 } from "~/lib/utils";
@@ -29,8 +29,17 @@ export async function getTimeblockRestrictionsAction() {
   try {
     const result = await getTimeblockRestrictions();
     // Handle ResultType<any[]> return type
-    if (result && typeof result === 'object' && 'success' in result && !result.success) {
-      return { success: false, error: result.error || "Failed to load restrictions", data: [] };
+    if (
+      result &&
+      typeof result === "object" &&
+      "success" in result &&
+      !result.success
+    ) {
+      return {
+        success: false,
+        error: result.error || "Failed to load restrictions",
+        data: [],
+      };
     }
     return { success: true, data: result };
   } catch (error) {
@@ -40,12 +49,21 @@ export async function getTimeblockRestrictionsAction() {
 }
 
 export async function getTimeblockRestrictionsByCategoryAction(
-  category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY"
+  category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY",
 ) {
   try {
     const result = await getTimeblockRestrictionsByCategory(category);
-    if (result && typeof result === 'object' && 'success' in result && !result.success) {
-      return { success: false, error: result.error || "Failed to load restrictions", data: [] };
+    if (
+      result &&
+      typeof result === "object" &&
+      "success" in result &&
+      !result.success
+    ) {
+      return {
+        success: false,
+        error: result.error || "Failed to load restrictions",
+        data: [],
+      };
     }
     return { success: true, data: result };
   } catch (error) {
@@ -57,8 +75,16 @@ export async function getTimeblockRestrictionsByCategoryAction(
 export async function getTimeblockRestrictionByIdAction(id: number) {
   try {
     const result = await getTimeblockRestrictionById(id);
-    if (result && typeof result === 'object' && 'success' in result && !result.success) {
-      return { success: false, error: result.error || "Failed to load restriction" };
+    if (
+      result &&
+      typeof result === "object" &&
+      "success" in result &&
+      !result.success
+    ) {
+      return {
+        success: false,
+        error: result.error || "Failed to load restriction",
+      };
     }
     return { success: true, data: result };
   } catch (error) {
@@ -78,8 +104,17 @@ export async function getTimeblockOverridesAction(params?: {
 }) {
   try {
     const result = await getTimeblockOverrides(params);
-    if (result && typeof result === 'object' && 'success' in result && !result.success) {
-      return { success: false, error: result.error || "Failed to load overrides", data: [] };
+    if (
+      result &&
+      typeof result === "object" &&
+      "success" in result &&
+      !result.success
+    ) {
+      return {
+        success: false,
+        error: result.error || "Failed to load overrides",
+        data: [],
+      };
     }
     return { success: true, data: result };
   } catch (error) {
@@ -522,7 +557,7 @@ export async function checkTimeblockRestrictionsAction(params: {
                   entityId: memberId.toString(),
                   memberClass,
                   type: "TIME",
-                  message: `Booking time (${formatDisplayTime(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatDisplayTime(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatDisplayTime(restriction.endTime) : "23:59"})`,
+                  message: `Booking time (${formatTimeString(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
                   canOverride: restriction.canOverride,
                 });
               }
@@ -626,7 +661,7 @@ export async function checkTimeblockRestrictionsAction(params: {
                   restrictionCategory: "GUEST",
                   entityId: guestId.toString(),
                   type: "TIME",
-                  message: `Guest booking time (${formatDisplayTime(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatDisplayTime(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatDisplayTime(restriction.endTime) : "23:59"})`,
+                  message: `Guest booking time (${formatTimeString(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
                   canOverride: restriction.canOverride,
                 });
               }

@@ -11,7 +11,7 @@ import {
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { Card, CardContent } from "~/components/ui/card";
 import { Calendar, Clock, User, Filter } from "lucide-react";
-import { formatDateStringToWords, formatTimeStringTo12Hour } from "~/lib/utils";
+import { formatDateStringToWords, formatTimeString } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
 import {
   Select,
@@ -174,7 +174,7 @@ export function BookingHistoryDialog({
                 const formattedDate = formatDateStringToWords(dateStr);
 
                 const timeDisplay = item.time
-                  ? formatTimeStringTo12Hour(item.time)
+                  ? formatTimeString(item.time)
                   : "";
 
                 const createdDate = new Date(item.createdAt);

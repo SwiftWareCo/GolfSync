@@ -3,7 +3,7 @@ import { Clock } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "~/components/ui/card";
 import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
-import { formatDisplayTime } from "~/lib/utils";
+import { formatTimeString } from "~/lib/utils";
 
 interface TimeBlockHeaderProps {
   timeBlock: TimeBlockWithMembers;
@@ -28,7 +28,7 @@ export function TimeBlockHeader({
           </div>
           <div>
             <CardTitle className="text-xl">
-              {formatDisplayTime(timeBlock.startTime)}
+              {formatTimeString(timeBlock.startTime)}
             </CardTitle>
             <p className="text-sm text-gray-500">
               {totalPeople} / {maxPeople} people booked

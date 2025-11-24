@@ -226,3 +226,27 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Visible scrollbar override */
+.scrollbar-visible {
+  scrollbar-width: auto; /* Firefox */
+  -ms-overflow-style: auto; /* Internet Explorer 10+ */
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  display: block; /* Chrome, Safari, Edge */
+  width: 6px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: var(--color-org-primary);
+  border-radius: 3px;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb:hover {
+  background: var(--color-org-primary-light);
+}

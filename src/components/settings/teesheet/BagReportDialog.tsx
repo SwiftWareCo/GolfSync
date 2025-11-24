@@ -8,7 +8,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Printer } from "lucide-react";
 import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
-import { formatTimeStringTo12Hour } from "~/lib/utils";
+import { formatTimeString } from "~/lib/utils";
 import {
   Select,
   SelectContent,
@@ -44,7 +44,7 @@ export function BagReportDialog({
     .sort()
     .map((time) => ({
       value: time,
-      label: formatTimeStringTo12Hour(time),
+      label: formatTimeString(time),
     }));
 
   // Find all bag numbers within the selected time range
@@ -136,7 +136,7 @@ export function BagReportDialog({
     </style>
   </head>
   <body>
-    <pre>Bag Report ${formatTimeStringTo12Hour(startTime)} - ${formatTimeStringTo12Hour(endTime)}
+    <pre>Bag Report ${formatTimeString(startTime)} - ${formatTimeString(endTime)}
 ${"=".repeat(32)}
 ${formattedBagReport}</pre>
   </body>
@@ -242,7 +242,7 @@ ${formattedBagReport}</pre>
                 <div key={block.id} className="rounded-md border p-3">
                   <div className="mb-2 flex items-center justify-between border-b pb-2">
                     <span className="text-lg font-medium">
-                      {formatTimeStringTo12Hour(block.startTime)}
+                      {formatTimeString(block.startTime)}
                     </span>
                     <span className="text-muted-foreground text-sm">
                       {block.timeBlockMembers?.length}/4 bags

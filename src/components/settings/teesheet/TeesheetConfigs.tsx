@@ -132,19 +132,8 @@ export function TeesheetConfigs({ configs }: TeesheetConfigsProps) {
       {/* Right Panel - Editor or Empty State */}
       <div className="lg:col-span-3">
         {editorState ? (
-          <Card className="rounded-lg">
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {editorState.mode === "create"
-                  ? "Create New Configuration"
-                  : `Edit: ${editorState.config?.name}`}
-              </CardTitle>
-              <CardDescription>
-                {editorState.mode === "create"
-                  ? "Set up a new teesheet configuration"
-                  : "Modify this teesheet configuration"}
-              </CardDescription>
-            </CardHeader>
+          <Card className="rounded-lg py-4">
+    
             <CardContent className="max-h-[calc(100vh-200px)] overflow-auto">
               <ConfigEditor
                 mode={editorState.mode}

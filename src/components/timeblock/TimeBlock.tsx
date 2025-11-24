@@ -3,10 +3,17 @@
 import { useState, useEffect } from "react";
 import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
 import { Button } from "~/components/ui/button";
-import { X, UserCheck, UserX, UserPlus, MoreVertical, StickyNote } from "lucide-react";
+import {
+  X,
+  UserCheck,
+  UserX,
+  UserPlus,
+  MoreVertical,
+  StickyNote,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import { type RestrictionViolation } from "~/app/types/RestrictionTypes";
-import { formatDisplayTime, getMemberClassStyling } from "~/lib/utils";
+import { formatTimeString, getMemberClassStyling } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import type { PaceOfPlayRecord } from "~/server/pace-of-play/data";
@@ -56,7 +63,7 @@ export function TimeBlock({
   onToggleNoteEdit,
   onSaveNotes,
 }: TimeBlockProps) {
-  const formattedTime = formatDisplayTime(timeBlock.startTime);
+  const formattedTime = formatTimeString(timeBlock.startTime);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [editedNotes, setEditedNotes] = useState(timeBlock.notes || "");
 
