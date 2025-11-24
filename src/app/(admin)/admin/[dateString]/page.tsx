@@ -1,5 +1,5 @@
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
-import { getTeesheetConfigs, getLotterySettings } from "~/server/settings/data";
+import { getTeesheetConfigs } from "~/server/settings/data";
 import { ConfigSummary } from "~/components/teesheet/admin/ConfigSummary";
 import { CalendarPicker } from "~/components/teesheet/admin/CalendarPicker";
 import { GeneralNotes } from "~/components/teesheet/admin/GeneralNotes";
@@ -42,7 +42,7 @@ export default async function AdminPage({
     }),
   ]);
 
-  const { teesheet, config, timeBlocks, lotterySettings } = result;
+  const { teesheet, config, timeBlocks } = result;
 
   return (
     <div className="flex h-screen">
@@ -52,7 +52,6 @@ export default async function AdminPage({
         dateString={dateString}
         config={config}
         timeBlocks={timeBlocks}
-        lotterySettings={lotterySettings}
         availableConfigs={teesheetConfigs}
       />
 

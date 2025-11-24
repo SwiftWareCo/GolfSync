@@ -4,7 +4,6 @@ import {
   updateTeesheetVisibility,
   updateLotterySettings,
 } from "~/server/settings/actions";
-import type { TeesheetConfigInput } from "~/app/types/TeeSheetTypes";
 import type { QueryClient } from "@tanstack/react-query";
 
 /**
@@ -99,22 +98,8 @@ export const settingsMutations = {
 
       return result;
     },
-    onSuccess: (
-      _: unknown,
-      variables: {
-        teesheetId: number;
-        settings: {
-          isLotteryEnabled: boolean;
-          lotteryDisabledMessage?: string;
-          lotteryCloseTime?: string;
-          lotteryDrawTime?: string;
-        };
-      },
-    ) => {
-      // Invalidate lottery settings for this specific teesheet
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.settings.lotterySettings(variables.teesheetId),
-      });
+    onSuccess: () => {
+      // Invalidate teesheet and lottery queries since we updated teesheet directly
       queryClient.invalidateQueries({ queryKey: queryKeys.lottery.all() });
       queryClient.invalidateQueries({ queryKey: queryKeys.teesheets.all() });
     },

@@ -35,12 +35,10 @@ import type {
   LotteryEntryFormData,
 } from "~/app/types/LotteryTypes";
 import type { Member } from "~/app/types/MemberTypes";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
 import {
   calculateDynamicTimeWindows,
-  isLotteryAvailableForConfig,
-  type DynamicTimeWindowInfo,
 } from "~/lib/lottery-utils";
+import { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 // For the member search results
 interface SearchMember {
@@ -61,7 +59,7 @@ type FormData = z.infer<typeof lotteryEntrySchema>;
 interface LotteryEntryFormProps {
   lotteryDate: string;
   member: Member;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
   existingEntry?: LotteryEntry | null;
   onSuccess?: () => void;
 }
@@ -79,7 +77,8 @@ export function MemberLotteryEntryForm({
 
   // Calculate dynamic time windows based on config
   const timeWindows = calculateDynamicTimeWindows(config);
-  const isLotteryAvailable = isLotteryAvailableForConfig(config);
+  //TODO: FIX THIS TO USE LOTTERY.ENABLED PROP
+  const isLotteryAvailable = true;
 
   const form = useForm<FormData>({
     resolver: zodResolver(lotteryEntrySchema),

@@ -19,6 +19,10 @@ import {
   primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+import { createTable } from "./helpers";
+import { teesheetConfigs } from "./schema/teesheetConfigs.schema";
+
+export * from "./schema/teesheetConfigs.schema";
 
 /**
  * This is an example of how to use the multi-project schema feature of Drizzle ORM. Use the same
@@ -26,7 +30,6 @@ import { relations } from "drizzle-orm";
  *
  * @see https://orm.drizzle.team/docs/goodies#multi-project-schema
  */
-export const createTable = pgTableCreator((name) => `golfsync_${name}`);
 
 // Member Classes table
 export const memberClasses = createTable(
@@ -106,99 +109,6 @@ export const membersRelations = relations(members, ({ many }) => ({
   }),
 }));
 
-// Teesheet configurations
-export const teesheetConfigs = createTable(
-  "teesheet_configs",
-  {
-    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    name: varchar("name", { length: 50 }).notNull(),
-    type: varchar("type", { length: 20 }).notNull().default("REGULAR"),
-    // Optional fields for REGULAR type
-    startTime: varchar("start_time", { length: 5 }),
-    endTime: varchar("end_time", { length: 5 }),
-    interval: integer("interval"),
-    maxMembersPerBlock: integer("max_members_per_block"),
-    // Template reference for CUSTOM type
-    templateId: integer("template_id").references(() => templates.id),
-    isActive: boolean("is_active").notNull().default(true),
-    isSystemConfig: boolean("is_system_config").notNull().default(false),
-    disallowMemberBooking: boolean("disallow_member_booking")
-      .notNull()
-      .default(false),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
-      () => new Date(),
-    ),
-  },
-  (table) => [index("configs_template_id_idx").on(table.templateId)],
-);
-
-// Configuration rules for when to apply each config
-export const teesheetConfigRules = createTable(
-  "teesheet_config_rules",
-  {
-    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    configId: integer("config_id")
-      .references(() => teesheetConfigs.id, { onDelete: "cascade" })
-      .notNull(),
-    daysOfWeek: integer("days_of_week").array(), // [1,2,3,4] for Mon-Thu
-    startDate: date("start_date"), // null for recurring
-    endDate: date("end_date"), // null for recurring
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
-      () => new Date(),
-    ),
-  },
-  (table) => [
-    index("rules_config_id_idx").on(table.configId),
-    index("rules_days_of_week_idx").on(table.daysOfWeek),
-  ],
-);
-
-// Define relations
-export const teesheetConfigsRelations = relations(
-  teesheetConfigs,
-  ({ many }) => ({
-    rules: many(teesheetConfigRules),
-  }),
-);
-
-export const teesheetConfigRulesRelations = relations(
-  teesheetConfigRules,
-  ({ one }) => ({
-    config: one(teesheetConfigs, {
-      fields: [teesheetConfigRules.configId],
-      references: [teesheetConfigs.id],
-    }),
-  }),
-);
-
-export const templates = createTable(
-  "templates",
-  {
-    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    name: varchar("name", { length: 50 }).notNull(),
-    type: varchar("type", { length: 20 }).notNull(), // REGULAR or CUSTOM
-    // For REGULAR templates
-    startTime: varchar("start_time", { length: 5 }),
-    endTime: varchar("end_time", { length: 5 }),
-    interval: integer("interval"),
-    maxMembersPerBlock: integer("max_members_per_block"),
-    // For CUSTOM templates
-    blocks: jsonb("blocks"), // Array of block definitions
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
-      () => new Date(),
-    ),
-  },
-  (table) => [],
-);
 
 // Teesheets table
 export const teesheets = createTable(
@@ -206,7 +116,9 @@ export const teesheets = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     date: date("date").notNull(),
-    configId: integer("config_id").notNull(),
+    configId: integer("config_id").references(() => teesheetConfigs.id, {
+      onDelete: "set null",
+    }),
     generalNotes: text("general_notes"),
     isPublic: boolean("is_public").default(false).notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }),
@@ -214,6 +126,13 @@ export const teesheets = createTable(
     privateMessage: text("private_message").default(
       "This teesheet is not yet available for booking.",
     ),
+    lotteryEnabled: boolean("lottery_enabled").default(true).notNull(),
+    lotteryDisabledMessage: text("lottery_disabled_message").default(
+      "Lottery signup is disabled for this date",
+    ),
+    disallowMemberBooking: boolean("disallow_member_booking")
+      .default(false)
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
@@ -228,37 +147,14 @@ export const teesheets = createTable(
   ],
 );
 
-// Lottery settings table
-export const lotterySettings = createTable(
-  "lottery_settings",
-  {
-    id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    teesheetId: integer("teesheet_id")
-      .references(() => teesheets.id, { onDelete: "cascade" })
-      .notNull(),
-    enabled: boolean("enabled").default(true).notNull(),
-    disabledMessage: text("disabled_message").default(
-      "Lottery signup is disabled for this date",
-    ),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .default(sql`CURRENT_TIMESTAMP`)
-      .notNull(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
-      () => new Date(),
-    ),
-  },
-  (table) => [
-    unique("lottery_settings_teesheet_id_unq").on(table.teesheetId),
-    index("lottery_settings_teesheet_id_idx").on(table.teesheetId),
-  ],
-);
-
 // Time blocks
 export const timeBlocks = createTable(
   "time_blocks",
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    teesheetId: integer("teesheet_id").notNull(),
+    teesheetId: integer("teesheet_id")
+      .references(() => teesheets.id, { onDelete: "cascade" })
+      .notNull(),
     startTime: varchar("start_time", { length: 5 }).notNull(),
     endTime: varchar("end_time", { length: 5 }).notNull(),
     maxMembers: integer("max_members").notNull().default(4),
@@ -280,9 +176,9 @@ export const paceOfPlay = createTable(
   "pace_of_play",
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    timeBlockId: integer("time_block_id")
-      .references(() => timeBlocks.id, { onDelete: "cascade" })
-      .notNull(),
+    timeBlockId: integer("time_block_id").references(() => timeBlocks.id, {
+      onDelete: "set null",
+    }),
     startTime: timestamp("start_time", { withTimezone: true }),
     turn9Time: timestamp("turn9_time", { withTimezone: true }),
     finishTime: timestamp("finish_time", { withTimezone: true }),
@@ -327,22 +223,7 @@ export const teesheetsRelations = relations(teesheets, ({ many, one }) => ({
     fields: [teesheets.configId],
     references: [teesheetConfigs.id],
   }),
-  lotterySettings: one(lotterySettings, {
-    fields: [teesheets.id],
-    references: [lotterySettings.teesheetId],
-  }),
 }));
-
-// Define relations for lottery settings
-export const lotterySettingsRelations = relations(
-  lotterySettings,
-  ({ one }) => ({
-    teesheet: one(teesheets, {
-      fields: [lotterySettings.teesheetId],
-      references: [teesheets.id],
-    }),
-  }),
-);
 
 // Time block members (join table)
 export const timeBlockMembers = createTable(
@@ -705,7 +586,9 @@ export const timeblockOverrides = createTable(
     restrictionId: integer("restriction_id").references(
       () => timeblockRestrictions.id,
     ),
-    timeBlockId: integer("time_block_id").references(() => timeBlocks.id),
+    timeBlockId: integer("time_block_id").references(() => timeBlocks.id, {
+      onDelete: "cascade",
+    }),
     memberId: integer("member_id").references(() => members.id),
     guestId: integer("guest_id").references(() => guests.id),
     overriddenBy: varchar("overridden_by", { length: 100 }).notNull(),
@@ -1126,24 +1009,12 @@ export const weatherCache = createTable("weather_cache", {
     .notNull(),
 });
 
-// Helper type to export db schemas with relations
-export type WithRelations<T, R> = T & R;
 
 export type Teesheet = typeof teesheets.$inferSelect;
-export type TeesheetConfig = typeof teesheetConfigs.$inferSelect;
-export type TeesheetConfigRule = typeof teesheetConfigRules.$inferSelect;
-
-export type TeesheetConfigWithRules = WithRelations<
-  TeesheetConfig,
-  { rules: TeesheetConfigRule[] }
->;
-
 
 export type Timeblocks = typeof timeBlocks.$inferSelect;
 export type TimeblockInsert = typeof timeBlocks.$inferInsert;
 
-export type Templates = typeof templates.$inferSelect;
-export type TemplateInsert = typeof templates.$inferInsert;
 
 export type CourseInfo = typeof courseInfo.$inferSelect;
 export type CourseInfoInsert = typeof courseInfo.$inferInsert;
@@ -1155,10 +1026,6 @@ export type WeatherCacheInsert = typeof weatherCache.$inferInsert;
 export type MemberClass = typeof memberClasses.$inferSelect;
 export type MemberClassInsert = typeof memberClasses.$inferInsert;
 
-// Type exports for lottery settings
-export type LotterySettingsType = typeof lotterySettings.$inferSelect;
-export type LotterySettingsInsert = typeof lotterySettings.$inferInsert;
-
 export type PaceOfPlay = typeof paceOfPlay.$inferSelect;
 
 export type TimeblockFill = typeof timeBlockFills.$inferSelect;
@@ -1169,8 +1036,6 @@ export type TimeblockGuestInsert = typeof timeBlockGuests.$inferInsert;
 
 export type TimeblockMember = typeof timeBlockMembers.$inferSelect;
 export type TimeblockMemberInsert = typeof timeBlockMembers.$inferInsert;
-
-export type LotterySettings = typeof lotterySettings.$inferSelect;
 
 export type Guest = typeof guests.$inferSelect;
 export type GuestInsert = typeof guests.$inferInsert;

@@ -7,13 +7,13 @@ import { MemberLotteryEntryForm } from "./MemberLotteryEntryForm";
 import { MemberLotteryEntryView } from "./MemberLotteryEntryView";
 import type { LotteryEntryData } from "~/app/types/LotteryTypes";
 import type { Member } from "~/app/types/MemberTypes";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 interface LotteryInterfaceProps {
   lotteryDate: string;
   lotteryEntry?: LotteryEntryData;
   member: Member;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
   error?: string | null;
   onDataChange?: () => void;
 }

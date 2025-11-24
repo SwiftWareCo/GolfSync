@@ -2,7 +2,7 @@ import "server-only";
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { getTimeBlocksForTeesheet } from "~/server/teesheet/data";
 import { db } from "~/server/db";
-import { timeBlockMembers, members, lotterySettings } from "~/server/db/schema";
+import { timeBlockMembers, members } from "~/server/db/schema";
 import { and, eq, or, gt, asc, gte } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 
@@ -134,19 +134,17 @@ export async function getMemberTeesheetDataWithRestrictions(
 
   // Get or create teesheet for the date
   // This now returns the full config with rules
-  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
+  const dateString = formatCalendarDate(date);
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(dateString);
 
   // Get time blocks with all members
   const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
 
-  // Get lottery settings for this teesheet
-  const lotterySettingsResult = await db
-    .select()
-    .from(lotterySettings)
-    .where(eq(lotterySettings.teesheetId, teesheet.id))
-    .limit(1);
-
-  const lotterySettingsData = lotterySettingsResult[0] || null;
+  // Lottery settings are now stored on teesheet
+  const lotterySettingsData = {
+    enabled: teesheet.lotteryEnabled,
+    disabledMessage: teesheet.lotteryDisabledMessage,
+  };
 
   // Check restrictions for each time block
   let timeBlocksWithRestrictions = timeBlocks;

@@ -49,12 +49,6 @@ export const queryKeys = {
     teesheet: () => ['configs', 'teesheet'] as const,
   },
 
-  // Template queries
-  templates: {
-    all: () => ['templates'] as const,
-    byId: (id: number) => ['templates', 'byId', id] as const,
-  },
-
   // Lottery queries
   lottery: {
     all: () => ['lottery'] as const,
@@ -72,9 +66,7 @@ export const queryKeys = {
     all: () => ['settings'] as const,
     courseInfo: () => ['settings', 'courseInfo'] as const,
     teesheetConfigs: () => ['settings', 'teesheetConfigs'] as const,
-    templates: () => ['settings', 'templates'] as const,
     teesheetVisibility: (teesheetId: number) => ['settings', 'teesheetVisibility', teesheetId] as const,
-    lotterySettings: (teesheetId: number) => ['settings', 'lotterySettings', teesheetId] as const,
   },
 
   // Member classes queries

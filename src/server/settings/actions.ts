@@ -3,180 +3,28 @@
 import { db } from "~/server/db";
 import {
   teesheetConfigs,
-  teesheetConfigRules,
+  configBlocks,
   teesheets,
-  timeBlocks,
   courseInfo,
-  lotterySettings,
-  lotteryEntries,
-  lotteryGroups,
-  TeesheetConfigWithRules,
+  TeesheetConfigWithBlocks,
 } from "~/server/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
-import { revalidatePath, revalidateTag, updateTag } from "next/cache";
-import { replaceTimeBlocks } from "~/server/teesheet/actions";
+import { revalidatePath, updateTag } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
-import { ConfigTypes } from "~/app/types/TeeSheetTypes";
+import { generateTimeBlocks } from "~/lib/utils";
 
-export async function createTeesheetConfig(data: TeesheetConfigWithRules) {
-  // Validate required fields for REGULAR configs
-  if (data.type === ConfigTypes.REGULAR) {
-    if (
-      !data.startTime ||
-      !data.endTime ||
-      !data.interval ||
-      !data.maxMembersPerBlock
-    ) {
-      throw new Error(
-        "REGULAR configurations require startTime, endTime, interval, and maxMembersPerBlock",
-      );
-    }
-  }
-
-  // Create the config
-  const [newConfig] = await db
-    .insert(teesheetConfigs)
-    .values({
-      name: data.name,
-      type: data.type,
-      startTime: data.type === ConfigTypes.REGULAR ? data.startTime : null,
-      endTime: data.type === ConfigTypes.REGULAR ? data.endTime : null,
-      interval: data.type === ConfigTypes.REGULAR ? data.interval : null,
-      maxMembersPerBlock:
-        data.type === ConfigTypes.REGULAR ? data.maxMembersPerBlock : null,
-      templateId: data.type === ConfigTypes.CUSTOM ? data.templateId : null,
-      isActive: data.isActive ?? true,
-      isSystemConfig: data.isSystemConfig ?? false,
-      disallowMemberBooking: data.disallowMemberBooking ?? false,
-    })
-    .returning();
-
-  if (!newConfig) {
-    throw new Error("Failed to create configuration");
-  }
-
-  // Create the rules
-  if (data.rules && data.rules.length > 0) {
-    const rules = await Promise.all(
-      data.rules.map((rule) =>
-        db
-          .insert(teesheetConfigRules)
-          .values({
-            configId: newConfig.id,
-            daysOfWeek: rule.daysOfWeek,
-            startDate: rule.startDate,
-            endDate: rule.endDate,
-          })
-          .returning(),
-      ),
-    );
-
-    if (!rules.every((r) => r[0])) {
-      throw new Error("Failed to create rules");
-    }
-  }
-
-  updateTag("teesheet-configs");
-}
-
-export async function updateTeesheetConfig(
-  id: number,
-  data: TeesheetConfigWithRules,
+export async function deleteTeesheetConfig(
+  previousState: any,
+  configId: number,
 ) {
-  // Validate required fields for REGULAR configs
-  if (data.type === ConfigTypes.REGULAR) {
-    if (
-      !data.startTime ||
-      !data.endTime ||
-      !data.interval ||
-      !data.maxMembersPerBlock
-    ) {
-      throw new Error(
-        "REGULAR configurations require startTime, endTime, interval, and maxMembersPerBlock",
-      );
-    }
-  }
-
-  // Check config exists
-  const existingConfig = await db.query.teesheetConfigs.findFirst({
-    where: eq(teesheetConfigs.id, id),
-  });
-
-  if (!existingConfig) {
-    throw new Error("Configuration not found");
-  }
-
-  // Prevent renaming system configs
-  if (existingConfig.isSystemConfig && data.name !== existingConfig.name) {
-    throw new Error("Cannot rename system configurations");
-  }
-
-  // Update the config
-  const [updatedConfig] = await db
-    .update(teesheetConfigs)
-    .set({
-      name: data.name,
-      type: data.type,
-      startTime: data.type === ConfigTypes.REGULAR ? data.startTime : null,
-      endTime: data.type === ConfigTypes.REGULAR ? data.endTime : null,
-      interval: data.type === ConfigTypes.REGULAR ? data.interval : null,
-      maxMembersPerBlock:
-        data.type === ConfigTypes.REGULAR ? data.maxMembersPerBlock : null,
-      templateId: data.type === ConfigTypes.CUSTOM ? data.templateId : null,
-      isActive: data.isActive,
-      isSystemConfig: data.isSystemConfig,
-      disallowMemberBooking: data.disallowMemberBooking ?? false,
-    })
-    .where(eq(teesheetConfigs.id, id))
-    .returning();
-
-  if (!updatedConfig) {
-    throw new Error("Failed to update configuration");
-  }
-
-  // Update the rules if provided
-  if (data.rules && data.rules.length > 0) {
-    // First delete existing rules
-    await db
-      .delete(teesheetConfigRules)
-      .where(eq(teesheetConfigRules.configId, id));
-
-    // Then create new rules
-    const rules = await Promise.all(
-      data.rules.map((rule) =>
-        db
-          .insert(teesheetConfigRules)
-          .values({
-            configId: id,
-            daysOfWeek: rule.daysOfWeek,
-            startDate: rule.startDate,
-            endDate: rule.endDate,
-          })
-          .returning(),
-      ),
-    );
-
-    if (!rules.every((r) => r[0])) {
-      throw new Error("Failed to update rules");
-    }
-  }
-
-  updateTag("teesheet-configs");
-}
-
-export async function deleteTeesheetConfig(configId: number) {
-  // Check if config exists and is not a system config
+  // Check if config exists
   const config = await db.query.teesheetConfigs.findFirst({
     where: eq(teesheetConfigs.id, configId),
   });
 
   if (!config) {
     throw new Error("Configuration not found");
-  }
-
-  if (config.isSystemConfig) {
-    throw new Error("Cannot delete system configurations");
   }
 
   await db.delete(teesheetConfigs).where(eq(teesheetConfigs.id, configId));
@@ -290,192 +138,183 @@ export async function updateLotterySettings(
     disabledMessage?: string;
   },
 ) {
-  // Check if lottery settings exist for this teesheet
-  const existingSettings = await db
-    .select()
-    .from(lotterySettings)
-    .where(eq(lotterySettings.teesheetId, teesheetId))
-    .limit(1);
+  const updateData: any = {
+    lotteryEnabled: settings.enabled,
+    lotteryDisabledMessage:
+      settings.disabledMessage || "Lottery signup is disabled for this date",
+    updatedAt: new Date(),
+  };
 
-  if (existingSettings.length > 0) {
-    // Update existing settings
-    await db
-      .update(lotterySettings)
-      .set({
-        enabled: settings.enabled,
-        disabledMessage:
-          settings.disabledMessage ||
-          "Lottery signup is disabled for this date",
-        updatedAt: new Date(),
-      })
-      .where(eq(lotterySettings.teesheetId, teesheetId));
-  } else {
-    // Create new settings
-    await db.insert(lotterySettings).values({
-      teesheetId,
-      enabled: settings.enabled,
-      disabledMessage:
-        settings.disabledMessage || "Lottery signup is disabled for this date",
-    });
-  }
+  await db
+    .update(teesheets)
+    .set(updateData)
+    .where(eq(teesheets.id, teesheetId));
 
   revalidatePath("/admin/teesheet");
   revalidatePath("/members/teesheet");
 }
 
 /**
- * FormData wrapper for creating teesheet configs from TeesheetConfigForm
+ * FormData wrapper for creating teesheet configs
+ * Blocks can be generated from startTime/endTime/interval or added individually
  */
-export async function createTeesheetConfigAction(formData: FormData) {
+export async function createTeesheetConfigAction(
+  previousState: any,
+  formData: FormData,
+) {
   const name = formData.get("name") as string;
-  const type = formData.get("type") as "REGULAR" | "CUSTOM";
   const isActive = formData.get("isActive") === "true";
+  const disallowMemberBooking = formData.get("disallowMemberBooking") === "true";
+  const maxMembersPerBlock = formData.get("maxMembersPerBlock") as string;
 
-  if (!name || !type) {
-    throw new Error("Name and type are required");
+  if (!name || !maxMembersPerBlock) {
+    throw new Error("Name and max members are required");
   }
 
-  const data: TeesheetConfigWithRules = {
-    id: 0,
-    name,
-    type,
-    isActive,
-    isSystemConfig: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    startTime: null,
-    endTime: null,
-    interval: null,
-    maxMembersPerBlock: null,
-    templateId: null,
-    disallowMemberBooking: false,
-    rules: [],
-  };
+  try {
+    // Create the config
+    const [newConfig] = await db
+      .insert(teesheetConfigs)
+      .values({
+        name,
+        isActive,
+        disallowMemberBooking,
+        maxMembersPerBlock: parseInt(maxMembersPerBlock, 10),
+      })
+      .returning();
 
-  if (type === "REGULAR") {
-    const startTime = formData.get("startTime") as string;
-    const endTime = formData.get("endTime") as string;
-    const interval = formData.get("interval") as string;
-    const maxMembersPerBlock = formData.get("maxMembersPerBlock") as string;
+    if (!newConfig) {
+      throw new Error("Failed to create config");
+    }
+    const configId = newConfig.id;
 
-    if (!startTime || !endTime || !interval || !maxMembersPerBlock) {
-      throw new Error(
-        "Start time, end time, interval, and max members are required for regular configs",
-      );
+    // Check if auto-generating blocks from startTime/endTime/interval
+    const startTime = formData.get("startTime") as string | null;
+    const endTime = formData.get("endTime") as string | null;
+    const interval = formData.get("interval") as string | null;
+
+    if (startTime && endTime && interval) {
+      // Generate and insert config blocks immediately
+      const timeBlocksArray = generateTimeBlocks(startTime, endTime, parseInt(interval, 10));
+      if (timeBlocksArray.length > 0) {
+        const blocksToInsert = timeBlocksArray.map((blockStartTime, index) => ({
+          configId,
+          displayName: null,
+          startTime: blockStartTime,
+          maxPlayers: parseInt(maxMembersPerBlock, 10),
+          sortOrder: index,
+        }));
+
+        await db.insert(configBlocks).values(blocksToInsert);
+      }
     }
 
-    data.startTime = startTime;
-    data.endTime = endTime;
-    data.interval = parseInt(interval, 10);
-    data.maxMembersPerBlock = parseInt(maxMembersPerBlock, 10);
-
+    // Update scheduling fields if provided
     const daysOfWeekStr = formData.get("daysOfWeek");
-    if (daysOfWeekStr && typeof daysOfWeekStr === "string") {
-      const daysOfWeek = JSON.parse(daysOfWeekStr);
-      data.rules = [
-        {
-          id: 0,
-          configId: 0,
-          daysOfWeek,
-          startDate: null,
-          endDate: null,
-          createdAt: new Date(),
-          updatedAt: null,
-        },
-      ];
-    }
-  } else {
-    const templateId = formData.get("templateId") as string;
-    const disallowMemberBooking =
-      formData.get("disallowMemberBooking") === "true";
+    const configStartDate = formData.get("startDate") as string | null;
+    const configEndDate = formData.get("endDate") as string | null;
 
-    if (!templateId) {
-      throw new Error("Template ID is required for custom configs");
+    if (daysOfWeekStr || configStartDate || configEndDate) {
+      const updateData: any = {};
+      if (daysOfWeekStr && typeof daysOfWeekStr === "string") {
+        updateData.daysOfWeek = JSON.parse(daysOfWeekStr);
+      }
+      if (configStartDate) updateData.startDate = configStartDate;
+      if (configEndDate) updateData.endDate = configEndDate;
+
+      await db
+        .update(teesheetConfigs)
+        .set(updateData)
+        .where(eq(teesheetConfigs.id, configId));
     }
 
-    data.templateId = parseInt(templateId, 10);
-    data.disallowMemberBooking = disallowMemberBooking;
+    revalidatePath("/admin/settings");
+    updateTag("teesheet-configs");
+    return { success: true, configId };
+  } catch (error) {
+    console.error("Error creating config:", error);
+    throw error;
   }
-
-  return createTeesheetConfig(data);
 }
 
 /**
- * FormData wrapper for updating teesheet configs from TeesheetConfigForm
+ * FormData wrapper for updating teesheet configs
  */
-export async function updateTeesheetConfigAction(formData: FormData) {
+export async function updateTeesheetConfigAction(
+  previousState: any,
+  formData: FormData,
+) {
   const configIdStr = formData.get("configId") as string;
   const name = formData.get("name") as string;
-  const type = formData.get("type") as "REGULAR" | "CUSTOM";
   const isActive = formData.get("isActive") === "true";
+  const disallowMemberBooking = formData.get("disallowMemberBooking") === "true";
+  const maxMembersPerBlock = formData.get("maxMembersPerBlock") as string;
 
-  if (!configIdStr || !name || !type) {
-    throw new Error("Config ID, name, and type are required");
+  if (!configIdStr || !name || !maxMembersPerBlock) {
+    throw new Error("Config ID, name, and max members are required");
   }
 
   const configId = parseInt(configIdStr, 10);
 
-  const data: TeesheetConfigWithRules = {
-    id: configId,
-    name,
-    type,
-    isActive,
-    isSystemConfig: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    startTime: null,
-    endTime: null,
-    interval: null,
-    maxMembersPerBlock: null,
-    templateId: null,
-    disallowMemberBooking: false,
-    rules: [],
-  };
+  try {
+    // Update the config
+    await db
+      .update(teesheetConfigs)
+      .set({
+        name,
+        isActive,
+        disallowMemberBooking,
+        maxMembersPerBlock: parseInt(maxMembersPerBlock, 10),
+      })
+      .where(eq(teesheetConfigs.id, configId));
 
-  if (type === "REGULAR") {
-    const startTime = formData.get("startTime") as string;
-    const endTime = formData.get("endTime") as string;
-    const interval = formData.get("interval") as string;
-    const maxMembersPerBlock = formData.get("maxMembersPerBlock") as string;
+    // Check if regenerating blocks from startTime/endTime/interval
+    const startTime = formData.get("startTime") as string | null;
+    const endTime = formData.get("endTime") as string | null;
+    const interval = formData.get("interval") as string | null;
 
-    if (!startTime || !endTime || !interval || !maxMembersPerBlock) {
-      throw new Error(
-        "Start time, end time, interval, and max members are required for regular configs",
-      );
-    }
+    if (startTime && endTime && interval) {
+      // Regenerate blocks
+      await db.delete(configBlocks).where(eq(configBlocks.configId, configId));
 
-    data.startTime = startTime;
-    data.endTime = endTime;
-    data.interval = parseInt(interval, 10);
-    data.maxMembersPerBlock = parseInt(maxMembersPerBlock, 10);
-
-    const daysOfWeekStr = formData.get("daysOfWeek");
-    if (daysOfWeekStr && typeof daysOfWeekStr === "string") {
-      const daysOfWeek = JSON.parse(daysOfWeekStr);
-      data.rules = [
-        {
-          id: 0,
+      const timeBlocksArray = generateTimeBlocks(startTime, endTime, parseInt(interval, 10));
+      if (timeBlocksArray.length > 0) {
+        const blocksToInsert = timeBlocksArray.map((blockStartTime, index) => ({
           configId,
-          daysOfWeek,
-          startDate: null,
-          endDate: null,
-          createdAt: new Date(),
-          updatedAt: null,
-        },
-      ];
-    }
-  } else {
-    const templateId = formData.get("templateId") as string;
-    const disallowMemberBooking =
-      formData.get("disallowMemberBooking") === "true";
+          displayName: null,
+          startTime: blockStartTime,
+          maxPlayers: parseInt(maxMembersPerBlock, 10),
+          sortOrder: index,
+        }));
 
-    if (!templateId) {
-      throw new Error("Template ID is required for custom configs");
+        await db.insert(configBlocks).values(blocksToInsert);
+      }
     }
 
-    data.templateId = parseInt(templateId, 10);
-    data.disallowMemberBooking = disallowMemberBooking;
+    // Update scheduling fields if provided
+    const daysOfWeekStr = formData.get("daysOfWeek");
+    const configStartDate = formData.get("startDate") as string | null;
+    const configEndDate = formData.get("endDate") as string | null;
+
+    if (daysOfWeekStr || configStartDate || configEndDate) {
+      const updateData: any = {};
+      if (daysOfWeekStr && typeof daysOfWeekStr === "string") {
+        updateData.daysOfWeek = JSON.parse(daysOfWeekStr);
+      }
+      if (configStartDate) updateData.startDate = configStartDate;
+      if (configEndDate) updateData.endDate = configEndDate;
+
+      await db
+        .update(teesheetConfigs)
+        .set(updateData)
+        .where(eq(teesheetConfigs.id, configId));
+    }
+
+    revalidatePath("/admin/settings");
+    updateTag("teesheet-configs");
+    return { success: true, configId };
+  } catch (error) {
+    console.error("Error updating config:", error);
+    throw error;
   }
-
-  return updateTeesheetConfig(configId, data);
 }

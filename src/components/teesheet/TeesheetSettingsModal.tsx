@@ -23,7 +23,6 @@ import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Settings, Eye, Dice1, AlertCircle } from "lucide-react";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
-import type { LotterySettingsType } from "~/server/db/schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { settingsMutations } from "~/server/query-options/settings-mutation-options";
 import type { Teesheet, TeesheetConfig } from "~/server/db/schema";
@@ -33,7 +32,6 @@ interface TeesheetSettingsModalProps {
   onClose: () => void;
   teesheet: Teesheet;
   availableConfigs: TeesheetConfig[];
-  lotterySettings: LotterySettingsType | null;
   onSuccess?: () => void;
 }
 
@@ -42,7 +40,6 @@ export function TeesheetSettingsModal({
   onClose,
   teesheet,
   availableConfigs,
-  lotterySettings,
   onSuccess,
 }: TeesheetSettingsModalProps) {
   const queryClient = useQueryClient();
@@ -51,9 +48,9 @@ export function TeesheetSettingsModal({
   // Simple state object for all settings
   const [formData, setFormData] = useState({
     configId: teesheet.configId,
-    lotteryEnabled: lotterySettings?.enabled ?? true,
+    lotteryEnabled: teesheet.lotteryEnabled ?? true,
     lotteryDisabledMessage:
-      lotterySettings?.disabledMessage ||
+      teesheet.lotteryDisabledMessage ||
       "Lottery signup is disabled for this date",
     isPublic: teesheet.isPublic || false,
     privateMessage:
@@ -65,16 +62,16 @@ export function TeesheetSettingsModal({
   useEffect(() => {
     setFormData({
       configId: teesheet.configId,
-      lotteryEnabled: lotterySettings?.enabled ?? true,
+      lotteryEnabled: teesheet.lotteryEnabled ?? true,
       lotteryDisabledMessage:
-        lotterySettings?.disabledMessage ||
+        teesheet.lotteryDisabledMessage ||
         "Lottery signup is disabled for this date",
       isPublic: teesheet.isPublic || false,
       privateMessage:
         teesheet.privateMessage ||
         "This teesheet is not yet available for booking.",
     });
-  }, [teesheet, lotterySettings]);
+  }, [teesheet]);
 
   // Setup mutations
   const updateConfigMutation = () => {
@@ -142,9 +139,9 @@ export function TeesheetSettingsModal({
     // Reset to initial state
     setFormData({
       configId: teesheet.configId,
-      lotteryEnabled: lotterySettings?.enabled ?? true,
+      lotteryEnabled: teesheet.lotteryEnabled ?? true,
       lotteryDisabledMessage:
-        lotterySettings?.disabledMessage ||
+        teesheet.lotteryDisabledMessage ||
         "Lottery signup is disabled for this date",
       isPublic: teesheet.isPublic || false,
       privateMessage:
@@ -156,7 +153,7 @@ export function TeesheetSettingsModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
@@ -169,18 +166,18 @@ export function TeesheetSettingsModal({
 
         <div className="space-y-6">
           <Tabs defaultValue="configuration" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="configuration">Configuration</TabsTrigger>
               <TabsTrigger value="lottery">Lottery</TabsTrigger>
-              <TabsTrigger value="visibility">Visibility</TabsTrigger>
             </TabsList>
 
             <TabsContent value="configuration" className="space-y-4 pt-4">
               <div className="flex items-center gap-2 mb-4">
                 <Settings className="h-4 w-4" />
-                <h3 className="font-semibold">Configuration</h3>
+                <h3 className="font-semibold">Configuration & Access</h3>
               </div>
 
+              {/* Teesheet Configuration Selection */}
               <div className="space-y-2">
                 <Label>Teesheet Configuration</Label>
                 <Select
@@ -195,17 +192,17 @@ export function TeesheetSettingsModal({
                   <SelectContent>
                     {availableConfigs.map((config) => (
                       <SelectItem
-                        key={config.id}
-                        value={config.id.toString()}
+                        key={config?.id}
+                        value={config?.id?.toString()}
                       >
-                        {config.name}
-                        {config.id === teesheet.configId && " (Current)"}
+                        {config?.name}
+                        {config?.id === teesheet.configId && " (Current)"}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">
-                  Select the configuration template for this teesheet
+                  Select the configuration for this teesheet
                 </p>
                 {configChanged && (
                   <div className="flex items-center gap-2 text-sm text-orange-600 mt-2">
@@ -213,6 +210,78 @@ export function TeesheetSettingsModal({
                     Changing configuration will remove all existing bookings
                   </div>
                 )}
+              </div>
+
+              {/* Visibility Settings */}
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Eye className="h-4 w-4" />
+                  <h3 className="font-semibold">Visibility</h3>
+                </div>
+
+                <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Public Teesheet</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Make this teesheet visible to members for booking
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.isPublic}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, isPublic: checked })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Private Message</Label>
+                  <Textarea
+                    placeholder="Message shown to members when teesheet is private"
+                    value={formData.privateMessage}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        privateMessage: e.target.value,
+                      })
+                    }
+                    rows={3}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    This message will be shown to members when the teesheet is private
+                  </p>
+                </div>
+              </div>
+
+              {/* Member Booking Settings */}
+              <div className="space-y-4 border-t pt-4">
+                <div className="space-y-3">
+                  <div className="text-sm font-medium">
+                    Member Booking Restrictions
+                  </div>
+                  <div className="rounded-lg border p-4 bg-blue-50">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-blue-900">
+                          {availableConfigs.find((c) => c.id === formData.configId)
+                            ?.disallowMemberBooking
+                            ? "Member Booking Disabled"
+                            : "Member Booking Enabled"}
+                        </p>
+                        <p className="text-sm text-blue-700 mt-1">
+                          {availableConfigs.find((c) => c.id === formData.configId)
+                            ?.disallowMemberBooking
+                            ? "Members cannot book time blocks for this configuration. Only admin can manage bookings."
+                            : "Members can book available time blocks in this configuration."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This setting is configured at the teesheet configuration level. Change it in the configuration settings.
+                  </p>
+                </div>
               </div>
             </TabsContent>
 
@@ -256,45 +325,6 @@ export function TeesheetSettingsModal({
               </div>
             </TabsContent>
 
-            <TabsContent value="visibility" className="space-y-4 pt-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Eye className="h-4 w-4" />
-                <h3 className="font-semibold">Visibility Settings</h3>
-              </div>
-
-              <div className="flex flex-row items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <Label className="text-base">Public Teesheet</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Make this teesheet visible to members for booking
-                  </p>
-                </div>
-                <Switch
-                  checked={formData.isPublic}
-                  onCheckedChange={(checked) =>
-                    setFormData({ ...formData, isPublic: checked })
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Private Message</Label>
-                <Textarea
-                  placeholder="Message shown to members when teesheet is private"
-                  value={formData.privateMessage}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      privateMessage: e.target.value,
-                    })
-                  }
-                  rows={3}
-                />
-                <p className="text-sm text-muted-foreground">
-                  This message will be shown to members when the teesheet is private
-                </p>
-              </div>
-            </TabsContent>
           </Tabs>
 
           {/* Action Buttons */}

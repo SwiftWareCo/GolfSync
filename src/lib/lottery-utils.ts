@@ -1,5 +1,4 @@
-import type { TeesheetConfig, RegularConfig } from "~/app/types/TeeSheetTypes";
-import { ConfigTypes } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema/teesheetConfigs.schema";
 
 // Updated time window enum to use consistent naming
 export type TimeWindow = "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING";
@@ -16,24 +15,31 @@ export interface DynamicTimeWindowInfo {
 }
 
 /**
- * Calculate dynamic time windows based on teesheet config
- * Divides the available time into 4 equal windows: MORNING, MIDDAY, AFTERNOON, EVENING
+ * Calculate dynamic time windows based on teesheet config blocks
+ * Divides the time range into 4 equal windows: MORNING, MIDDAY, AFTERNOON, EVENING
  */
 export function calculateDynamicTimeWindows(
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks | null,
 ): DynamicTimeWindowInfo[] {
-  // For custom configs, don't allow lottery
-  if (config.type === ConfigTypes.CUSTOM) {
+  if (!config || !config.blocks || config.blocks.length === 0) {
     return [];
   }
 
-  const regularConfig = config;
+  // Extract and parse start times from all blocks
+  const startTimes = config.blocks
+    .map((block) => parseTimeToMinutes(block.startTime))
+    .filter((time): time is number => time !== null);
 
-  // Parse start and end times
-  const startTime = parseTimeToMinutes(regularConfig.startTime);
-  const endTime = parseTimeToMinutes(regularConfig.endTime);
+  if (startTimes.length === 0) {
+    return [];
+  }
 
-  if (startTime === null || endTime === null) {
+  // Find earliest and latest start times
+  const startTime = Math.min(...startTimes);
+  const endTime = Math.max(...startTimes);
+
+  // If there's no range, can't create windows
+  if (startTime === endTime) {
     return [];
   }
 
@@ -87,13 +93,6 @@ export function calculateDynamicTimeWindows(
   ];
 
   return windows;
-}
-
-/**
- * Check if lottery is available for a given config
- */
-export function isLotteryAvailableForConfig(config: TeesheetConfig): boolean {
-  return config.type === ConfigTypes.REGULAR;
 }
 
 /**

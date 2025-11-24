@@ -1,7 +1,6 @@
 import { Suspense } from "react";
-import { getTeesheetConfigs, getTemplates } from "~/server/settings/data";
-import { TeesheetSettings } from "~/components/settings/teesheet/TeesheetSettings";
-import { TemplateManagement } from "~/components/settings/teesheet/TemplateManagement";
+import { getTeesheetConfigs } from "~/server/settings/data";
+import { TeesheetConfigs } from "~/components/settings/teesheet/TeesheetConfigs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   getTimeblockRestrictions,
@@ -21,7 +20,6 @@ import {
 } from "~/server/pwa/data";
 import {
   ConfigurationsSkeleton,
-  TemplatesSkeleton,
   RestrictionsSkeleton,
   MemberClassesSkeleton,
   OverridesSkeleton,
@@ -30,22 +28,13 @@ import {
 } from "~/components/settings/skeletons";
 
 async function ConfigurationsTab() {
-  const [teesheetConfigs, templates] = await Promise.all([
-    getTeesheetConfigs(),
-    getTemplates(),
-  ]);
+  const teesheetConfigs = await getTeesheetConfigs();
 
   return (
-    <TeesheetSettings
+    <TeesheetConfigs
       configs={teesheetConfigs}
-      templates={templates as any[]}
     />
   );
-}
-
-async function TemplatesTab() {
-  const templates = await getTemplates();
-  return <TemplateManagement initialTemplates={templates as any[]} />;
 }
 
 async function RestrictionsTab() {
@@ -126,9 +115,6 @@ export default function SettingsPage() {
             <TabsTrigger value="configurations" className="flex-1">
               Configurations
             </TabsTrigger>
-            <TabsTrigger value="templates" className="flex-1">
-              Templates
-            </TabsTrigger>
             <TabsTrigger value="restrictions" className="flex-1">
               Timeblock Restrictions
             </TabsTrigger>
@@ -150,12 +136,6 @@ export default function SettingsPage() {
         <TabsContent value="configurations" className="mt-4">
           <Suspense fallback={<ConfigurationsSkeleton />}>
             <ConfigurationsTab />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="templates" className="mt-4">
-          <Suspense fallback={<TemplatesSkeleton />}>
-            <TemplatesTab />
           </Suspense>
         </TabsContent>
 

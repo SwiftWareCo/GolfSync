@@ -1,0 +1,70 @@
+diff --git a/dist/esm/app-router/suspense-when-cached.js b/dist/esm/app-router/suspense-when-cached.js
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/dist/esm/app-router/suspense-when-cached.js
+@@ -0,0 +1,19 @@
++import React, { Suspense } from "react";
++
++const isNextCacheComponents = process.env.__NEXT_CACHE_COMPONENTS;
++
++export const SuspenseWhenCached = ({
++  children,
++  noopWhen = false,
++}) => {
++  if (!isNextCacheComponents) {
++    return children;
++  }
++
++  if (noopWhen) {
++    return children;
++  }
++
++  return /* @__PURE__ */ React.createElement(Suspense, null, children);
++};
++//# sourceMappingURL=suspense-when-cached.js.map
+diff --git a/dist/esm/app-router/server/ClerkProvider.js b/dist/esm/app-router/server/ClerkProvider.js
+index 1111111..2222222 100644
+--- a/dist/esm/app-router/server/ClerkProvider.js
++++ b/dist/esm/app-router/server/ClerkProvider.js
+@@ -8,6 +8,7 @@ import { mergeNextClerkPropsWithEnv } from "../../utils/mergeNextClerkPropsWithE
+ import { isNext13 } from "../../utils/sdk-versions";
+ import { ClientClerkProvider } from "../client/ClerkProvider";
+ import { getKeylessStatus, KeylessProvider } from "./keyless-provider";
++import { SuspenseWhenCached } from "../suspense-when-cached.js";
+ import { buildRequestLike, getScriptNonceFromHeader } from "./utils";
+ const getDynamicClerkState = React.cache(async function getDynamicClerkState2() {
+   const request = await buildRequestLike();
+@@ -27,8 +28,18 @@ const getNonceHeaders = React.cache(async function getNonceHeaders2() {
+     await detectKeylessEnvDrift();
+   } catch {
+   }
+   if (shouldRunAsKeyless) {
+     output = /* @__PURE__ */ React.createElement(
++      SuspenseWhenCached,
++      { noopWhen: dynamic },
++      /* @__PURE__ */ React.createElement(
+         KeylessProvider,
+         {
+           rest: propsWithEnvs,
+@@ -37,10 +48,15 @@ const getNonceHeaders = React.cache(async function getNonceHeaders2() {
+           runningWithClaimedKeys
+         },
+         children
+       )
+     );
+   } else {
+     output = /* @__PURE__ */ React.createElement(
++      SuspenseWhenCached,
++      { noopWhen: dynamic },
++      /* @__PURE__ */ React.createElement(
+         ClientClerkProvider,
+         {
+           ...propsWithEnvs,
+@@ -49,6 +65,7 @@ const getNonceHeaders = React.cache(async function getNonceHeaders2() {
+         },
+         children
+       )
+     );
+   }
+   if (dynamic) {

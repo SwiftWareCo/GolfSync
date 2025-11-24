@@ -3,22 +3,16 @@ import { db } from "~/server/db";
 import {
   teesheets,
   timeBlocks,
-  templates,
   type Teesheet,
   type Timeblocks,
-  type TimeblockInsert,
-  type TeesheetConfig,
   type PaceOfPlay,
   type TimeblockMember,
   type TimeblockGuest,
   type TimeblockFill,
-  type LotterySettings,
+  type TeesheetConfigWithBlocks,
 } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
-
-import { type TemplateBlock } from "~/app/types/TeeSheetTypes";
 import { getConfigForDate } from "~/server/settings/data";
-import { generateTimeBlocks } from "~/lib/utils";
 
 type TimeBlockWithRelations = Timeblocks & {
   timeBlockMembers: TimeblockMember[];
@@ -29,79 +23,38 @@ type TimeBlockWithRelations = Timeblocks & {
 
 export async function createTimeBlocksForTeesheet(
   teesheetId: number,
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks,
 ) {
-  // For custom configurations, fetch the template and create blocks based on it
-  if (config.type === "CUSTOM") {
-    // Fetch the template
+  const blocks = config.blocks;
 
-    if (!config.templateId) {
-      throw new Error("Custom configuration missing templateId");
-    }
-
-    const template = await db.query.templates.findFirst({
-      where: eq(templates.id, config.templateId),
-    });
-
-    const templateBlocks = template?.blocks as TemplateBlock[];
-
-    if (templateBlocks.length === 0) {
-      return [];
-    }
-
-    // Create blocks based on template
-    const blocks = templateBlocks.map((block, index) => ({
-      teesheetId,
-      startTime: block.startTime,
-      endTime: block.startTime, // For template blocks, end time is same as start time
-      maxMembers: block.maxPlayers,
-      displayName: block.displayName,
-      sortOrder: index, // Use the index to maintain order
-    }));
-
-    return await db.insert(timeBlocks).values(blocks).returning();
+  if (!blocks || blocks.length === 0) {
+    return [];
   }
-  const regularConfig = config;
 
-  if (
-    !regularConfig.startTime ||
-    !regularConfig.endTime ||
-    !regularConfig.interval
-  ) {
-    throw new Error(
-      "Invalid regular configuration: missing startTime, endTime, or interval",
-    );
-  }
-  // For regular configurations, generate blocks based on start time, end time, and interval
-  const timeBlocksArray = generateTimeBlocks(
-    regularConfig.startTime,
-    regularConfig.endTime,
-    regularConfig.interval,
-  );
-
-  const blocks: TimeblockInsert[] = timeBlocksArray.map((time, index) => ({
+  // Create time blocks based on config blocks
+  const timeBlocksData = blocks.map((block, index) => ({
     teesheetId,
-    startTime: time,
-    endTime: time, // For regular blocks, end time is same as start time
-    maxMembers: regularConfig.maxMembersPerBlock || 4,
-    sortOrder: index,
+    startTime: block.startTime,
+    endTime: block.startTime, // For config blocks, end time is same as start time
+    maxMembers: block.maxPlayers,
+    displayName: block.displayName,
+    sortOrder: index, // Use the index to maintain order
   }));
 
-  return await db.insert(timeBlocks).values(blocks).returning();
+  return await db.insert(timeBlocks).values(timeBlocksData).returning();
 }
 
 export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
   teesheet: Teesheet;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks | null;
   timeBlocks: TimeBlockWithRelations[];
-  lotterySettings: LotterySettings | null;
 }> {
   // 1. Check if teesheet exists WITH timeblocks already loaded
   const existingTeesheet = await db.query.teesheets.findFirst({
     where: eq(teesheets.date, dateString),
     with: {
       config: {
-        with: { rules: true },
+        with: { blocks: true },
       },
       timeBlocks: {
         with: {
@@ -111,7 +64,6 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
           paceOfPlay: true,
         },
       },
-      lotterySettings: true,
     },
   });
 
@@ -119,38 +71,35 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
   if (existingTeesheet) {
     return {
       teesheet: existingTeesheet,
-      config: existingTeesheet.config as TeesheetConfig,
+      config: existingTeesheet.config as TeesheetConfigWithBlocks | null,
       timeBlocks: existingTeesheet.timeBlocks as TimeBlockWithRelations[],
-      lotterySettings: existingTeesheet.lotterySettings,
-    };
-  } else {
-    const config = await getConfigForDate(dateString);
-
-    const [newTeesheet] = await db
-      .insert(teesheets)
-      .values({ date: dateString, configId: config.id })
-      .returning();
-
-    if (!newTeesheet) {
-      throw new Error("Failed to create new teesheet");
-    }
-
-    await createTimeBlocksForTeesheet(newTeesheet.id, config);
-
-    const hydratedBlocks = await getTimeBlocksForTeesheet(newTeesheet.id);
-
-    if (!config) {
-      throw new Error("No configuration found for the given date");
-    }
-    // 4. Create timeblocks for new teesheet
-
-    return {
-      teesheet: newTeesheet,
-      config,
-      timeBlocks: hydratedBlocks,
-      lotterySettings: null,
     };
   }
+
+  // 3. Teesheet doesn't exist - create one without requiring a config
+  const config = await getConfigForDate(dateString);
+
+  const [newTeesheet] = await db
+    .insert(teesheets)
+    .values({ date: dateString, configId: config?.id ?? null })
+    .returning();
+
+  if (!newTeesheet) {
+    throw new Error("Failed to create new teesheet");
+  }
+
+  // 4. Create timeblocks if config exists
+  let hydratedBlocks: TimeBlockWithRelations[] = [];
+  if (config) {
+    await createTimeBlocksForTeesheet(newTeesheet.id, config);
+    hydratedBlocks = await getTimeBlocksForTeesheet(newTeesheet.id);
+  }
+
+  return {
+    teesheet: newTeesheet,
+    config: config ?? null,
+    timeBlocks: hydratedBlocks,
+  };
 }
 
 export async function getTimeBlocksForTeesheet(teesheetId: number) {

@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { BagReportDialog } from "~/components/settings/teesheet/BagReportDialog";
-import type { TeesheetConfig } from "~/server/db/schema";
+import type { TeesheetConfig, TeesheetConfigWithBlocks } from "~/server/db/schema";
 import { TeesheetSettingsModal } from "../TeesheetSettingsModal";
 import type { Teesheet } from "~/server/db/schema";
 import { AdminLotteryEntryModal } from "~/components/lottery/AdminLotteryEntryModal";
@@ -31,9 +31,8 @@ import { usePopulateTeesheet } from "~/services/teesheet/hooks";
 interface SidebarActionsProps {
   teesheet: Teesheet;
   dateString: string;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks | null;
   timeBlocks: any[];
-  lotterySettings: any;
   availableConfigs: TeesheetConfig[];
 }
 
@@ -42,7 +41,6 @@ export function SidebarActions({
   dateString,
   config,
   timeBlocks,
-  lotterySettings,
   availableConfigs,
 }: SidebarActionsProps) {
   const router = useRouter();
@@ -215,7 +213,6 @@ export function SidebarActions({
             teesheet={teesheet}
             isOpen={isSettingsOpen}
             availableConfigs={availableConfigs}
-            lotterySettings={lotterySettings}
             onClose={() => setIsSettingsOpen(false)}
           />
         </DialogContent>

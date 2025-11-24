@@ -30,12 +30,11 @@ import type {
 } from "~/app/types/LotteryTypes";
 import type { FillType } from "~/app/types/TeeSheetTypes";
 import { FillTypes } from "~/app/types/TeeSheetTypes";
-import {
-  calculateDynamicTimeWindows,
-  isLotteryAvailableForConfig,
-} from "~/lib/lottery-utils";
-import type { Teesheet, TeesheetConfig } from "~/server/db/schema";
-
+import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
+import type {
+  Teesheet,
+  TeesheetConfigWithBlocks,
+} from "~/server/db/schema";
 // Types
 interface SearchMember {
   id: number;
@@ -48,7 +47,7 @@ interface AdminLotteryEntryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   teesheet: Teesheet;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks | null;
   onSuccess?: () => void;
 }
 
@@ -72,7 +71,7 @@ export function AdminLotteryEntryModal({
 
   // Derived state
   const timeWindows = calculateDynamicTimeWindows(config);
-  const isLotteryAvailable = isLotteryAvailableForConfig(config);
+  const isLotteryAvailable = teesheet.lotteryEnabled;
   const totalPlayers =
     (organizer ? 1 : 0) + selectedMembers.length + fills.length;
 

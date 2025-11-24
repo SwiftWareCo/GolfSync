@@ -12,14 +12,14 @@ import {
 import { getDateForDB } from "~/lib/dates";
 import type { LotteryEntryData } from "~/app/types/LotteryTypes";
 import type { Member } from "~/app/types/MemberTypes";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 interface LotteryViewProps {
   selectedDate: string | Date;
   lotteryEntry?: LotteryEntryData;
   member: Member;
   date: Date;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
   showDatePicker: boolean;
   swipeLoading: boolean;
   onPreviousDay: () => void;

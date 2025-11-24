@@ -3,7 +3,6 @@
 import { addDays } from "date-fns";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useQuery } from "@tanstack/react-query";
-import { teesheetQueryOptions } from "~/server/query-options";
 import { useTeesheetMutations } from "~/hooks/useTeesheetMutations";
 import { TeesheetView } from "./TeesheetView";
 import { MutationProvider } from "~/hooks/useMutationContext";

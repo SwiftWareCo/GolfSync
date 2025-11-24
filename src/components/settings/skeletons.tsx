@@ -40,36 +40,6 @@ export function ConfigurationsSkeleton() {
   );
 }
 
-export function TemplatesSkeleton() {
-  return (
-    <Card className="rounded-lg">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Skeleton className="h-10 w-10 rounded-lg" />
-            <div className="space-y-2">
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="h-4 w-64" />
-            </div>
-          </div>
-          <Skeleton className="h-10 w-40" />
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        <div className="space-y-3">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="rounded-lg border p-4">
-              <Skeleton className="h-5 w-48 mb-2" />
-              <Skeleton className="h-4 w-full" />
-            </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function RestrictionsSkeleton() {
   return (
     <Card className="rounded-lg">

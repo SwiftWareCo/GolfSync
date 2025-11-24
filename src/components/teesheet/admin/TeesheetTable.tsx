@@ -15,6 +15,8 @@ import {
 } from "~/server/teesheet/actions";
 import { toast } from "react-hot-toast";
 import { type Member, type Guest } from "~/server/db/schema";
+import { Settings } from "lucide-react";
+import Link from "next/link";
 
 interface TeesheetTableProps {
   dateString: string;
@@ -174,6 +176,29 @@ const fullData = playerDataRef.current.get(`${player.type}-${player.id}`);
   const selectedTimeBlock = timeBlocks.find(
     (b: any) => b.id === selectedTimeBlockId,
   );
+
+  if (timeBlocks.length === 0) {
+    return (
+      <div className="rounded-lg bg-white shadow">
+        <div className="flex flex-col items-center justify-center py-12">
+          <Settings className="mb-4 h-12 w-12 text-gray-400" />
+          <h3 className="mb-2 text-lg font-medium text-gray-900">
+            No teesheet configuration
+          </h3>
+          <p className="mb-4 text-sm text-gray-600">
+            Create a configuration to start managing this teesheet.
+          </p>
+          <Link
+            href="/admin/settings"
+            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Go to Settings
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-lg bg-white shadow">
