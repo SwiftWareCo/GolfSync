@@ -10,10 +10,10 @@ import {
 } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
-import { revalidatePath, updateTag } from "next/cache";
+import { updateTag } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { generateTimeBlocks } from "~/lib/utils";
-import type { TeesheetConfigWithBlocksInsert } from "~/server/db/schema";
+import type { ConfigBlockInsert ,TeesheetConfigWithBlocksInsert } from "~/server/db/schema";
 
 export async function deleteTeesheetConfig(
   previousState: any,
@@ -62,8 +62,7 @@ export async function updateCourseInfo(data: { notes?: string }) {
         .where(eq(courseInfo.id, existing.id))
         .returning();
 
-      revalidatePath("/members");
-      revalidatePath("/admin/settings");
+      updateTag("course-info");
       return { success: true };
     } else {
       // Create new record - without weather fields
@@ -78,8 +77,7 @@ export async function updateCourseInfo(data: { notes?: string }) {
         })
         .returning();
 
-      revalidatePath("/members");
-      revalidatePath("/admin/settings");
+      updateTag("course-info");
       return { success: true, data: created[0] };
     }
   } catch (error) {
@@ -125,8 +123,7 @@ export async function updateTeesheetVisibility(
     throw new Error("Failed to update teesheet visibility");
   }
 
-  revalidatePath("/admin/teesheet");
-  revalidatePath("/members/teesheet");
+  updateTag("teesheets");
 }
 
 /**
@@ -151,29 +148,108 @@ export async function updateLotterySettings(
     .set(updateData)
     .where(eq(teesheets.id, teesheetId));
 
-  revalidatePath("/admin/teesheet");
-  revalidatePath("/members/teesheet");
+  updateTag("teesheets");
 }
 
 /**
- * FormData wrapper for creating teesheet configs
- * Blocks can be generated from startTime/endTime/interval or added individually
+ * Create a new teesheet configuration with blocks
  */
 export async function createTeesheetConfig(
   previousState: any,
   data: TeesheetConfigWithBlocksInsert
 ) {
-  
-console.log(data);
+  try {
+    const { blocks, ...configData } = data;
+
+    // Create the config
+    const [createdConfig] = await db
+      .insert(teesheetConfigs)
+      .values(configData)
+      .returning();
+
+    if (!createdConfig) {
+      throw new Error("Failed to create configuration");
+    }
+
+    // Create blocks if provided
+    let createdBlocks: ConfigBlockInsert[] = [];
+    if (blocks && blocks.length > 0) {
+      const blocksToInsert = blocks.map((block) => ({
+        configId: createdConfig.id,
+        displayName: block.displayName,
+        startTime: block.startTime,
+        maxPlayers: block.maxPlayers,
+        sortOrder: block.sortOrder,
+      }));
+
+      createdBlocks = await db
+        .insert(configBlocks)
+        .values(blocksToInsert)
+        .returning();
+    }
+
+    updateTag("teesheet-configs");
+    return { success: true, data: { ...createdConfig, blocks: createdBlocks } };
+  } catch (error) {
+    console.error("Error creating teesheet config:", error);
+    return { success: false, error: "Error creating configuration" };
+  }
 }
 
 /**
- * FormData wrapper for updating teesheet configs
+ * Update an existing teesheet configuration with blocks
  */
 export async function updateTeesheetConfig(
   previousState: any,
-  data: TeesheetConfigWithBlocksInsert
-
+  data: TeesheetConfigWithBlocksInsert & { id: number }
 ) {
+  try {
+    const { id, blocks, ...configData } = data;
 
+    // Verify config exists
+    const existingConfig = await db.query.teesheetConfigs.findFirst({
+      where: eq(teesheetConfigs.id, id),
+    });
+
+    if (!existingConfig) {
+      throw new Error("Configuration not found");
+    }
+
+    // Update the config
+    const [updatedConfig] = await db
+      .update(teesheetConfigs)
+      .set(configData)
+      .where(eq(teesheetConfigs.id, id))
+      .returning();
+
+    if (!updatedConfig) {
+      throw new Error("Failed to update configuration");
+    }
+
+    // Delete existing blocks for this config
+    await db.delete(configBlocks).where(eq(configBlocks.configId, id));
+
+    // Create new blocks if provided
+    let createdBlocks: ConfigBlockInsert[] = [];
+    if (blocks && blocks.length > 0) {
+      const blocksToInsert = blocks.map((block) => ({
+        configId: id,
+        displayName: block.displayName,
+        startTime: block.startTime,
+        maxPlayers: block.maxPlayers,
+        sortOrder: block.sortOrder,
+      }));
+
+      createdBlocks = await db
+        .insert(configBlocks)
+        .values(blocksToInsert)
+        .returning();
+    }
+
+    updateTag("teesheet-configs");
+    return { success: true, data: { ...updatedConfig, blocks: createdBlocks } };
+  } catch (error) {
+    console.error("Error updating teesheet config:", error);
+    return { success: false, error: "Error updating configuration" };
+  }
 }
