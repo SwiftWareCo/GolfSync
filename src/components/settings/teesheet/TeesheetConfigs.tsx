@@ -133,9 +133,9 @@ export function TeesheetConfigs({ configs }: TeesheetConfigsProps) {
       <div className="lg:col-span-3">
         {editorState ? (
           <Card className="rounded-lg py-4">
-    
             <CardContent className="max-h-[calc(100vh-200px)] overflow-auto">
               <ConfigEditor
+                key={editorState.config?.id}
                 mode={editorState.mode}
                 config={editorState.config}
                 onSuccess={handleCloseEditor}

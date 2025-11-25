@@ -21,7 +21,6 @@ import {
 import toast from "react-hot-toast";
 import { TeesheetConfigWithBlocksInsertSchema } from "~/server/db/schema/teesheetConfigs.schema";
 import { startTransition } from "react";
-import { CardContent, Card } from "~/components/ui/card";
 import { Zap } from "lucide-react";
 
 type BlockWithId = Omit<ConfigBlockInsert, "id"> & { id: string | number };
@@ -98,10 +97,7 @@ export function ConfigEditor({
   });
 
   const blocks = watch("blocks");
-
-  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(
-    config?.daysOfWeek || [],
-  );
+  const daysOfWeek = watch("daysOfWeek");
 
   // Generator state (uncontrolled inputs)
   const [generatorState, setGeneratorState] = useState({
@@ -142,11 +138,11 @@ export function ConfigEditor({
       try {
         if (mode === "edit" && config) {
           startTransition(async () => {
-            await action({ id: config.id, ...data, daysOfWeek });
+            await action({ id: config.id, ...data });
           });
         } else {
           startTransition(async () => {
-            await action({ ...data, daysOfWeek });
+            await action({ id: 0, ...data });
           });
         }
         toast.success(
@@ -308,7 +304,7 @@ export function ConfigEditor({
             <div className="grid grid-cols-7 gap-1">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
                 (day, index) => {
-                  const isSelected = daysOfWeek.includes(index);
+                  const isSelected = (daysOfWeek || []).includes(index);
                   return (
                     <Button
                       key={day}
@@ -317,9 +313,9 @@ export function ConfigEditor({
                       size="sm"
                       onClick={() => {
                         if (isSelected) {
-                          setDaysOfWeek(daysOfWeek.filter((d) => d !== index));
+                          setValue("daysOfWeek", (daysOfWeek || []).filter((d) => d !== index));
                         } else {
-                          setDaysOfWeek([...daysOfWeek, index]);
+                          setValue("daysOfWeek", [...(daysOfWeek || []), index]);
                         }
                       }}
                     >
@@ -335,6 +331,7 @@ export function ConfigEditor({
           <div className="flex items-center space-x-2">
             <Switch
               id="isActive"
+              checked={watch("isActive")}
               onCheckedChange={(checked) => setValue("isActive", checked)}
             />
             <Label htmlFor="isActive">Active</Label>

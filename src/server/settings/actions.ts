@@ -13,7 +13,10 @@ import { eq } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { generateTimeBlocks } from "~/lib/utils";
-import type { ConfigBlockInsert ,TeesheetConfigWithBlocksInsert } from "~/server/db/schema";
+import type {
+  ConfigBlockInsert,
+  TeesheetConfigWithBlocksInsert,
+} from "~/server/db/schema";
 
 export async function deleteTeesheetConfig(
   previousState: any,
@@ -156,10 +159,10 @@ export async function updateLotterySettings(
  */
 export async function createTeesheetConfig(
   previousState: any,
-  data: TeesheetConfigWithBlocksInsert
+  data: TeesheetConfigWithBlocksInsert & { id?: number },
 ) {
   try {
-    const { blocks, ...configData } = data;
+    const { id, blocks, ...configData } = data;
 
     // Create the config
     const [createdConfig] = await db
@@ -201,7 +204,7 @@ export async function createTeesheetConfig(
  */
 export async function updateTeesheetConfig(
   previousState: any,
-  data: TeesheetConfigWithBlocksInsert & { id: number }
+  data: TeesheetConfigWithBlocksInsert & { id: number },
 ) {
   try {
     const { id, blocks, ...configData } = data;
