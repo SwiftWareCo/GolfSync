@@ -54,13 +54,14 @@ export async function getConfigForDate(
   });
 
   if (!matchingConfig) {
-    console.error(
+    console.warn(
       "[getConfigForDate] No matching configuration found for date:",
       dateString,
       "dayOfWeek:",
       dayOfWeek,
+      "- proceeding with empty teesheet",
     );
-    throw new Error("No teesheet configuration available. Please create one in settings.");
+    return null;
   }
 
   return matchingConfig;
