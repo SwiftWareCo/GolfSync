@@ -18,6 +18,7 @@ import {
 } from "~/server/db/schema";
 import { and, eq, sql, gte, lte, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "~/lib/auth-server";
 import { initializePaceOfPlay } from "~/server/pace-of-play/actions";
 import type { FillType } from "~/app/types/TeeSheetTypes";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
@@ -44,6 +45,8 @@ export async function replaceTimeBlocks(
   teesheetId: number,
   config: TeesheetConfig,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // First, delete all existing time blocks for this teesheet
     await db
@@ -100,6 +103,8 @@ export async function removeTimeBlockMember(
   timeBlockId: number,
   memberId: number,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Delete the time block member
     const result = await db
@@ -133,6 +138,8 @@ export async function removeTimeBlockGuest(
   timeBlockId: number,
   guestId: number,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Delete the time block guest
     const result = await db
@@ -167,6 +174,8 @@ export async function checkInMember(
   memberId: number,
   isCheckedIn: boolean,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     const result = await db
       .update(timeBlockMembers)
@@ -307,6 +316,8 @@ export async function checkInGuest(
   guestId: number,
   isCheckedIn: boolean,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Get guest and time block details
     const guestDetails = await db.query.timeBlockGuests.findFirst({
@@ -381,6 +392,8 @@ export async function checkInAllTimeBlockParticipants(
   timeBlockId: number,
   isCheckedIn: boolean,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Check in all members
     await db
@@ -430,6 +443,8 @@ export async function updateTimeBlockNotes(
   timeBlockId: number,
   notes: string | null,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     const result = await db
       .update(timeBlocks)
@@ -460,6 +475,8 @@ export async function populateTimeBlocksWithRandomMembers(
   teesheetId: number,
   date: string,
 ) {
+  await requireAdmin();
+
   try {
     // Get all members in the organization (exclude RESIGNED, SUSPENDED, DINING)
     const allMembers = await db.query.members.findMany({
@@ -594,6 +611,8 @@ export async function updateTeesheetGeneralNotes(
   teesheetId: number,
   generalNotes: string | null,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     const result = await db
       .update(teesheets)
@@ -626,6 +645,8 @@ export async function addFillToTimeBlock(
   count: number,
   customName?: string,
 ): Promise<FillActionResult> {
+  await requireAdmin();
+
   try {
     // Create individual fill records instead of using count
     const fillPromises = Array.from({ length: count }, () =>
@@ -668,6 +689,8 @@ export async function removeFillFromTimeBlock(
   timeBlockId: number,
   fillId: number,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Delete the fill directly, similar to member removal
     const result = await db
@@ -706,6 +729,8 @@ export async function swapTimeBlocks(
   sourceTimeBlockId: number,
   targetTimeBlockId: number,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Get both timeblocks
     const sourceBlock = await db.query.timeBlocks.findFirst({
@@ -767,6 +792,8 @@ export async function moveTimeBlockPosition(
   timeBlockId: number,
   direction: "up" | "down",
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Get all timeblocks for this teesheet ordered by sortOrder
     const allBlocks = await db.query.timeBlocks.findMany({
@@ -815,6 +842,8 @@ export async function insertTimeBlock(
     maxMembers?: number;
   },
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Get the timeblock we're inserting after
     const afterBlock = await db.query.timeBlocks.findFirst({
@@ -901,6 +930,8 @@ export async function deleteTimeBlock(
   teesheetId: number,
   timeBlockId: number,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     // Verify the timeblock exists and belongs to the specified teesheet
     const timeBlock = await db.query.timeBlocks.findFirst({
@@ -947,6 +978,8 @@ export async function deleteTimeBlock(
 export async function getArrangeResultsData(
   teesheetId: number,
 ): Promise<ActionResult> {
+  await requireAdmin();
+
   try {
     const teesheet = await db.query.teesheets.findFirst({
       where: eq(teesheets.id, teesheetId),

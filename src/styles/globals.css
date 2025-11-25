@@ -47,7 +47,7 @@
   --color-neutral: #f5f5f5;
   --color-neutral-dark: #333333;
 
-  /* Organization theme colors - static for single-tenant */
+  /*theme colors */
   --color-org-primary: #06466c;
   --color-org-primary-light: #3472a3; /* Lighter shade of org-primary */
   --color-org-primary-lighter: #5a8fbf; /* Even lighter shade of org-primary */

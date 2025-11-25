@@ -11,7 +11,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import { updateTag } from "next/cache";
-import { auth } from "@clerk/nextjs/server";
+import { requireAdmin } from "~/lib/auth-server";
 import { generateTimeBlocks } from "~/lib/utils";
 import type {
   ConfigBlockInsert,
@@ -22,6 +22,8 @@ export async function deleteTeesheetConfig(
   previousState: any,
   configId: number,
 ) {
+  await requireAdmin();
+
   // Check if config exists
   const config = await db.query.teesheetConfigs.findFirst({
     where: eq(teesheetConfigs.id, configId),
@@ -38,11 +40,7 @@ export async function deleteTeesheetConfig(
 
 // Update or create course info
 export async function updateCourseInfo(data: { notes?: string }) {
-  const { userId, orgId } = await auth();
-
-  if (!orgId || !userId) {
-    return { success: false, error: "Not authenticated" };
-  }
+  const { userId } = await requireAdmin();
 
   try {
     // Check if the course info exists
@@ -97,8 +95,8 @@ export async function updateTeesheetVisibility(
   isPublic: boolean,
   privateMessage?: string,
 ) {
-  const { userId } = await auth();
-  const publishedBy = userId || "Unknown";
+  const { userId } = await requireAdmin();
+  const publishedBy = userId;
 
   const updateData: any = {
     isPublic,
@@ -139,6 +137,8 @@ export async function updateLotterySettings(
     disabledMessage?: string;
   },
 ) {
+  await requireAdmin();
+
   const updateData: any = {
     lotteryEnabled: settings.enabled,
     lotteryDisabledMessage:
@@ -161,6 +161,8 @@ export async function createTeesheetConfig(
   previousState: any,
   data: TeesheetConfigWithBlocksInsert & { id?: number },
 ) {
+  await requireAdmin();
+
   try {
     const { id, blocks, ...configData } = data;
 
@@ -206,6 +208,8 @@ export async function updateTeesheetConfig(
   previousState: any,
   data: TeesheetConfigWithBlocksInsert & { id: number },
 ) {
+  await requireAdmin();
+
   try {
     const { id, blocks, ...configData } = data;
 

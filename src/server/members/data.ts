@@ -28,7 +28,6 @@ function convertToMember(row: any): Member {
   };
 }
 
-// Single-tenant: no organization filtering needed
 export async function getMembers(): Promise<Member[]> {
   const rows = await db
     .select()

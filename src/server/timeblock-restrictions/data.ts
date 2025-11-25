@@ -14,7 +14,7 @@ import { format } from "date-fns";
 
 type ResultType<T> = { success: false; error: string } | T;
 
-// Get all timeblock restrictions for the current organization
+// Get all timeblock restrictions
 export async function getTimeblockRestrictions(): Promise<ResultType<any[]>> {
   try {
     const restrictions = await db.query.timeblockRestrictions.findMany({

@@ -1,11 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 
 /**
- * Get authenticated user session - reusable across server components and data functions
+ * Require user to be authenticated
  * @returns {Promise<{userId: string, sessionClaims: any}>}
  * @throws {Error} If user is not authenticated
  */
-export async function getAuthenticatedUser() {
+export async function requireAuthentication() {
   const { userId, sessionClaims } = await auth();
 
   if (!userId) {
@@ -16,14 +16,21 @@ export async function getAuthenticatedUser() {
 }
 
 /**
- * Check if user is authenticated (non-throwing version)
- * @returns {Promise<boolean>}
+ * Require user to be authenticated AND have admin privileges
+ * @returns {Promise<{userId: string, sessionClaims: any}>}
+ * @throws {Error} If user is not authenticated or not an admin
  */
-export async function isUserAuthenticated(): Promise<boolean> {
-  try {
-    await getAuthenticatedUser();
-    return true;
-  } catch {
-    return false;
+export async function requireAdmin() {
+  const { userId, sessionClaims } = await auth();
+
+  if (!userId) {
+    throw new Error("Not authenticated");
   }
+
+  const isAdmin = (sessionClaims as any)?.publicMetadata?.isAdmin === true;
+  if (!isAdmin) {
+    throw new Error("Admin access required");
+  }
+
+  return { userId, sessionClaims };
 }

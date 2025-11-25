@@ -95,7 +95,7 @@ export function SidebarActions({
   return (
     <>
       {/* Sidebar */}
-      <div className="group border-org-primary sticky top-6 mt-6 flex h-fit w-14 flex-col items-stretch gap-1 rounded-lg border bg-white p-2 transition-all duration-300 focus-within:w-48 focus-within:rounded-l-lg focus-within:rounded-r-none hover:w-48 hover:rounded-l-lg hover:rounded-r-none">
+      <div className="group border-org-primary sticky top-6 mt-6 flex h-fit w-14 flex-col items-stretch gap-1 rounded-lg border bg-white p-2 transition-all duration-300 hover:w-48 hover:rounded-l-lg hover:rounded-r-none">
         {/* Return to Today - Top */}
         <Button
           variant="ghost"

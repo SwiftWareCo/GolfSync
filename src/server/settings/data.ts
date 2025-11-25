@@ -80,7 +80,7 @@ export async function getTeesheetConfigs(): Promise<
   return configs;
 }
 
-// Get course info for the current organization
+// Get course info 
 export async function getCourseInfo() {
   "use cache";
   cacheTag("course-info");

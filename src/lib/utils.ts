@@ -342,36 +342,6 @@ export function formatDisplayDate(date: Date | string): string {
   return format(dateObj, "MMMM do, yyyy");
 }
 
-export function getOrganizationColors(theme?: {
-  primary?: string;
-  secondary?: string;
-  tertiary?: string;
-  ["--org-primary"]?: string;
-  ["--org-secondary"]?: string;
-  ["--org-tertiary"]?: string;
-}) {
-  // Handle both formats of theme properties
-  const primaryColor = theme?.primary || theme?.["--org-primary"] || "#000000";
-  const secondaryColor =
-    theme?.secondary || theme?.["--org-secondary"] || "#f3f4f6";
-  const tertiaryColor =
-    theme?.tertiary || theme?.["--org-tertiary"] || "#9ca3af";
-
-  return {
-    primary: primaryColor,
-    secondary: secondaryColor,
-    tertiary: tertiaryColor,
-    text: {
-      primary: primaryColor,
-      secondary: "#4B5563",
-    },
-    background: {
-      primary: "#FFFFFF",
-      secondary: secondaryColor,
-    },
-  };
-}
-
 /**
  * Checks if two dates are on the same day (ignoring time) using UTC components
  * This is useful for server-side date comparisons

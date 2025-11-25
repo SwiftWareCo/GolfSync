@@ -25,7 +25,6 @@ process.env.VAPID_PRIVATE_KEY = 'test_vapid_private';
 process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'test_vapid_public';
 process.env.DEFAULT_LAT = '49.2827';
 process.env.DEFAULT_LON = '-123.1207';
-process.env.NODE_ENV = 'test';
 process.env.SKIP_ENV_VALIDATION = '1';
 
 // Mock console methods to reduce noise in test output
