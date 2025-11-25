@@ -39,7 +39,7 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
   let lotteryEntry: LotteryEntryData = null;
   if (isLotteryEligible) {
     try {
-      lotteryEntry = await getLotteryEntryData(dateString);
+      lotteryEntry = await getLotteryEntryData(dateString, sessionClaims?.userId as string);
     } catch (error) {
       console.error("Error fetching lottery entry:", error);
       // Continue without lottery data - the component will handle the error state

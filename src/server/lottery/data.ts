@@ -10,7 +10,6 @@ import {
   timeblockRestrictions,
 } from "~/server/db/schema";
 import { eq, and, sql, desc, asc, inArray } from "drizzle-orm";
-import { getAuthenticatedUser } from "~/lib/auth-server";
 import type { LotteryEntryData } from "~/app/types/LotteryTypes";
 
 /**
@@ -20,13 +19,13 @@ import type { LotteryEntryData } from "~/app/types/LotteryTypes";
  */
 export async function getLotteryEntryData(
   lotteryDate: string,
+  userId: string,
 ): Promise<LotteryEntryData> {
   try {
-    const { sessionClaims } = await getAuthenticatedUser();
 
     // Get member data using the external userId from session claims
     const member = await db.query.members.findFirst({
-      where: eq(members.id, Number(sessionClaims?.userId)),
+      where: eq(members.id, Number(userId)),
     });
 
     if (!member) {
