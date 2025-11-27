@@ -2,11 +2,11 @@ import { format } from "date-fns";
 import { Clock } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "~/components/ui/card";
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
+import type { TimeBlockWithRelations } from "~/server/db/schema";
 import { formatTimeString } from "~/lib/utils";
 
 interface TimeBlockHeaderProps {
-  timeBlock: TimeBlockWithMembers;
+  timeBlock: TimeBlockWithRelations;
   guestsCount?: number;
   maxPeople?: number;
 }
@@ -17,7 +17,8 @@ export function TimeBlockHeader({
   maxPeople = 4,
 }: TimeBlockHeaderProps) {
   const fillsCount = timeBlock.fills?.length || 0;
-  const totalPeople = timeBlock.members.length + guestsCount + fillsCount;
+  const membersCount = timeBlock.timeBlockMembers?.length || 0;
+  const totalPeople = membersCount + guestsCount + fillsCount;
 
   return (
     <Card>
@@ -33,7 +34,7 @@ export function TimeBlockHeader({
             <p className="text-sm text-gray-500">
               {totalPeople} / {maxPeople} people booked
               {totalPeople > 0 &&
-                ` (${timeBlock.members.length} members, ${guestsCount} guests${fillsCount > 0 ? `, ${fillsCount} fills` : ""}`}
+                ` (${membersCount} members, ${guestsCount} guests${fillsCount > 0 ? `, ${fillsCount} fills` : ""}`}
             </p>
           </div>
         </div>

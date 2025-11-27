@@ -1,7 +1,6 @@
 // Lottery Entries
 export {
   lotteryEntries,
-  fillTypeEnum,
   lotteryEntriesInsertSchema,
   lotteryEntrySelectSchema,
   lotteryEntryUpdateSchema,

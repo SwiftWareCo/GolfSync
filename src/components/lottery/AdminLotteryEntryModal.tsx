@@ -20,13 +20,11 @@ import { Clock, Dice1, CheckCircle, Users, X } from "lucide-react";
 import { formatDate } from "~/lib/dates";
 import { submitLotteryEntry } from "~/server/lottery/actions";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
-import { LotteryFillSelector } from "~/components/lottery/LotteryFillSelector";
+import { FillForm } from "~/components/timeblock/fills/FillForm";
 import type {
   TimeWindow,
   LotteryEntryFormData,
 } from "~/app/types/LotteryTypes";
-import type { FillType } from "~/app/types/TeeSheetTypes";
-import { FillTypes } from "~/app/types/TeeSheetTypes";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import type { Teesheet, TeesheetConfigWithBlocks } from "~/server/db/schema";
 import {
@@ -185,7 +183,7 @@ export function AdminLotteryEntryModal({
     setOrganizerDisplay(null);
   };
 
-  const addFill = (fillType: FillType, customName?: string) => {
+  const addFill = (fillType: string, customName?: string) => {
     if (totalPlayers >= 4) {
       setError("fills", { message: "Maximum 4 players per group" });
       return;
@@ -379,10 +377,10 @@ export function AdminLotteryEntryModal({
                     </div>
                     <div className="flex-1">
                       <div className="font-medium">
-                        {fill.fillType === FillTypes.GUEST && "Guest Fill"}
-                        {fill.fillType === FillTypes.RECIPROCAL &&
+                        {fill.fillType === "guest" && "Guest Fill"}
+                        {fill.fillType === "reciprocal" &&
                           "Reciprocal Fill"}
-                        {fill.fillType === FillTypes.CUSTOM &&
+                        {fill.fillType === "custom" &&
                           (fill.customName || "Custom Fill")}
                       </div>
                       <div className="text-sm text-gray-500">Fill</div>
@@ -405,7 +403,7 @@ export function AdminLotteryEntryModal({
                     <div className="text-sm font-medium text-gray-700">
                       Add Fills (Optional)
                     </div>
-                    <LotteryFillSelector
+                    <FillForm
                       onAddFill={addFill}
                       isDisabled={totalPlayers >= 4}
                     />

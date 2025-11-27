@@ -16,12 +16,7 @@ import {
 import { z } from "zod";
 import { createTable } from "../../helpers";
 
-// Enums for fill types
-export const fillTypeEnum = pgEnum("fill_type", [
-  "guest_fill",
-  "reciprocal_fill",
-  "custom_fill",
-]);
+
 
 // Consolidated lottery entries table (individual + group)
 // Type Detection: INDIVIDUAL if memberIds.length === 1

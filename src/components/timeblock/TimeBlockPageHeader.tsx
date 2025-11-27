@@ -4,11 +4,11 @@ import { format } from "date-fns";
 import { ChevronLeft, Calendar } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { useRouter } from "next/navigation";
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
+import type { TimeBlockWithRelations } from "~/server/db/schema";
 import { formatTimeString } from "~/lib/utils";
 
 interface TimeBlockPageHeaderProps {
-  timeBlock: TimeBlockWithMembers;
+  timeBlock: TimeBlockWithRelations;
 }
 
 export function TimeBlockPageHeader({ timeBlock }: TimeBlockPageHeaderProps) {

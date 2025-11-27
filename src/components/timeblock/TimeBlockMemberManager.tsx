@@ -1,100 +1,66 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useDebouncedCallback } from "use-debounce";
-import { TimeBlockPageHeader } from "./TimeBlockPageHeader";
 import { TimeBlockHeader } from "./TimeBlockHeader";
-import { useTeesheetMutations } from "~/hooks/useTeesheetMutations";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { memberQueryOptions, guestQueryOptions, queryKeys } from "~/server/query-options";
+import { useQuery } from "@tanstack/react-query";
+import { memberQueryOptions, guestQueryOptions } from "~/server/query-options";
 import {
-  searchMembersAction,
   addMemberToTimeBlock,
 } from "~/server/members/actions";
 import {
-  searchGuestsAction,
   addGuestToTimeBlock,
-  removeGuestFromTimeBlock,
 } from "~/server/guests/actions";
 import {
   addFillToTimeBlock,
   removeFillFromTimeBlock,
   removeTimeBlockMember,
+  removeTimeBlockGuest,
 } from "~/server/teesheet/actions";
 import { checkTimeblockRestrictionsAction } from "~/server/timeblock-restrictions/actions";
-import type { Member } from "~/app/types/MemberTypes";
-import type {
-  TimeBlockWithMembers,
-  TimeBlockMemberView,
-  TimeBlockFill,
-  FillType,
-} from "~/app/types/TeeSheetTypes";
+import type { TimeBlockWithRelations } from "~/server/db/schema";
 import {
   TimeBlockMemberSearch,
   TimeBlockGuestSearch,
   TimeBlockPeopleList,
 } from "./TimeBlockPeopleList";
-import { TimeBlockFillForm } from "./fills/TimeBlockFillForm";
+import { FillForm } from "./fills/FillForm";
 import toast from "react-hot-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { type RestrictionViolation } from "~/app/types/RestrictionTypes";
 import { RestrictionViolationAlert } from "~/components/settings/timeblock-restrictions/RestrictionViolationAlert";
-import { formatDateToYYYYMMDD, parseDate, getBCToday, formatDate } from "~/lib/dates";
-import { type TimeBlockGuest } from "~/app/types/GuestTypes";
+import {  getBCToday } from "~/lib/dates";
+import { type TimeBlockGuest } from "~/app/types/GuestTypes"
 import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
 import { createGuest } from "~/server/guests/actions";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
-
-type Guest = {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phone: string | null;
-};
+import { useTeeblockOptimisticUpdate } from "~/hooks/useTeeblockOptimisticUpdate";
 
 interface TimeBlockMemberManagerProps {
-  timeBlock: TimeBlockWithMembers;
-  timeBlockGuests?: TimeBlockGuest[];
-  // Optional mutations - if not provided, will fall back to direct server actions
-  mutations?: any;
+  timeBlock: TimeBlockWithRelations;
+  dateString: string;
 }
 
 export function TimeBlockMemberManager({
-  timeBlock: initialTimeBlock,
-  timeBlockGuests: initialTimeBlockGuests = [],
-  mutations: providedMutations,
+  timeBlock,
+  dateString,
 }: TimeBlockMemberManagerProps) {
-  const queryClient = useQueryClient();
+  // Optimistic update hook
+  const {
+    optimisticallyAddMember,
+    optimisticallyRemoveMember,
+    optimisticallyAddGuest,
+    optimisticallyRemoveGuest,
+    optimisticallyAddFill,
+    optimisticallyRemoveFill,
+    rollback,
+  } = useTeeblockOptimisticUpdate(dateString, timeBlock.id);
 
-  // Use mutations-only hook to avoid redundant data fetching
-  const dateForMutations = initialTimeBlock.date
-    ? parseDate(initialTimeBlock.date)
-    : new Date();
-  const { mutations: hookMutations } = useTeesheetMutations(dateForMutations);
-
-  // Use provided mutations if available, otherwise use hook mutations
-  const mutations = providedMutations || hookMutations;
-
-  // Subscribe to live data instead of using static initial data
-  const dateString = formatDate(dateForMutations, "yyyy-MM-dd");
-
-  // Use reactive query to get live data - this will trigger re-renders when cache updates
-  const teesheetQuery = useQuery(teesheetQueryOptions.byDate(dateString));
-
-  // Find the current timeblock from live data, fallback to initial data
-  let timeBlock = initialTimeBlock;
-  if (teesheetQuery.data?.timeBlocks) {
-    const currentTimeBlock = teesheetQuery.data.timeBlocks.find(
-      (tb: any) => tb.id === initialTimeBlock.id
-    );
-    if (currentTimeBlock) {
-      timeBlock = currentTimeBlock;
-    }
-  }
-
-  const members = timeBlock.members || [];
-  const guests = timeBlock.guests || [];
+  // Extract members and guests from relations for display components
+  const memberRelations = timeBlock.timeBlockMembers || [];
+  const guestRelations = timeBlock.timeBlockGuests || [];
+  const members = memberRelations.map((m) => m.member);
+  const guests = guestRelations.map((g) => g.guest);
   const fills = timeBlock.fills || [];
 
   // Member search state and query
@@ -117,17 +83,6 @@ export function TimeBlockMemberManager({
 
   // Guest creation state
   const [showAddGuestDialog, setShowAddGuestDialog] = useState(false);
-
-  // Course Sponsored member - hard coded
-  const courseSponsoredMember = {
-    id: -1, // Special ID to distinguish from real members
-    username: "course_sponsored",
-    firstName: "Course",
-    lastName: "Sponsored",
-    memberNumber: "CS001",
-    class: "COURSE_SPONSORED",
-    email: "course@golfsync.com",
-  };
 
   // Constants
   const MAX_PEOPLE = 4;
@@ -220,19 +175,12 @@ export function TimeBlockMemberManager({
   };
 
   const handleAddMember = async (memberId: number) => {
+    if (isTimeBlockFull) return;
 
-    // Check if timeblock is full
-    if (isTimeBlockFull) {
-      return;
-    }
+    const memberToAdd = memberSearchResults.find((m) => m.id === memberId);
+    if (!memberToAdd) return;
 
     try {
-      const memberToAdd = memberSearchResults.find((m) => m.id === memberId);
-      if (!memberToAdd) {
-        return;
-      }
-
-
       // Check for restrictions first
       const hasViolations = await checkMemberRestrictions(
         memberId,
@@ -243,63 +191,72 @@ export function TimeBlockMemberManager({
         // Save the action for later if admin overrides
         setPendingAction(() => {
           return async () => {
-            try {
-              await mutations.addMember(timeBlock.id, memberId);
-            } catch (error) {
-              console.error("Error adding member:", error);
-            }
+            await performAddMember(memberId);
           };
         });
         return;
       }
 
-      // No violations, proceed as normal
-      try {
-        const result = await mutations.addMember(timeBlock.id, memberId);
-      } catch (error) {
-        console.error("Error adding member:", error);
-      }
+      // No violations, proceed immediately
+      await performAddMember(memberId);
     } catch (error) {
       console.error("Error adding member:", error);
       toast.error("An error occurred while adding the member");
     }
   };
 
-  const handleRemoveMember = async (memberId: number) => {
+  const performAddMember = async (memberId: number) => {
+    const { previousData } = optimisticallyAddMember(memberId, {});
+
     try {
-      await mutations.removeMember(timeBlock.id, memberId);
+      const result = await addMemberToTimeBlock(timeBlock.id, memberId);
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to add member");
+        rollback(previousData);
+      } else {
+        toast.success("Member added");
+      }
+    } catch (error) {
+      console.error("Error adding member:", error);
+      toast.error("Error adding member");
+      rollback(previousData);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: number) => {
+    const { previousData } = optimisticallyRemoveMember(memberId);
+
+    try {
+      const result = await removeTimeBlockMember(timeBlock.id, memberId);
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to remove member");
+        rollback(previousData);
+      } else {
+        toast.success("Member removed");
+      }
     } catch (error) {
       console.error("Error removing member:", error);
+      toast.error("Error removing member");
+      rollback(previousData);
     }
   };
 
   const handleAddGuest = async (guestId: number) => {
-    // Check if timeblock is full
-    if (isTimeBlockFull) {
-      return;
-    }
+    if (isTimeBlockFull) return;
 
     const guestToAdd = guestSearchResults.find((g) => g.id === guestId);
-    if (!guestToAdd) {
-      return;
-    }
+    if (!guestToAdd) return;
 
     // Determine the inviting member - use Course Sponsored if selectedMemberId is -1 or null
-    let invitingMember;
     let invitingMemberId: number;
 
     if (!selectedMemberId || selectedMemberId === -1) {
-      // Use Course Sponsored member
-      if (!courseSponsoredMember) {
-        toast.error("Course Sponsored member not available");
-        return;
-      }
-      invitingMember = courseSponsoredMember;
-      invitingMemberId = courseSponsoredMember.id;
+      invitingMemberId = -1; // Course Sponsored
     } else {
-      // Use selected member
-      invitingMember = members.find((m: any) => m.id === selectedMemberId);
-      if (!invitingMember) {
+      const foundMember = members.find((m) => m.id === selectedMemberId);
+      if (!foundMember) {
         toast.error("Selected member not found");
         return;
       }
@@ -314,31 +271,60 @@ export function TimeBlockMemberManager({
         // Save the action for later if admin overrides
         setPendingAction(() => {
           return async () => {
-            try {
-              await mutations.addGuest(timeBlock.id, guestId, invitingMemberId);
-              setSelectedMemberId(null);
-            } catch (error) {
-              console.error("Error adding guest:", error);
-            }
+            await performAddGuest(guestId, invitingMemberId);
           };
         });
         return;
       }
 
-      // No violations, proceed as normal
-      await mutations.addGuest(timeBlock.id, guestId, invitingMemberId);
-      setSelectedMemberId(null);
+      // No violations, proceed immediately
+      await performAddGuest(guestId, invitingMemberId);
     } catch (error) {
       toast.error("An error occurred while adding the guest");
       console.error(error);
     }
   };
 
-  const handleRemoveGuest = async (guestId: number) => {
+  const performAddGuest = async (guestId: number, invitingMemberId: number) => {
+    const { previousData } = optimisticallyAddGuest(guestId, invitingMemberId, {});
+
     try {
-      await mutations.removeGuest(timeBlock.id, guestId);
+      const result = await addGuestToTimeBlock(
+        timeBlock.id,
+        guestId,
+        invitingMemberId,
+      );
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to add guest");
+        rollback(previousData);
+      } else {
+        toast.success("Guest added");
+        setSelectedMemberId(null);
+      }
+    } catch (error) {
+      console.error("Error adding guest:", error);
+      toast.error("Error adding guest");
+      rollback(previousData);
+    }
+  };
+
+  const handleRemoveGuest = async (guestId: number) => {
+    const { previousData } = optimisticallyRemoveGuest(guestId);
+
+    try {
+      const result = await removeTimeBlockGuest(timeBlock.id, guestId);
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to remove guest");
+        rollback(previousData);
+      } else {
+        toast.success("Guest removed");
+      }
     } catch (error) {
       console.error("Error removing guest:", error);
+      toast.error("Error removing guest");
+      rollback(previousData);
     }
   };
 
@@ -385,37 +371,60 @@ export function TimeBlockMemberManager({
     setShowAddGuestDialog(true);
   };
 
-  const handleAddFill = async (fillType: FillType, customName?: string) => {
-    // Check if timeblock is full
-    if (isTimeBlockFull) {
-      return;
-    }
+  const handleAddFill = async (fillType: string, customName?: string) => {
+    if (isTimeBlockFull) return;
+
+    const { previousData } = optimisticallyAddFill(fillType, customName);
 
     try {
-      await mutations.addFill(timeBlock.id, fillType, customName);
+      const result = await addFillToTimeBlock(
+        timeBlock.id,
+        fillType,
+        1, // Add one fill
+        customName,
+      );
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to add fill");
+        rollback(previousData);
+      } else {
+        toast.success("Fill added");
+      }
     } catch (error) {
       console.error("Error adding fill:", error);
+      toast.error("Error adding fill");
+      rollback(previousData);
     }
   };
 
   const handleRemoveFill = async (fillId: number) => {
+    const { previousData } = optimisticallyRemoveFill(fillId);
+
     try {
-      await mutations.removeFill(timeBlock.id, fillId);
+      const result = await removeFillFromTimeBlock(timeBlock.id, fillId);
+
+      if (!result.success) {
+        toast.error(result.error || "Failed to remove fill");
+        rollback(previousData);
+      } else {
+        toast.success("Fill removed");
+      }
     } catch (error) {
       console.error("Error removing fill:", error);
+      toast.error("Error removing fill");
+      rollback(previousData);
     }
   };
 
   return (
     <div className="space-y-6">
-      <TimeBlockPageHeader timeBlock={timeBlock} />
       <TimeBlockHeader
         timeBlock={timeBlock}
         guestsCount={guests.length}
         maxPeople={MAX_PEOPLE}
       />
 
-      <Tabs defaultValue="members" className="mt-8 w-full">
+      <Tabs defaultValue="members" className="mt-6 w-full min-h-[500px]">
         <TabsList className="mb-4">
           <TabsTrigger value="members">Add Members</TabsTrigger>
           <TabsTrigger value="guests">Add Guests</TabsTrigger>
@@ -466,7 +475,7 @@ export function TimeBlockMemberManager({
         </TabsContent>
 
         <TabsContent value="fills">
-          <TimeBlockFillForm
+          <FillForm
             onAddFill={handleAddFill}
             isTimeBlockFull={isTimeBlockFull}
             maxPeople={MAX_PEOPLE}

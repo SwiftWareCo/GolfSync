@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
+import type { TimeBlockWithRelations } from "~/server/db/schema";
 import { Button } from "~/components/ui/button";
 import {
   X,
@@ -35,7 +35,7 @@ import {
 } from "~/components/ui/tooltip";
 
 interface TimeBlockProps {
-  timeBlock: TimeBlockWithMembers;
+  timeBlock: TimeBlockWithRelations;
   onRestrictionViolation?: (violations: RestrictionViolation[]) => void;
   setPendingAction?: (action: (() => Promise<void>) | null) => void;
   paceOfPlay?: PaceOfPlayRecord | null;

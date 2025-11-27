@@ -19,7 +19,6 @@ import { and, eq, sql, gte, lte, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "~/lib/auth-server";
 import { initializePaceOfPlay } from "~/server/pace-of-play/actions";
-import type { FillType } from "~/app/types/TeeSheetTypes";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
 import { getTimeBlocksForTeesheet } from "~/server/teesheet/data";
 
@@ -114,6 +113,8 @@ export async function removeTimeBlockMember(
       };
     }
 
+    revalidatePath(`/admin`);
+    revalidatePath(`/members/teesheet`);
     return { success: true };
   } catch (error) {
     console.error("Error removing time block member:", error);
@@ -149,6 +150,8 @@ export async function removeTimeBlockGuest(
       };
     }
 
+    revalidatePath(`/admin`);
+    revalidatePath(`/members/teesheet`);
     return { success: true };
   } catch (error) {
     console.error("Error removing time block guest:", error);
@@ -631,7 +634,7 @@ export async function updateTeesheetGeneralNotes(
 
 export async function addFillToTimeBlock(
   timeBlockId: number,
-  fillType: FillType,
+  fillType: string,
   count: number,
   customName?: string,
 ): Promise<ActionResult> {
@@ -665,6 +668,7 @@ export async function addFillToTimeBlock(
       };
     }
 
+    revalidatePath(`/admin`);
     revalidatePath(`/teesheet`);
     return { success: true };
   } catch (error) {
@@ -701,6 +705,7 @@ export async function removeFillFromTimeBlock(
       };
     }
 
+    revalidatePath(`/admin`);
     revalidatePath(`/teesheet`);
     return { success: true };
   } catch (error) {

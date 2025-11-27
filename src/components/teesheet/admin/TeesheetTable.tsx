@@ -31,7 +31,7 @@ type TimeBlockMemberFull = {
   bookingTime: string;
   bagNumber: string | null;
   createdAt: Date;
-  member: Member;  
+  member: Member;
 };
 
 type TimeBlockGuestFull = {
@@ -43,8 +43,8 @@ type TimeBlockGuestFull = {
   bookingDate: string;
   bookingTime: string;
   createdAt: Date;
-  guest: Guest;  
-  invitedByMember: Member;  
+  guest: Guest;
+  invitedByMember: Member;
 };
 
 export function TeesheetTable({ dateString }: TeesheetTableProps) {
@@ -60,10 +60,10 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   // Use the fresh data from the query if available, otherwise fall back to initial server props
   const timeBlocks = queryResult?.timeBlocks ?? [];
 
- // ✅ Properly typed Map with composite keys
-  const playerDataRef = useRef<Map<string, TimeBlockMemberFull | TimeBlockGuestFull>>(
-    new Map()
-  );
+  // ✅ Properly typed Map with composite keys
+  const playerDataRef = useRef<
+    Map<string, TimeBlockMemberFull | TimeBlockGuestFull>
+  >(new Map());
 
   const getPlayersForBlock = (block: any): PlayerData[] => {
     const players: PlayerData[] = [];
@@ -71,7 +71,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     block.timeBlockMembers?.forEach((tbm: TimeBlockMemberFull) => {
       // Store full TimeBlockMember
       playerDataRef.current.set(`member-${tbm.member.id}`, tbm);
-      
+
       // Return display data
       players.push({
         id: tbm.member.id,
@@ -86,7 +86,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     block.timeBlockGuests?.forEach((tbg: TimeBlockGuestFull) => {
       // Store full TimeBlockGuest
       playerDataRef.current.set(`guest-${tbg.guest.id}`, tbg);
-      
+
       // Return display data
       players.push({
         id: tbg.guest.id,
@@ -99,7 +99,10 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     block.fills?.forEach((fill: any) => {
       players.push({
         id: fill.id,
-        name: fill.fillType === "custom_fill" ? fill.customName || "Custom Fill" : "Fill",
+        name:
+          fill.fillType === "custom_fill"
+            ? fill.customName || "Custom Fill"
+            : "Fill",
         type: "fill",
         fillType: fill.fillType,
       });
@@ -165,7 +168,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   const handlePlayerClick = (player: PlayerData) => {
     console.log(player);
-const fullData = playerDataRef.current.get(`${player.type}-${player.id}`);
+    const fullData = playerDataRef.current.get(`${player.type}-${player.id}`);
     console.log("fullData", fullData);
     if (player.type === "member" || player.type === "guest") {
       setIsAccountDialogOpen(true);
@@ -190,7 +193,7 @@ const fullData = playerDataRef.current.get(`${player.type}-${player.id}`);
           </p>
           <Link
             href="/admin/settings"
-            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Settings className="mr-2 h-4 w-4" />
             Go to Settings
@@ -242,11 +245,7 @@ const fullData = playerDataRef.current.get(`${player.type}-${player.id}`);
           open={isAddPlayerModalOpen}
           onOpenChange={setIsAddPlayerModalOpen}
           timeBlock={selectedTimeBlock}
-          timeBlockGuests={
-            selectedTimeBlock.guests ||
-            selectedTimeBlock.timeBlockGuests?.map((g: any) => g.guest) ||
-            []
-          }
+          dateString={dateString}
         />
       )}
 

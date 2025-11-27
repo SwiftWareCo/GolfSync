@@ -14,6 +14,13 @@ import {
 import { z } from "zod";
 import { createTable } from "../helpers";
 
+// Enums for fill types
+export const fillTypeEnum = pgEnum("fill_type", [
+  "guest_fill",
+  "reciprocal_fill",
+  "custom_fill",
+]);
+
 export const fillRelatedTypeEnum = pgEnum("fill_related_type", [
   "lottery_entry",
   "timeblock",

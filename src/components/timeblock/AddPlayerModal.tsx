@@ -1,24 +1,21 @@
 "use client";
 
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
+import type { TimeBlockWithRelations } from "~/server/db/schema";
 import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
 import { TimeBlockMemberManager } from "./TimeBlockMemberManager";
-import type { TimeBlockGuest } from "~/app/types/GuestTypes";
 
 interface AddPlayerModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  timeBlock: TimeBlockWithMembers;
-  timeBlockGuests?: TimeBlockGuest[];
-  mutations?: any;
+  timeBlock: TimeBlockWithRelations;
+  dateString: string;
 }
 
 export function AddPlayerModal({
   open,
   onOpenChange,
   timeBlock,
-  timeBlockGuests = [],
-  mutations,
+  dateString,
 }: AddPlayerModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -27,8 +24,7 @@ export function AddPlayerModal({
         <div className="flex-grow overflow-y-auto pr-1">
           <TimeBlockMemberManager
             timeBlock={timeBlock}
-            timeBlockGuests={timeBlockGuests}
-            mutations={mutations}
+            dateString={dateString}
           />
         </div>
       </DialogContent>
