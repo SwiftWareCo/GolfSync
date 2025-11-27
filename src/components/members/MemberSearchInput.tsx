@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
-import { searchMembersAction } from "~/server/members/actions";
+import { useQuery } from "@tanstack/react-query";
+import { memberQueryOptions } from "~/services/member/member-query-options";
 import {
   Command,
   CommandEmpty,
@@ -34,30 +35,23 @@ export function MemberSearchInput({
   className = "",
 }: MemberSearchInputProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [results, setResults] = useState<Member[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const handleSearch = useDebouncedCallback(async (query: string) => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const searchResults = await searchMembersAction(query);
-      setResults(searchResults);
-    } catch (error) {
-      console.error("Error searching members:", error);
-    } finally {
-      setIsLoading(false);
-    }
+  // Debounce the search query
+  const handleSearchChange = useDebouncedCallback((query: string) => {
+    setDebouncedQuery(query);
   }, 300);
 
-  useEffect(() => {
-    handleSearch(searchQuery);
-  }, [searchQuery, handleSearch]);
+  // Query member search results with deduplication and caching
+  const { data: results = [], isLoading } = useQuery(
+    memberQueryOptions.search(debouncedQuery),
+  );
+
+  const handleInputChange = (query: string) => {
+    setSearchQuery(query);
+    handleSearchChange(query);
+  };
 
   if (selectedMember) {
     return (
@@ -90,7 +84,7 @@ export function MemberSearchInput({
       <CommandInput
         placeholder={placeholder}
         value={searchQuery}
-        onValueChange={setSearchQuery}
+        onValueChange={handleInputChange}
         onFocus={() => setIsOpen(true)}
       />
       {isOpen && (

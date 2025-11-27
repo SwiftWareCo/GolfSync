@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,19 +33,23 @@ export function BagReportDialog({
   const [endTime, setEndTime] = useState("");
 
   // Ensure timeBlocks is an array and sort by startTime
-  const safeData = Array.isArray(timeBlocks)
-    ? [...timeBlocks].sort((a, b) => a.startTime.localeCompare(b.startTime))
-    : [];
+  const safeData = useMemo(() => {
+    return Array.isArray(timeBlocks)
+      ? [...timeBlocks].sort((a, b) => a.startTime.localeCompare(b.startTime))
+      : [];
+  }, [timeBlocks]);
 
   // Generate unique time options from timeblocks
-  const timeOptions = [
-    ...new Set(safeData.flatMap((block) => [block.startTime, block.endTime])),
-  ]
-    .sort()
-    .map((time) => ({
-      value: time,
-      label: formatTimeString(time),
-    }));
+  const timeOptions = useMemo(() => {
+    return [
+      ...new Set(safeData.flatMap((block) => [block.startTime, block.endTime])),
+    ]
+      .sort()
+      .map((time) => ({
+        value: time,
+        label: formatTimeString(time),
+      }));
+  }, [safeData]);
 
   // Find all bag numbers within the selected time range
   const getBagNumbersInRange = () => {

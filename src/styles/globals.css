@@ -64,165 +64,94 @@
   --color-org-background-primary: #ffffff;
 }
 
-/* Dialog animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
+@theme {
+  /* ... existing theme ... */
+  --animate-fade-in: fadeIn 0.2s ease-out forwards;
+  --animate-fade-out: fadeOut 0.15s ease-in forwards;
+  --animate-zoom-in: zoomIn 0.2s ease-out forwards;
+  --animate-zoom-out: zoomOut 0.15s ease-in forwards;
+  --animate-slide-in-from-top: slideInFromTop 0.2s ease-out forwards;
+  --animate-slide-out-to-top: slideOutToTop 0.15s ease-in forwards;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
-  to {
-    opacity: 1;
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
   }
-}
 
-@keyframes fadeOut {
-  from {
-    opacity: 1;
+  @keyframes zoomIn {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
-  to {
-    opacity: 0;
+
+  @keyframes zoomOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.98);
+    }
   }
-}
 
-@keyframes zoomIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
+  @keyframes slideInFromTop {
+    from {
+      transform: translateY(-100%);
+    }
+    to {
+      transform: translateY(0);
+    }
   }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
 
-@keyframes zoomOut {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.2s ease-out forwards;
-}
-
-.animate-fade-out {
-  animation: fadeOut 0.15s ease-in forwards;
-}
-
-.animate-zoom-in {
-  animation: zoomIn 0.2s ease-out forwards;
-}
-
-.animate-zoom-out {
-  animation: zoomOut 0.15s ease-in forwards;
-}
-
-/* Dialog specific animations */
-.dialog-overlay {
-  opacity: 0;
-}
-
-.dialog-overlay[data-state="open"] {
-  animation: fadeIn 0.2s ease-out forwards;
-}
-
-.dialog-overlay[data-state="closed"] {
-  animation: fadeOut 0.15s ease-in forwards;
-}
-
-.dialog-content {
-  opacity: 0;
-  transform: scale(0.98);
-}
-
-.dialog-content[data-state="open"] {
-  animation: dialogZoomIn 0.2s ease-out forwards;
-}
-
-.dialog-content[data-state="closed"] {
-  animation: dialogZoomOut 0.15s ease-in forwards;
-}
-
-@keyframes dialogZoomIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
+  @keyframes slideOutToTop {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-100%);
+    }
   }
 }
 
-@keyframes dialogZoomOut {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-}
-
-/* Popover specific animations */
-.popover-content {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
-.popover-content[data-state="open"] {
-  animation: popoverZoomIn 0.2s ease-out forwards;
-}
-
-.popover-content[data-state="closed"] {
-  animation: popoverZoomOut 0.15s ease-in forwards;
-}
-
-@keyframes popoverZoomIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes popoverZoomOut {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-}
+/* Dialog specific animations are now handled via utility classes */
 
 /* Line clamp utilities */
 .line-clamp-1 {
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  line-clamp: 1;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .line-clamp-2 {
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
 .line-clamp-3 {
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

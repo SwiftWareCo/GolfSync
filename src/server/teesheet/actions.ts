@@ -8,11 +8,10 @@ import {
   paceOfPlay,
   members,
   teesheets,
-  timeBlockFills,
+  fills,
   generalCharges,
   timeblockRestrictions,
   lotteryEntries,
-  lotteryGroups,
   configBlocks,
   type TeesheetConfig,
 } from "~/server/db/schema";
@@ -22,20 +21,13 @@ import { requireAdmin } from "~/lib/auth-server";
 import { initializePaceOfPlay } from "~/server/pace-of-play/actions";
 import type { FillType } from "~/app/types/TeeSheetTypes";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
-import {
-  getTimeBlocksForTeesheet,
-} from "~/server/teesheet/data";
+import { getTimeBlocksForTeesheet } from "~/server/teesheet/data";
 
 type ActionResult = {
   success: boolean;
   error?: string;
   data?: any;
 };
-
-type FillActionResult = ActionResult & {
-  fill?: typeof timeBlockFills.$inferSelect;
-};
-
 
 /**
  * Server action to create or replace time blocks for a teesheet
@@ -49,9 +41,7 @@ export async function replaceTimeBlocks(
 
   try {
     // First, delete all existing time blocks for this teesheet
-    await db
-      .delete(timeBlocks)
-      .where(eq(timeBlocks.teesheetId, teesheetId));
+    await db.delete(timeBlocks).where(eq(timeBlocks.teesheetId, teesheetId));
 
     // Fetch all config blocks and create time blocks from them
     const blocks = await db.query.configBlocks.findMany({
@@ -644,16 +634,17 @@ export async function addFillToTimeBlock(
   fillType: FillType,
   count: number,
   customName?: string,
-): Promise<FillActionResult> {
+): Promise<ActionResult> {
   await requireAdmin();
 
   try {
     // Create individual fill records instead of using count
     const fillPromises = Array.from({ length: count }, () =>
       db
-        .insert(timeBlockFills)
+        .insert(fills)
         .values({
-          timeBlockId,
+          relatedType: "timeblock",
+          relatedId: timeBlockId,
           fillType,
           customName: customName || null,
         })
@@ -675,7 +666,7 @@ export async function addFillToTimeBlock(
     }
 
     revalidatePath(`/teesheet`);
-    return { success: true, fill: results[0][0] };
+    return { success: true };
   } catch (error) {
     console.error("Error adding fills to time block:", error);
     return {
@@ -684,7 +675,6 @@ export async function addFillToTimeBlock(
     };
   }
 }
-
 export async function removeFillFromTimeBlock(
   timeBlockId: number,
   fillId: number,
@@ -694,11 +684,12 @@ export async function removeFillFromTimeBlock(
   try {
     // Delete the fill directly, similar to member removal
     const result = await db
-      .delete(timeBlockFills)
+      .delete(fills)
       .where(
         and(
-          eq(timeBlockFills.timeBlockId, timeBlockId),
-          eq(timeBlockFills.id, fillId),
+          eq(fills.relatedType, "timeblock"),
+          eq(fills.relatedId, timeBlockId),
+          eq(fills.id, fillId),
         ),
       )
       .returning();
@@ -989,16 +980,12 @@ export async function getArrangeResultsData(
       return { success: false, error: "Teesheet not found" };
     }
 
-    // Check if lottery has been processed
+    // Check if lottery has been processed (consolidated schema - single table)
     const hasLotteryEntries = await db.query.lotteryEntries.findFirst({
       where: eq(lotteryEntries.lotteryDate, teesheet.date),
     });
 
-    const hasLotteryGroups = await db.query.lotteryGroups.findFirst({
-      where: eq(lotteryGroups.lotteryDate, teesheet.date),
-    });
-
-    const lotteryProcessed = hasLotteryEntries || hasLotteryGroups;
+    const lotteryProcessed = !!hasLotteryEntries;
 
     // Get timeblocks with their assignments
     const timeBlocksWithData = await getTimeBlocksForTeesheet(teesheetId);

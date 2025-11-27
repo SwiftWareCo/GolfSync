@@ -5,7 +5,6 @@ import { eq, sql } from "drizzle-orm";
 import {
   teesheetConfigs,
   lotteryEntries,
-  lotteryGroups,
   timeBlocks,
   timeBlockMembers,
   TeesheetConfigWithBlocks,
@@ -114,20 +113,21 @@ export async function checkTeesheetHasBookingsOrLotteryEntries(
       .where(eq(timeBlocks.teesheetId, teesheetId))
       .then((res) => res[0]?.count || 0);
 
-    // Check for lottery entries (both individual and group)
-    const individualCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(lotteryEntries)
-      .where(eq(lotteryEntries.lotteryDate, date))
-      .then((res) => res[0]?.count || 0);
+    // Check for lottery entries (consolidated schema - individual and group in same table)
+    const allLotteryEntries = await db.query.lotteryEntries.findMany({
+      where: eq(lotteryEntries.lotteryDate, date),
+    });
 
-    const groupCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(lotteryGroups)
-      .where(eq(lotteryGroups.lotteryDate, date))
-      .then((res) => res[0]?.count || 0);
+    // Separate into individual and group entries
+    const individualCount = allLotteryEntries.filter(
+      (entry) => entry.memberIds.length === 1,
+    ).length;
 
-    const totalLotteryEntries = individualCount + groupCount;
+    const groupCount = allLotteryEntries.filter(
+      (entry) => entry.memberIds.length > 1,
+    ).length;
+
+    const totalLotteryEntries = allLotteryEntries.length;
 
     return {
       hasBookings: bookingCount > 0,

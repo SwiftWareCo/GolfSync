@@ -3,209 +3,113 @@
 import { db } from "~/server/db";
 import {
   lotteryEntries,
-  lotteryGroups,
+  fills,
   members,
   timeBlockMembers,
   memberFairnessScores,
   timeBlocks,
   memberSpeedProfiles,
+  TeesheetConfig,
 } from "~/server/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type {
-  LotteryEntryInsert,
-  LotteryGroupInsert,
   LotteryEntryFormData,
   TimeWindow,
 } from "~/app/types/LotteryTypes";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
-
-export type ActionResult = {
-  success: boolean;
-  error?: string;
-  data?: any;
-};
 
 /**
  * Submit a lottery entry (individual or group based on memberIds)
+ * Consolidated schema: INDIVIDUAL if memberIds.length === 1
+ *                      GROUP if memberIds.length > 1
+ * organizerId is ALWAYS set to the entry creator
  */
 export async function submitLotteryEntry(
   userId: number,
   data: LotteryEntryFormData,
-): Promise<ActionResult> {
-  try {
-    // Get member data
-    const member = await db.query.members.findFirst({
-      where: eq(members.id, userId),
-    });
+): Promise<{ success: boolean; error?: string; data?: any }> {
 
-    if (!member) {
-      return { success: false, error: "Member not found" };
-    }
+  // Get member data
+  const member = await db.query.members.findFirst({
+    where: eq(members.id, userId),
+  });
 
-    // Check if this is a group entry (has memberIds) or individual
-    const isGroupEntry = data.memberIds && data.memberIds.length > 0;
-
-    if (isGroupEntry) {
-      // Handle group entry
-      const allMemberIds = [member.id, ...(data.memberIds || [])];
-
-      // Check if group entry already exists for this date
-      const existingGroup = await db.query.lotteryGroups.findFirst({
-        where: and(
-          eq(lotteryGroups.leaderId, member.id),
-          eq(lotteryGroups.lotteryDate, data.lotteryDate),
-        ),
-      });
-
-      if (existingGroup) {
-        return {
-          success: false,
-          error: "You already have a group lottery entry for this date",
-        };
-      }
-
-      // Check if any of the group members already have individual entries
-      const existingEntries = await db.query.lotteryEntries.findMany({
-        where: and(eq(lotteryEntries.lotteryDate, data.lotteryDate)),
-      });
-
-      const conflictingMembers = existingEntries.filter((entry) =>
-        allMemberIds.includes(entry.memberId),
-      );
-
-      if (conflictingMembers.length > 0) {
-        return {
-          success: false,
-          error:
-            "Some group members already have lottery entries for this date",
-        };
-      }
-
-      // Create group lottery entry
-      const groupData: LotteryGroupInsert = {
-        leaderId: member.id,
-        lotteryDate: data.lotteryDate,
-        memberIds: allMemberIds,
-        fills: data.fills || undefined,
-        preferredWindow: data.preferredWindow,
-        alternateWindow: data.alternateWindow || null,
-        status: "PENDING",
-      };
-
-      const [newGroup] = await db
-        .insert(lotteryGroups)
-        .values(groupData)
-        .returning();
-
-      revalidatePath("/members/teesheet");
-      return { success: true, data: newGroup };
-    } else {
-      // Handle individual entry
-      // Check if entry already exists for this date
-      const existingEntry = await db.query.lotteryEntries.findFirst({
-        where: and(
-          eq(lotteryEntries.memberId, member.id),
-          eq(lotteryEntries.lotteryDate, data.lotteryDate),
-        ),
-      });
-
-      if (existingEntry) {
-        return {
-          success: false,
-          error: "You already have a lottery entry for this date",
-        };
-      }
-
-      // Create individual lottery entry
-      const entryData: LotteryEntryInsert = {
-        memberId: member.id,
-        lotteryDate: data.lotteryDate,
-        preferredWindow: data.preferredWindow,
-        alternateWindow: data.alternateWindow || null,
-        status: "PENDING",
-      };
-
-      const [newEntry] = await db
-        .insert(lotteryEntries)
-        .values(entryData)
-        .returning();
-
-      revalidatePath("/members/teesheet");
-      return { success: true, data: newEntry };
-    }
-  } catch (error) {
-    console.error("Error submitting lottery entry:", error);
-    return { success: false, error: "Failed to submit lottery entry" };
+  if (!member) {
+    return { success: false, error: "Member not found" };
   }
+
+  // Always construct memberIds with organizer first, then additional members
+  const allMemberIds = [member.id, ...(data.memberIds || [])];
+
+  // Check if ANY member already has an entry for this date
+  const existingEntries = await db.query.lotteryEntries.findMany({
+    where: eq(lotteryEntries.lotteryDate, data.lotteryDate),
+  });
+
+  // Validate: No member in allMemberIds can already have an entry on this date
+  for (const memberId of allMemberIds) {
+    const memberHasEntry = existingEntries.some((entry) =>
+      entry.memberIds.includes(memberId),
+    );
+    if (memberHasEntry) {
+      // Find member details for error message
+      const conflictingMember = await db.query.members.findFirst({
+        where: eq(members.id, memberId),
+      });
+      const memberName = conflictingMember
+        ? `${conflictingMember.firstName} ${conflictingMember.lastName}`
+        : `Member #${memberId}`;
+      return {
+        success: false,
+        error: `${memberName} already has a lottery entry for this date`,
+      };
+    }
+  }
+
+  // Validate all member IDs exist
+  const memberIds = await db.query.members.findMany({
+    where: inArray(members.id, allMemberIds),
+  });
+  if (memberIds.length !== allMemberIds.length) {
+    return {
+      success: false,
+      error: "One or more members in the group do not exist",
+    };
+  }
+
+  // Create lottery entry - organizerId is ALWAYS set to the creator
+  const entryData = {
+    memberIds: allMemberIds,
+    organizerId: member.id, // Always set - the entry creator
+    lotteryDate: data.lotteryDate,
+    preferredWindow: data.preferredWindow,
+    alternateWindow: data.alternateWindow || null,
+    status: "PENDING" as const,
+  };
+
+  const [newEntry] = await db
+    .insert(lotteryEntries)
+    .values(entryData)
+    .returning();
+
+  // Insert fills if provided (for both individual and group entries)
+  if (data.fills && data.fills.length > 0 && newEntry) {
+    await db.insert(fills).values(
+      data.fills.map((fill) => ({
+        relatedType: "lottery_entry" as const,
+        relatedId: newEntry.id,
+        fillType: fill.fillType ,
+        customName: fill.customName || null,
+      })),
+    );
+  }
+
+  return { success: true, data: newEntry };
 }
 
 /**
- * Get lottery entry for a member and date
- */
-export async function getLotteryEntry(
-  userId: string,
-  lotteryDate: string,
-): Promise<ActionResult> {
-  try {
-    // Get member data
-    const member = await db.query.members.findFirst({
-      where: eq(members.username, userId),
-    });
-
-    if (!member) {
-      return { success: false, error: "Member not found" };
-    }
-
-    // Check for individual entry
-    const individualEntry = await db.query.lotteryEntries.findFirst({
-      where: and(
-        eq(lotteryEntries.memberId, member.id),
-        eq(lotteryEntries.lotteryDate, lotteryDate),
-      ),
-    });
-
-    if (individualEntry) {
-      return {
-        success: true,
-        data: { type: "individual", entry: individualEntry },
-      };
-    }
-
-    // Check for group entry where this member is the leader
-    const groupEntry = await db.query.lotteryGroups.findFirst({
-      where: and(
-        eq(lotteryGroups.leaderId, member.id),
-        eq(lotteryGroups.lotteryDate, lotteryDate),
-      ),
-    });
-
-    if (groupEntry) {
-      return { success: true, data: { type: "group", entry: groupEntry } };
-    }
-
-    // Check if member is part of another group
-    const otherGroupEntry = await db.query.lotteryGroups.findFirst({
-      where: eq(lotteryGroups.lotteryDate, lotteryDate),
-    });
-
-    if (otherGroupEntry?.memberIds.includes(member.id)) {
-      return {
-        success: true,
-        data: { type: "group_member", entry: otherGroupEntry },
-      };
-    }
-
-    return { success: true, data: null };
-  } catch (error) {
-    console.error("Error getting lottery entry:", error);
-    return { success: false, error: "Failed to get lottery entry" };
-  }
-}
-
-/**
- * Update a lottery entry
+ * Update a lottery entry (consolidated schema)
  */
 export async function updateLotteryEntry(
   userId: string,
@@ -225,15 +129,20 @@ export async function updateLotteryEntry(
       return { success: false, error: "Member not found" };
     }
 
-    // Verify the entry belongs to this member
+    // Verify the entry exists and belongs to this member
     const entry = await db.query.lotteryEntries.findFirst({
-      where: and(
-        eq(lotteryEntries.id, data.entryId),
-        eq(lotteryEntries.memberId, member.id),
-      ),
+      where: eq(lotteryEntries.id, data.entryId),
     });
 
     if (!entry) {
+      return {
+        success: false,
+        error: "Lottery entry not found",
+      };
+    }
+
+    // Check if member is authorized (is in memberIds)
+    if (!entry.memberIds.includes(member.id)) {
       return {
         success: false,
         error: "Lottery entry not found or access denied",
@@ -309,10 +218,11 @@ export async function updateLotteryEntryAdmin(
 }
 
 /**
- * Update a lottery group (admin action)
+ * Update a group lottery entry (admin action - consolidated schema)
+ * Can update memberIds, preferredWindow, and alternateWindow
  */
 export async function updateLotteryGroupAdmin(
-  groupId: number,
+  entryId: number,
   data: {
     preferredWindow: string;
     alternateWindow?: string;
@@ -320,40 +230,59 @@ export async function updateLotteryGroupAdmin(
   },
 ): Promise<ActionResult> {
   try {
-    // Verify the group exists
-    const group = await db.query.lotteryGroups.findFirst({
-      where: eq(lotteryGroups.id, groupId),
+    // Verify the entry exists and is a group
+    const entry = await db.query.lotteryEntries.findFirst({
+      where: eq(lotteryEntries.id, entryId),
     });
 
-    if (!group) {
+    if (!entry) {
       return {
         success: false,
-        error: "Lottery group not found",
+        error: "Lottery entry not found",
       };
     }
 
-    // Validate that memberIds includes the leader
-    if (!data.memberIds.includes(group.leaderId)) {
+    // Verify it's a group (memberIds.length > 1)
+    if (entry.memberIds.length <= 1) {
       return {
         success: false,
-        error: "Group leader must be included in member list",
+        error: "This is not a group entry",
       };
     }
 
-    // Update the group
-    const [updatedGroup] = await db
-      .update(lotteryGroups)
+    // Validate that memberIds includes the organizer
+    if (!data.memberIds.includes(entry.organizerId)) {
+      return {
+        success: false,
+        error: "Group organizer must be included in member list",
+      };
+    }
+
+    // Validate all member IDs exist
+    const memberIds = await db.query.members.findMany({
+      where: inArray(members.id, data.memberIds),
+    });
+    if (memberIds.length !== data.memberIds.length) {
+      return {
+        success: false,
+        error: "One or more members in the group do not exist",
+      };
+    }
+
+    // Update the entry
+    const [updatedEntry] = await db
+      .update(lotteryEntries)
       .set({
         preferredWindow: data.preferredWindow,
         alternateWindow: data.alternateWindow || null,
         memberIds: data.memberIds,
         updatedAt: new Date(),
       })
-      .where(eq(lotteryGroups.id, groupId))
+      .where(eq(lotteryEntries.id, entryId))
       .returning();
 
     revalidatePath("/admin/lottery");
-    return { success: true, data: updatedGroup };
+    return { success: true, data: updatedEntry };
   } catch (error) {
     console.error("Error updating lottery group (admin):", error);
     return { success: false, error: "Failed to update lottery group" };
@@ -363,38 +292,23 @@ export async function updateLotteryGroupAdmin(
 // ADMIN FUNCTIONS
 
 /**
- * Cancel a lottery entry (admin action)
+ * Cancel a lottery entry (admin action - consolidated schema)
  */
 export async function cancelLotteryEntry(
   entryId: number,
-  isGroup = false,
 ): Promise<ActionResult> {
   try {
-    if (isGroup) {
-      const [updatedGroup] = await db
-        .update(lotteryGroups)
-        .set({
-          status: "CANCELLED",
-          updatedAt: new Date(),
-        })
-        .where(eq(lotteryGroups.id, entryId))
-        .returning();
+    const [updatedEntry] = await db
+      .update(lotteryEntries)
+      .set({
+        status: "CANCELLED",
+        updatedAt: new Date(),
+      })
+      .where(eq(lotteryEntries.id, entryId))
+      .returning();
 
-      revalidatePath("/admin/lottery");
-      return { success: true, data: updatedGroup };
-    } else {
-      const [updatedEntry] = await db
-        .update(lotteryEntries)
-        .set({
-          status: "CANCELLED",
-          updatedAt: new Date(),
-        })
-        .where(eq(lotteryEntries.id, entryId))
-        .returning();
-
-      revalidatePath("/admin/lottery");
-      return { success: true, data: updatedEntry };
-    }
+    revalidatePath("/admin/lottery");
+    return { success: true, data: updatedEntry };
   } catch (error) {
     console.error("Error canceling lottery entry:", error);
     return { success: false, error: "Failed to cancel lottery entry" };
@@ -402,17 +316,25 @@ export async function cancelLotteryEntry(
 }
 
 /**
- * Manually assign a lottery entry to a time block (admin action)
+ * Manually assign a lottery entry to a time block (admin action - consolidated schema)
  */
 export async function assignLotteryEntry(
   entryId: number,
   timeBlockId: number,
-  isGroup = false,
 ): Promise<ActionResult> {
   try {
     const now = new Date();
 
-    // Get the time block details to extract the proper time
+    // Get the entry
+    const entry = await db.query.lotteryEntries.findFirst({
+      where: eq(lotteryEntries.id, entryId),
+    });
+
+    if (!entry) {
+      return { success: false, error: "Lottery entry not found" };
+    }
+
+    // Get the time block details
     const timeBlock = await db.query.timeBlocks.findFirst({
       where: eq(timeBlocks.id, timeBlockId),
     });
@@ -421,59 +343,30 @@ export async function assignLotteryEntry(
       return { success: false, error: "Time block not found" };
     }
 
-    if (isGroup) {
-      // Update group status
-      const [updatedGroup] = await db
-        .update(lotteryGroups)
-        .set({
-          status: "ASSIGNED",
-          assignedTimeBlockId: timeBlockId,
-          processedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(lotteryGroups.id, entryId))
-        .returning();
+    // Update entry status
+    const [updatedEntry] = await db
+      .update(lotteryEntries)
+      .set({
+        status: "ASSIGNED",
+        assignedTimeBlockId: timeBlockId,
+        processedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(lotteryEntries.id, entryId))
+      .returning();
 
-      // Add all group members to the time block
-      if (updatedGroup) {
-        const memberInserts = updatedGroup.memberIds.map((memberId) => ({
-          timeBlockId,
-          memberId,
-          bookingDate: updatedGroup.lotteryDate,
-          bookingTime: timeBlock.startTime, // Use actual time from time block
-        }));
+    // Add all members in the entry to the time block
+    const memberInserts = entry.memberIds.map((memberId) => ({
+      timeBlockId,
+      memberId,
+      bookingDate: entry.lotteryDate,
+      bookingTime: timeBlock.startTime,
+    }));
 
-        await db.insert(timeBlockMembers).values(memberInserts);
-      }
+    await db.insert(timeBlockMembers).values(memberInserts);
 
-      revalidatePath("/admin/lottery");
-      return { success: true, data: updatedGroup };
-    } else {
-      // Update entry status
-      const [updatedEntry] = await db
-        .update(lotteryEntries)
-        .set({
-          status: "ASSIGNED",
-          assignedTimeBlockId: timeBlockId,
-          processedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(lotteryEntries.id, entryId))
-        .returning();
-
-      // Add member to the time block
-      if (updatedEntry) {
-        await db.insert(timeBlockMembers).values({
-          timeBlockId,
-          memberId: updatedEntry.memberId,
-          bookingDate: updatedEntry.lotteryDate,
-          bookingTime: timeBlock.startTime, // Use actual time from time block
-        });
-      }
-
-      revalidatePath("/admin/lottery");
-      return { success: true, data: updatedEntry };
-    }
+    revalidatePath("/admin/lottery");
+    return { success: true, data: updatedEntry };
   } catch (error) {
     console.error("Error assigning lottery entry:", error);
     return { success: false, error: "Failed to assign lottery entry" };
@@ -482,16 +375,16 @@ export async function assignLotteryEntry(
 
 /**
  * Calculate fairness score for a lottery entry based on fairness, speed, and admin adjustments
+ * Uses organizerId (entry creator) consistently for all entries
  */
 async function calculateFairnessScore(
   entry: any,
   timeWindows: any[],
-  isGroup = false,
 ): Promise<number> {
   let fairnessScore = 0;
 
-  // Get the member ID (either direct member or group leader)
-  const memberId = isGroup ? entry.leaderId : entry.memberId;
+  // Get the member ID: always use organizerId (the entry creator)
+  const memberId = entry.organizerId;
 
   // 1. Base fairness score (0-100, higher = more priority)
   const fairnessData = await db.query.memberFairnessScores.findFirst({
@@ -595,18 +488,14 @@ export async function processLotteryForDate(
     // Calculate fairness scores for all entries
     const individualEntriesWithPriority = await Promise.all(
       entries.individual.map(async (entry) => {
-        const priority = await calculateFairnessScore(
-          entry,
-          timeWindows,
-          false,
-        );
+        const priority = await calculateFairnessScore(entry, timeWindows);
         return { ...entry, fairnessScore: priority };
       }),
     );
 
     const groupEntriesWithPriority = await Promise.all(
       entries.groups.map(async (group) => {
-        const priority = await calculateFairnessScore(group, timeWindows, true);
+        const priority = await calculateFairnessScore(group, timeWindows);
         return { ...group, fairnessScore: priority };
       }),
     );
@@ -688,14 +577,14 @@ export async function processLotteryForDate(
       if (suitableBlock) {
         // Update group status to ASSIGNED
         await db
-          .update(lotteryGroups)
+          .update(lotteryEntries)
           .set({
             status: "ASSIGNED",
             assignedTimeBlockId: suitableBlock.id,
             processedAt: now,
             updatedAt: now,
           })
-          .where(eq(lotteryGroups.id, group.id));
+          .where(eq(lotteryEntries.id, group.id));
 
         // Create timeBlockMembers records for all group members
         for (const memberId of group.memberIds) {
@@ -717,6 +606,14 @@ export async function processLotteryForDate(
     for (const entry of individualEntriesWithPriority) {
       if (entry.status !== "PENDING") continue;
 
+      // For individual entries, the member is the only one in memberIds
+      const individualMemberId = entry.memberIds[0];
+      const memberData = await db.query.members.findFirst({
+        where: eq(members.id, individualMemberId),
+      });
+
+      if (!memberData) continue;
+
       // Find available block that matches preferences
       const suitableResult = findSuitableTimeBlock(
         availableBlocksOnly,
@@ -724,8 +621,8 @@ export async function processLotteryForDate(
         entry.alternateWindow as TimeWindow | null,
         config,
         {
-          memberId: entry.memberId,
-          memberClass: entry.member.class,
+          memberId: individualMemberId,
+          memberClass: memberData.class,
         },
         date,
         timeRestrictions,
@@ -743,10 +640,10 @@ export async function processLotteryForDate(
           })
           .where(eq(lotteryEntries.id, entry.id));
 
-        // Create timeBlockMembers record
+        // Create timeBlockMembers record (use the individual member ID)
         memberInserts.push({
           timeBlockId: suitableResult.block.id,
-          memberId: entry.memberId,
+          memberId: individualMemberId,
           bookingDate: date,
           bookingTime: suitableResult.block.startTime,
         });
@@ -811,7 +708,7 @@ export async function processLotteryForDate(
 }
 
 /**
- * Finalize lottery results by creating actual timeBlockMembers records
+ * Finalize lottery results by creating actual timeBlockMembers records (consolidated schema)
  * This should only be called after admin confirms the assignments
  */
 export async function finalizeLotteryResults(
@@ -831,9 +728,10 @@ export async function finalizeLotteryResults(
         });
 
         if (timeBlock) {
+          // For individual entries, memberIds has one element
           memberInserts.push({
             timeBlockId: entry.assignedTimeBlockId,
-            memberId: entry.memberId,
+            memberId: entry.memberIds[0],
             bookingDate: date,
             bookingTime: timeBlock.startTime,
           });
@@ -843,13 +741,8 @@ export async function finalizeLotteryResults(
 
     // Create timeBlockMembers records for assigned group entries
     for (const group of entries.groups) {
-      if (
-        group.status === "ASSIGNED" &&
-        group.assignedTimeBlockId &&
-        group.members &&
-        group.members.length > 0
-      ) {
-        // Get the assigned time block directly from the group's assignedTimeBlockId
+      if (group.status === "ASSIGNED" && group.assignedTimeBlockId) {
+        // Get the assigned time block
         const assignedTimeBlock = await db.query.timeBlocks.findFirst({
           where: eq(timeBlocks.id, group.assignedTimeBlockId),
         });
@@ -924,15 +817,6 @@ export async function initializeFairnessScore(
   }
 }
 
-/**
- * Helper function to format date to YYYY-MM-DD for consistent comparison
- */
-function formatDateToYYYYMMDD(date: string | Date): string {
-  if (typeof date === "string") {
-    return date.split("T")[0] || date; // Handle ISO strings
-  }
-  return date.toISOString().split("T")[0] || "";
-}
 
 /**
  * Filter timeblocks by member class TIME restrictions
@@ -975,8 +859,8 @@ function filterBlocksByRestrictions(
       if (withinTimeRange) {
         // Check date range if applicable
         if (restriction.startDate && restriction.endDate) {
-          const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
-          const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
+          const startDateStr = restriction.startDate;
+          const endDateStr = restriction.endDate;
           const withinDateRange =
             bookingDate >= startDateStr && bookingDate <= endDateStr;
 
@@ -1175,8 +1059,7 @@ export async function createTestLotteryEntries(
       };
     }
 
-    const testEntries: LotteryEntryInsert[] = [];
-    const testGroups: LotteryGroupInsert[] = [];
+    const testEntries: any[] = [];
 
     // Realistic time windows from CSV analysis
     const timeWindows: TimeWindow[] = ["MORNING", "MIDDAY", "AFTERNOON"];
@@ -1256,6 +1139,7 @@ export async function createTestLotteryEntries(
 
     // Create 4-player groups
     console.log(`🏌️‍♂️ Creating ${targetFourGroups} 4-player groups...`);
+    let groupCount = 0;
     for (
       let i = 0;
       i < targetFourGroups && memberIndex < shuffledMembers.length - 3;
@@ -1271,19 +1155,20 @@ export async function createTestLotteryEntries(
 
       const { preferredWindow, alternateWindow } = getTimePreference();
 
-      testGroups.push({
-        leaderId: leader.id,
-        lotteryDate: date,
+      testEntries.push({
+        organizerId: leader.id,
         memberIds: groupMembers,
+        lotteryDate: date,
         preferredWindow,
         alternateWindow,
         status: "PENDING",
       });
 
+      groupCount++;
       memberIndex += 4;
     }
     console.log(
-      `✅ Created ${testGroups.length} 4-player groups, memberIndex now: ${memberIndex}`,
+      `✅ Created ${groupCount} 4-player groups, memberIndex now: ${memberIndex}`,
     );
 
     // Create 3-player groups
@@ -1302,19 +1187,20 @@ export async function createTestLotteryEntries(
 
       const { preferredWindow, alternateWindow } = getTimePreference();
 
-      testGroups.push({
-        leaderId: leader.id,
-        lotteryDate: date,
+      testEntries.push({
+        organizerId: leader.id,
         memberIds: groupMembers,
+        lotteryDate: date,
         preferredWindow,
         alternateWindow,
         status: "PENDING",
       });
 
+      groupCount++;
       memberIndex += 3;
     }
     console.log(
-      `✅ Total groups after 3-player: ${testGroups.length}, memberIndex now: ${memberIndex}`,
+      `✅ Total groups after 3-player: ${groupCount}, memberIndex now: ${memberIndex}`,
     );
 
     // Create 2-player groups
@@ -1329,23 +1215,25 @@ export async function createTestLotteryEntries(
 
       const { preferredWindow, alternateWindow } = getTimePreference();
 
-      testGroups.push({
-        leaderId: leader.id,
-        lotteryDate: date,
+      testEntries.push({
+        organizerId: leader.id,
         memberIds: groupMembers,
+        lotteryDate: date,
         preferredWindow,
         alternateWindow,
         status: "PENDING",
       });
 
+      groupCount++;
       memberIndex += 2;
     }
     console.log(
-      `✅ Total groups after 2-player: ${testGroups.length}, memberIndex now: ${memberIndex}`,
+      `✅ Total groups after 2-player: ${groupCount}, memberIndex now: ${memberIndex}`,
     );
 
     // Create individual entries
     console.log(`🏌️‍♂️ Creating ${targetIndividualEntries} individual entries...`);
+    let individualCount = 0;
     for (
       let i = 0;
       i < targetIndividualEntries && memberIndex < shuffledMembers.length;
@@ -1355,61 +1243,67 @@ export async function createTestLotteryEntries(
       const { preferredWindow, alternateWindow } = getTimePreference();
 
       testEntries.push({
-        memberId: member.id,
+        memberIds: [member.id],
+        organizerId: member.id,
         lotteryDate: date,
         preferredWindow,
         alternateWindow,
         status: "PENDING",
       });
 
+      individualCount++;
       memberIndex++;
     }
     console.log(
-      `✅ Created ${testEntries.length} individual entries, memberIndex now: ${memberIndex}`,
+      `✅ Created ${individualCount} individual entries, memberIndex now: ${memberIndex}`,
     );
 
-    // Insert all test entries
-    let createdEntries = 0;
-    let createdGroups = 0;
+    // Insert all test entries (consolidated schema - both individual and group in same table)
+    let totalCreated = 0;
 
     if (testEntries.length > 0) {
       const results = await db
         .insert(lotteryEntries)
         .values(testEntries)
         .returning();
-      createdEntries = results.length;
+      totalCreated = results.length;
     }
 
-    if (testGroups.length > 0) {
-      const results = await db
-        .insert(lotteryGroups)
-        .values(testGroups)
-        .returning();
-      createdGroups = results.length;
-    }
-
-    const totalPlayers =
-      createdEntries +
-      testGroups.reduce((sum, group) => sum + group.memberIds.length, 0);
+    const totalPlayers = testEntries.reduce(
+      (sum, entry) => sum + entry.memberIds.length,
+      0,
+    );
+    const createdGroups = groupCount;
+    const createdIndividuals = individualCount;
 
     // Final summary
+    const foursomeCount = testEntries.filter(
+      (e) => e.memberIds.length === 4,
+    ).length;
+    const threesomeCount = testEntries.filter(
+      (e) => e.memberIds.length === 3,
+    ).length;
+    const pairCount = testEntries.filter(
+      (e) => e.memberIds.length === 2,
+    ).length;
+
     console.log(`🎯 Test data creation complete!`);
     console.log(
-      `📊 Final results: ${createdGroups} groups + ${createdEntries} individuals = ${createdGroups + createdEntries} total entries`,
+      `📊 Final results: ${createdGroups} groups + ${createdIndividuals} individuals = ${totalCreated} total entries`,
     );
     console.log(`👥 Total players: ${totalPlayers}`);
     console.log(
-      `📈 Breakdown: ${testGroups.filter((g) => g.memberIds.length === 4).length} foursomes, ${testGroups.filter((g) => g.memberIds.length === 3).length} threesomes, ${testGroups.filter((g) => g.memberIds.length === 2).length} pairs`,
+      `📈 Breakdown: ${foursomeCount} foursomes, ${threesomeCount} threesomes, ${pairCount} pairs`,
     );
 
     revalidatePath("/admin/lottery");
     return {
       success: true,
       data: {
-        createdEntries,
+        createdIndividuals,
         createdGroups,
         totalPlayers,
-        message: `Created realistic test data matching CSV patterns: ${createdGroups} groups (${testGroups.filter((g) => g.memberIds.length === 4).length} foursomes, ${testGroups.filter((g) => g.memberIds.length === 3).length} threesomes, ${testGroups.filter((g) => g.memberIds.length === 2).length} pairs) + ${createdEntries} individuals = ${createdGroups + createdEntries} total entries with ${totalPlayers} players.`,
+        message: `Created realistic test data matching CSV patterns: ${createdGroups} groups (${foursomeCount} foursomes, ${threesomeCount} threesomes, ${pairCount} pairs) + ${createdIndividuals} individuals = ${totalCreated} total entries with ${totalPlayers} players.`,
       },
     };
   } catch (error) {
@@ -1419,22 +1313,34 @@ export async function createTestLotteryEntries(
 }
 
 /**
- * Clear all lottery entries for a date (debug function)
+ * Clear all lottery entries for a date (debug function - consolidated schema)
  */
 export async function clearLotteryEntriesForDate(
   date: string,
 ): Promise<ActionResult> {
   try {
-    // Delete individual entries
+    // Get all entries for the date to delete related fills
+    const entriesToDelete = await db.query.lotteryEntries.findMany({
+      where: eq(lotteryEntries.lotteryDate, date),
+    });
+
+    // Delete fills for these entries
+    if (entriesToDelete.length > 0) {
+      const entryIds = entriesToDelete.map((e) => e.id);
+      await db
+        .delete(fills)
+        .where(
+          and(
+            eq(fills.relatedType, "lottery_entry"),
+            inArray(fills.relatedId, entryIds),
+          ),
+        );
+    }
+
+    // Delete entries
     const deletedEntries = await db
       .delete(lotteryEntries)
       .where(eq(lotteryEntries.lotteryDate, date))
-      .returning();
-
-    // Delete group entries
-    const deletedGroups = await db
-      .delete(lotteryGroups)
-      .where(eq(lotteryGroups.lotteryDate, date))
       .returning();
 
     revalidatePath("/admin/lottery");
@@ -1442,7 +1348,6 @@ export async function clearLotteryEntriesForDate(
       success: true,
       data: {
         deletedEntries: deletedEntries.length,
-        deletedGroups: deletedGroups.length,
       },
     };
   } catch (error) {
@@ -1452,163 +1357,71 @@ export async function clearLotteryEntriesForDate(
 }
 
 /**
- * Update lottery assignment (move entry/group between time blocks or unassign)
- */
-export async function updateLotteryAssignment(
-  entryId: number,
-  isGroup: boolean,
-  targetTimeBlockId: number | null,
-): Promise<ActionResult> {
-  try {
-    if (isGroup) {
-      await db
-        .update(lotteryGroups)
-        .set({
-          assignedTimeBlockId: targetTimeBlockId,
-          status: targetTimeBlockId ? "ASSIGNED" : "PENDING",
-          updatedAt: new Date(),
-        })
-        .where(eq(lotteryGroups.id, entryId));
-    } else {
-      await db
-        .update(lotteryEntries)
-        .set({
-          assignedTimeBlockId: targetTimeBlockId,
-          status: targetTimeBlockId ? "ASSIGNED" : "PENDING",
-          updatedAt: new Date(),
-        })
-        .where(eq(lotteryEntries.id, entryId));
-    }
-
-    revalidatePath("/admin/lottery");
-    return { success: true };
-  } catch (error) {
-    console.error("Error updating lottery assignment:", error);
-    return { success: false, error: "Failed to update assignment" };
-  }
-}
-
-/**
- * Batch update lottery assignments (save all client-side changes at once)
+ * Batch update lottery assignments (save all client-side changes at once - consolidated schema)
  * This function actually moves the timeBlockMembers records, not just updates assignedTimeBlockId
  */
 export async function batchUpdateLotteryAssignments(
   changes: {
     entryId: number;
-    isGroup: boolean;
     assignedTimeBlockId: number | null;
   }[],
 ): Promise<ActionResult> {
   try {
     // Process all entry assignment changes
     for (const change of changes) {
-      if (change.isGroup) {
-        // Get the group details
-        const group = await db.query.lotteryGroups.findFirst({
-          where: eq(lotteryGroups.id, change.entryId),
-          with: {
-            leader: true,
-          },
-        });
+      // Get the entry details
+      const entry = await db.query.lotteryEntries.findFirst({
+        where: eq(lotteryEntries.id, change.entryId),
+      });
 
-        if (!group) {
-          console.error(`Group ${change.entryId} not found`);
-          continue;
-        }
+      if (!entry) {
+        console.error(`Entry ${change.entryId} not found`);
+        continue;
+      }
 
-        // Remove existing timeBlockMembers for all group members
-        if (group.memberIds && group.memberIds.length > 0) {
-          await db
-            .delete(timeBlockMembers)
-            .where(
-              and(
-                inArray(timeBlockMembers.memberId, group.memberIds),
-                eq(timeBlockMembers.bookingDate, group.lotteryDate),
-              ),
-            );
-        }
-
-        // If assigning to a new time block, create new timeBlockMembers records
-        if (
-          change.assignedTimeBlockId &&
-          group.memberIds &&
-          group.memberIds.length > 0
-        ) {
-          const timeBlock = await db.query.timeBlocks.findFirst({
-            where: eq(timeBlocks.id, change.assignedTimeBlockId!),
-          });
-
-          if (timeBlock) {
-            const memberInserts = group.memberIds.map((memberId) => ({
-              timeBlockId: change.assignedTimeBlockId!,
-              memberId: memberId,
-              bookingDate: group.lotteryDate,
-              bookingTime: timeBlock.startTime,
-            }));
-
-            await db.insert(timeBlockMembers).values(memberInserts);
-          }
-        }
-
-        // Update group assignment
-        await db
-          .update(lotteryGroups)
-          .set({
-            assignedTimeBlockId: change.assignedTimeBlockId,
-            status: change.assignedTimeBlockId ? "ASSIGNED" : "PENDING",
-            updatedAt: new Date(),
-          })
-          .where(eq(lotteryGroups.id, change.entryId));
-      } else {
-        // Get the individual entry details
-        const entry = await db.query.lotteryEntries.findFirst({
-          where: eq(lotteryEntries.id, change.entryId),
-          with: {
-            member: true,
-          },
-        });
-
-        if (!entry) {
-          console.error(`Entry ${change.entryId} not found`);
-          continue;
-        }
-
-        // Remove existing timeBlockMembers for this member
+      // Remove existing timeBlockMembers for all members in this entry
+      if (entry.memberIds && entry.memberIds.length > 0) {
         await db
           .delete(timeBlockMembers)
           .where(
             and(
-              eq(timeBlockMembers.memberId, entry.memberId),
+              inArray(timeBlockMembers.memberId, entry.memberIds),
               eq(timeBlockMembers.bookingDate, entry.lotteryDate),
             ),
           );
-
-        // If assigning to a new time block, create new timeBlockMembers record
-        if (change.assignedTimeBlockId) {
-          const timeBlock = await db.query.timeBlocks.findFirst({
-            where: eq(timeBlocks.id, change.assignedTimeBlockId),
-          });
-
-          if (timeBlock) {
-            await db.insert(timeBlockMembers).values({
-              timeBlockId: change.assignedTimeBlockId,
-              memberId: entry.memberId,
-              bookingDate: entry.lotteryDate,
-              bookingTime: timeBlock.startTime,
-            });
-          }
-        }
-
-        // Update entry assignment
-        await db
-          .update(lotteryEntries)
-          .set({
-            assignedTimeBlockId: change.assignedTimeBlockId,
-            status: change.assignedTimeBlockId ? "ASSIGNED" : "PENDING",
-            updatedAt: new Date(),
-          })
-          .where(eq(lotteryEntries.id, change.entryId));
       }
+
+      // If assigning to a new time block, create new timeBlockMembers records
+      if (
+        change.assignedTimeBlockId &&
+        entry.memberIds &&
+        entry.memberIds.length > 0
+      ) {
+        const timeBlock = await db.query.timeBlocks.findFirst({
+          where: eq(timeBlocks.id, change.assignedTimeBlockId),
+        });
+
+        if (timeBlock) {
+          const memberInserts = entry.memberIds.map((memberId) => ({
+            timeBlockId: change.assignedTimeBlockId!,
+            memberId: memberId,
+            bookingDate: entry.lotteryDate,
+            bookingTime: timeBlock.startTime,
+          }));
+
+          await db.insert(timeBlockMembers).values(memberInserts);
+        }
+      }
+
+      // Update entry assignment
+      await db
+        .update(lotteryEntries)
+        .set({
+          assignedTimeBlockId: change.assignedTimeBlockId,
+          status: change.assignedTimeBlockId ? "ASSIGNED" : "PENDING",
+          updatedAt: new Date(),
+        })
+        .where(eq(lotteryEntries.id, change.entryId));
     }
 
     revalidatePath("/admin/lottery");
@@ -1638,7 +1451,8 @@ async function updateFairnessScoresAfterProcessing(
     // Update scores for individual entries
     for (const entry of entries.individual) {
       if (entry.status === "ASSIGNED" && entry.assignedTimeBlockId) {
-        const memberId = entry.memberId;
+        // For individual entries, memberId is the first (and only) element in memberIds
+        const memberId = entry.memberIds[0];
 
         // Get the assigned time block details
         const assignedTimeBlock = await db.query.timeBlocks.findFirst({
@@ -1649,9 +1463,14 @@ async function updateFairnessScoresAfterProcessing(
 
         // Check if they got their preferred window, considering restrictions
         // Determine if this assignment was affected by restrictions
+        // Get member details for restriction checking
+        const member = await db.query.members.findFirst({
+          where: eq(members.id, memberId),
+        });
+
         const memberInfo = {
-          memberId: entry.memberId,
-          memberClass: entry.member.class,
+          memberId,
+          memberClass: member?.class || "",
         };
 
         // Check what blocks were available without restrictions
@@ -1752,10 +1571,10 @@ async function updateFairnessScoresAfterProcessing(
       }
     }
 
-    // Update scores for group entries (using group leader)
+    // Update scores for group entries (using group organizer)
     for (const group of entries.groups) {
       if (group.status === "ASSIGNED" && group.assignedTimeBlockId) {
-        const memberId = group.leaderId;
+        const memberId = group.organizerId;
 
         // Get the assigned time block details
         const assignedTimeBlock = await db.query.timeBlocks.findFirst({
@@ -1766,25 +1585,35 @@ async function updateFairnessScoresAfterProcessing(
 
         // Check if they got their preferred window, considering restrictions
         // For groups, check if ANY member was blocked by restrictions
+        // Get member details for restriction checking
+        const groupOrganizer = await db.query.members.findFirst({
+          where: eq(members.id, group.organizerId),
+        });
+
         const groupMemberInfo = {
-          memberId: group.leaderId,
-          memberClass: group.leader.class,
+          memberId: group.organizerId,
+          memberClass: groupOrganizer?.class || "",
         };
 
         // Check if the group assignment was affected by restrictions from any member
         const allBlocks = [
           { startTime: assignedTimeBlock.startTime, id: assignedTimeBlock.id },
         ];
-        const wasBlockedByRestrictions =
-          group.members?.some((member) => {
-            const memberAllowedBlocks = filterBlocksByRestrictions(
-              allBlocks,
-              { memberId: member.id, memberClass: member.class },
-              date,
-              timeRestrictions,
-            );
-            return memberAllowedBlocks.length === 0;
-          }) || false;
+
+        // Get all group members to check restrictions
+        const groupMembers = await db.query.members.findMany({
+          where: inArray(members.id, group.memberIds),
+        });
+
+        const wasBlockedByRestrictions = groupMembers.some((member) => {
+          const memberAllowedBlocks = filterBlocksByRestrictions(
+            allBlocks,
+            { memberId: member.id, memberClass: member.class },
+            date,
+            timeRestrictions,
+          );
+          return memberAllowedBlocks.length === 0;
+        });
 
         const preferenceGranted = checkPreferenceMatchWithRestrictions(
           assignedTimeBlock.startTime,

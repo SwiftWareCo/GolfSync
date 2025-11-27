@@ -4,22 +4,11 @@ import {
   teesheets,
   timeBlocks,
   type Teesheet,
-  type Timeblocks,
-  type PaceOfPlay,
-  type TimeblockMember,
-  type TimeblockGuest,
-  type TimeblockFill,
+  type TimeBlockWithRelations,
   type TeesheetConfigWithBlocks,
 } from "~/server/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { getConfigForDate } from "~/server/settings/data";
-
-type TimeBlockWithRelations = Timeblocks & {
-  timeBlockMembers: TimeblockMember[];
-  timeBlockGuests: TimeblockGuest[];
-  fills: TimeblockFill[];
-  paceOfPlay: PaceOfPlay | null;
-};
 
 export async function createTimeBlocksForTeesheet(
   teesheetId: number,

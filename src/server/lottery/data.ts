@@ -3,17 +3,20 @@ import "server-only";
 import { db } from "~/server/db";
 import {
   lotteryEntries,
-  lotteryGroups,
   members,
   teesheets,
   timeBlocks,
   timeblockRestrictions,
+  fills,
 } from "~/server/db/schema";
 import { eq, and, sql, desc, asc, inArray } from "drizzle-orm";
 import type { LotteryEntryData } from "~/app/types/LotteryTypes";
 
 /**
  * Get lottery entry for the authenticated member and specified date
+ * Type detection: INDIVIDUAL if memberIds.length === 1
+ *                 GROUP if memberIds.length > 1
+ *                 GROUP_MEMBER if member is in memberIds but not the organizer
  * @param lotteryDate YYYY-MM-DD date string
  * @returns Lottery entry data or null if none found
  */
@@ -22,7 +25,6 @@ export async function getLotteryEntryData(
   userId: string,
 ): Promise<LotteryEntryData> {
   try {
-
     // Get member data using the external userId from session claims
     const member = await db.query.members.findFirst({
       where: eq(members.id, Number(userId)),
@@ -32,37 +34,45 @@ export async function getLotteryEntryData(
       throw new Error("Member not found");
     }
 
-    // Check for individual entry
-    const individualEntry = await db.query.lotteryEntries.findFirst({
-      where: and(
-        eq(lotteryEntries.memberId, member.id),
-        eq(lotteryEntries.lotteryDate, lotteryDate),
-      ),
+    // Query consolidated lotteryEntries table
+    const entries = await db.query.lotteryEntries.findMany({
+      where: eq(lotteryEntries.lotteryDate, lotteryDate),
+      with: {
+        fills: true,
+      },
     });
+
+    // Check for individual entry (memberIds length = 1, single member is the organizer)
+    const individualEntry = entries.find(
+      (entry) =>
+        entry.memberIds.length === 1 &&
+        entry.memberIds[0] === member.id &&
+        entry.organizerId === member.id,
+    );
 
     if (individualEntry) {
       return { type: "individual", entry: individualEntry as any };
     }
 
-    // Check for group entry where this member is the leader
-    const groupEntry = await db.query.lotteryGroups.findFirst({
-      where: and(
-        eq(lotteryGroups.leaderId, member.id),
-        eq(lotteryGroups.lotteryDate, lotteryDate),
-      ),
-    });
+    // Check for group entry where this member is the organizer
+    const groupEntry = entries.find(
+      (entry) => entry.organizerId === member.id && entry.memberIds.length > 1,
+    );
 
     if (groupEntry) {
       return { type: "group", entry: groupEntry as any };
     }
 
     // Check if member is part of another group
-    const otherGroupEntry = await db.query.lotteryGroups.findFirst({
-      where: eq(lotteryGroups.lotteryDate, lotteryDate),
-    });
+    const groupMemberEntry = entries.find(
+      (entry) =>
+        entry.memberIds.includes(member.id) &&
+        entry.organizerId !== member.id &&
+        entry.memberIds.length > 1,
+    );
 
-    if (otherGroupEntry?.memberIds.includes(member.id)) {
-      return { type: "group_member", entry: otherGroupEntry as any };
+    if (groupMemberEntry) {
+      return { type: "group_member", entry: groupMemberEntry as any };
     }
 
     return null;
@@ -74,25 +84,27 @@ export async function getLotteryEntryData(
 
 /**
  * Get lottery statistics for a specific date
+ * Queries consolidated lotteryEntries table and separates by type
  * @param date YYYY-MM-DD date string
  */
 export async function getLotteryStatsForDate(date: string) {
   try {
-    // Get individual entries
-    const individualEntries = await db.query.lotteryEntries.findMany({
+    // Query consolidated lotteryEntries table
+    const allEntries = await db.query.lotteryEntries.findMany({
       where: eq(lotteryEntries.lotteryDate, date),
       with: {
-        member: true,
+        fills: true,
       },
     });
 
-    // Get group entries
-    const groupEntries = await db.query.lotteryGroups.findMany({
-      where: eq(lotteryGroups.lotteryDate, date),
-      with: {
-        leader: true,
-      },
-    });
+    // Separate entries by type
+    const individualEntries = allEntries.filter(
+      (entry) => entry.memberIds.length === 1,
+    );
+
+    const groupEntries = allEntries.filter(
+      (entry) => entry.memberIds.length > 1,
+    );
 
     // Calculate total players in groups
     const totalGroupPlayers = groupEntries.reduce(
@@ -113,13 +125,13 @@ export async function getLotteryStatsForDate(date: string) {
       0;
 
     // Determine processing status
-    const hasProcessedEntries =
-      individualEntries.some((entry) => entry.status === "ASSIGNED") ||
-      groupEntries.some((group) => group.status === "ASSIGNED");
+    const hasProcessedEntries = allEntries.some(
+      (entry) => entry.status === "ASSIGNED",
+    );
 
-    const hasAssignedEntries =
-      individualEntries.some((entry) => entry.assignedTimeBlockId) ||
-      groupEntries.some((group) => group.processedAt);
+    const hasAssignedEntries = allEntries.some(
+      (entry) => entry.assignedTimeBlockId,
+    );
 
     let processingStatus: "pending" | "processing" | "completed";
     if (hasAssignedEntries) {
@@ -131,7 +143,7 @@ export async function getLotteryStatsForDate(date: string) {
     }
 
     return {
-      totalEntries: individualEntries.length + groupEntries.length,
+      totalEntries: allEntries.length,
       individualEntries: individualEntries.length,
       groupEntries: groupEntries.length,
       totalPlayers: individualEntries.length + totalGroupPlayers,
@@ -150,26 +162,30 @@ export async function getLotteryStatsForDate(date: string) {
 
 /**
  * Get all lottery entries for a date with member details
+ * Queries consolidated table and separates by type (individual vs group)
+ * For groups, fetches member details for all members in memberIds array
  */
 export async function getLotteryEntriesForDate(date: string) {
   try {
-    const individualEntries = await db.query.lotteryEntries.findMany({
+    // Query consolidated lotteryEntries table
+    const allEntries = await db.query.lotteryEntries.findMany({
       where: eq(lotteryEntries.lotteryDate, date),
       with: {
-        member: true,
-        submittedByMember: true,
+        organizer: true,
         assignedTimeBlock: true,
+        fills: true,
       },
       orderBy: [asc(lotteryEntries.submissionTimestamp)],
     });
 
-    const groupEntries = await db.query.lotteryGroups.findMany({
-      where: eq(lotteryGroups.lotteryDate, date),
-      with: {
-        leader: true,
-      },
-      orderBy: [asc(lotteryGroups.submissionTimestamp)],
-    });
+    // Separate entries by type
+    const individualEntries = allEntries.filter(
+      (entry) => entry.memberIds.length === 1,
+    );
+
+    const groupEntries = allEntries.filter(
+      (entry) => entry.memberIds.length > 1,
+    );
 
     // For group entries, get member details for all members in the group
     const groupEntriesWithMembers = await Promise.all(

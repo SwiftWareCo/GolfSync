@@ -75,9 +75,9 @@ export interface LotteryEntry {
 // Group lottery entry
 export interface LotteryGroup {
   id: number;
-  leaderId: number;
+  organizerId: number;
   lotteryDate: string; // YYYY-MM-DD
-  memberIds: number[]; // All members including leader
+  memberIds: number[]; // All members including organizer
   fills?: Array<{ fillType: string; customName?: string }>; // Array of fills
   preferredWindow: TimeWindow;
   alternateWindow?: TimeWindow | null;
@@ -99,7 +99,7 @@ export interface LotteryEntryInsert {
 }
 
 export interface LotteryGroupInsert {
-  leaderId: number;
+  organizerId: number;
   lotteryDate: string;
   memberIds: number[];
   fills?: Array<{ fillType: string; customName?: string }>;
