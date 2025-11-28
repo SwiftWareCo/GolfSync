@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { index, integer, timestamp, varchar } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
 import {
   createInsertSchema,
   createUpdateSchema,

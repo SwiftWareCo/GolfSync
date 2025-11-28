@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { TimeBlockHeader } from "./TimeBlockHeader";
 import { useQuery } from "@tanstack/react-query";
@@ -30,7 +30,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { type RestrictionViolation } from "~/app/types/RestrictionTypes";
 import { RestrictionViolationAlert } from "~/components/settings/timeblock-restrictions/RestrictionViolationAlert";
 import {  getBCToday } from "~/lib/dates";
-import { type TimeBlockGuest } from "~/app/types/GuestTypes"
 import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
 import { createGuest } from "~/server/guests/actions";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
@@ -54,13 +53,11 @@ export function TimeBlockMemberManager({
     optimisticallyAddFill,
     optimisticallyRemoveFill,
     rollback,
-  } = useTeeblockOptimisticUpdate(dateString, timeBlock.id);
+  } = useTeeblockOptimisticUpdate(dateString, timeBlock.id as number);
 
-  // Extract members and guests from relations for display components
-  const memberRelations = timeBlock.timeBlockMembers || [];
-  const guestRelations = timeBlock.timeBlockGuests || [];
-  const members = memberRelations.map((m) => m.member);
-  const guests = guestRelations.map((g) => g.guest);
+  // Extract members and guests from flattened structure
+  const members = timeBlock.members || [];
+  const guests = timeBlock.guests || [];
   const fills = timeBlock.fills || [];
 
   // Member search state and query
@@ -112,8 +109,8 @@ export function TimeBlockMemberManager({
     memberClass: string,
   ) => {
     try {
-      // Use the timeblock's date with proper BC timezone handling
-      const bookingDateString = timeBlock.date || getBCToday();
+      // Use the dateString parameter passed to component
+      const bookingDateString = dateString;
 
       // Check for restrictions first
       const checkResult = await checkTimeblockRestrictionsAction({
@@ -145,8 +142,8 @@ export function TimeBlockMemberManager({
   // Check for restrictions before adding a guest
   const checkGuestRestrictions = async (guestId: number) => {
     try {
-      // Use the timeblock's date with proper BC timezone handling
-      const bookingDateString = timeBlock.date || getBCToday();
+      // Use the dateString parameter passed to component
+      const bookingDateString = dateString;
 
       // Check for restrictions
       const checkResult = await checkTimeblockRestrictionsAction({
@@ -209,7 +206,7 @@ export function TimeBlockMemberManager({
     const { previousData } = optimisticallyAddMember(memberId, {});
 
     try {
-      const result = await addMemberToTimeBlock(timeBlock.id, memberId);
+      const result = await addMemberToTimeBlock(timeBlock.id as number, memberId);
 
       if (!result.success) {
         toast.error(result.error || "Failed to add member");
@@ -228,7 +225,7 @@ export function TimeBlockMemberManager({
     const { previousData } = optimisticallyRemoveMember(memberId);
 
     try {
-      const result = await removeTimeBlockMember(timeBlock.id, memberId);
+      const result = await removeTimeBlockMember(timeBlock.id as number, memberId);
 
       if (!result.success) {
         toast.error(result.error || "Failed to remove member");
@@ -290,7 +287,7 @@ export function TimeBlockMemberManager({
 
     try {
       const result = await addGuestToTimeBlock(
-        timeBlock.id,
+        timeBlock.id as number,
         guestId,
         invitingMemberId,
       );
@@ -313,7 +310,7 @@ export function TimeBlockMemberManager({
     const { previousData } = optimisticallyRemoveGuest(guestId);
 
     try {
-      const result = await removeTimeBlockGuest(timeBlock.id, guestId);
+      const result = await removeTimeBlockGuest(timeBlock.id as number  , guestId);
 
       if (!result.success) {
         toast.error(result.error || "Failed to remove guest");
@@ -378,7 +375,7 @@ export function TimeBlockMemberManager({
 
     try {
       const result = await addFillToTimeBlock(
-        timeBlock.id,
+        timeBlock.id as number,
         fillType,
         1, // Add one fill
         customName,
@@ -401,7 +398,7 @@ export function TimeBlockMemberManager({
     const { previousData } = optimisticallyRemoveFill(fillId);
 
     try {
-      const result = await removeFillFromTimeBlock(timeBlock.id, fillId);
+      const result = await removeFillFromTimeBlock(timeBlock.id as number, fillId);
 
       if (!result.success) {
         toast.error(result.error || "Failed to remove fill");
@@ -424,7 +421,19 @@ export function TimeBlockMemberManager({
         maxPeople={MAX_PEOPLE}
       />
 
-      <Tabs defaultValue="members" className="mt-6 w-full min-h-[500px]">
+      {/* Combined People List - always visible at top */}
+      <TimeBlockPeopleList
+        key={`people-${timeBlock.id}-${members.length}-${guests.length}-${fills.length}`}
+        members={members}
+        guests={guests}
+        fills={fills}
+        onRemoveMember={handleRemoveMember}
+        onRemoveGuest={handleRemoveGuest}
+        onRemoveFill={handleRemoveFill}
+        maxPeople={MAX_PEOPLE}
+      />
+
+      <Tabs defaultValue="members" className="mt-6 w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="members">Add Members</TabsTrigger>
           <TabsTrigger value="guests">Add Guests</TabsTrigger>
@@ -448,13 +457,7 @@ export function TimeBlockMemberManager({
 
         <TabsContent value="guests">
           <div className="space-y-4">
-            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-              <p className="text-sm text-blue-800">
-                <strong>Guest Hosting:</strong> Select a member from the time
-                block to host a guest, or select Course Sponsored guests
-                (reciprocals, gift certificates, etc.).
-              </p>
-            </div>
+      
             <TimeBlockGuestSearch
               searchQuery={guestSearchQuery}
               onSearch={(query: string) => {
@@ -483,18 +486,6 @@ export function TimeBlockMemberManager({
           />
         </TabsContent>
       </Tabs>
-
-      {/* Combined People List - always visible */}
-      <TimeBlockPeopleList
-        key={`people-${timeBlock.id}-${members.length}-${guests.length}-${fills.length}`}
-        members={members}
-        guests={guests}
-        fills={fills}
-        onRemoveMember={handleRemoveMember}
-        onRemoveGuest={handleRemoveGuest}
-        onRemoveFill={handleRemoveFill}
-        maxPeople={MAX_PEOPLE}
-      />
 
       {/* Restriction Violation Alert */}
       <RestrictionViolationAlert

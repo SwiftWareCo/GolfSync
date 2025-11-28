@@ -10,6 +10,23 @@ import {
 import { eq, asc } from "drizzle-orm";
 import { getConfigForDate } from "~/server/settings/data";
 
+// Helper function to flatten nested timeBlockMembers and timeBlockGuests to members and guests
+function flattenTimeBlock(rawTimeBlock: any): TimeBlockWithRelations {
+  return {
+    ...rawTimeBlock,
+    members: rawTimeBlock.timeBlockMembers?.map((tbm: any) => ({
+      ...tbm.member,
+      bagNumber: tbm.bagNumber,
+      checkedIn: tbm.checkedIn,
+      checkedInAt: tbm.checkedInAt,
+    })) ?? [],
+    guests: rawTimeBlock.timeBlockGuests?.map((tbg: any) => ({
+      ...tbg.guest,
+      invitedByMemberId: tbg.invitedByMemberId,
+    })) ?? [],
+  };
+}
+
 export async function createTimeBlocksForTeesheet(
   teesheetId: number,
   config: TeesheetConfigWithBlocks,
@@ -61,7 +78,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
     return {
       teesheet: existingTeesheet,
       config: existingTeesheet.config as TeesheetConfigWithBlocks | null,
-      timeBlocks: existingTeesheet.timeBlocks as TimeBlockWithRelations[],
+      timeBlocks: existingTeesheet.timeBlocks.map(flattenTimeBlock),
     };
   }
 
@@ -100,7 +117,7 @@ export async function getTimeBlocksForTeesheet(teesheetId: number) {
     throw new Error("Teesheet not found");
   }
 
-  return await db.query.timeBlocks.findMany({
+  const rawTimeBlocks = await db.query.timeBlocks.findMany({
     where: eq(timeBlocks.teesheetId, teesheetId),
     with: {
       timeBlockMembers: { with: { member: true } },
@@ -110,4 +127,6 @@ export async function getTimeBlocksForTeesheet(teesheetId: number) {
     },
     orderBy: [asc(timeBlocks.sortOrder), asc(timeBlocks.startTime)],
   });
+
+  return rawTimeBlocks.map(flattenTimeBlock);
 }

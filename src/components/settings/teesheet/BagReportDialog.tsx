@@ -7,7 +7,6 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Printer } from "lucide-react";
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
 import { formatTimeString } from "~/lib/utils";
 import {
   Select,
@@ -17,9 +16,10 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Label } from "~/components/ui/label";
+import { TimeBlockWithRelations } from "~/server/db/schema";
 
 interface BagReportDialogProps {
-  timeBlocks: TimeBlockWithMembers[];
+  timeBlocks: TimeBlockWithRelations[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -62,9 +62,9 @@ export function BagReportDialog({
 
     // Extract bag numbers from all members in those blocks
     const bagNumbers = blocksInRange.flatMap((block) =>
-      (block.timeBlockMembers || [])
-        .filter((tbm) => tbm.member.bagNumber) // Only include members with bag numbers
-        .map((tbm) => tbm.member.bagNumber!),
+      block.members
+        .filter((member: any) => member.bagNumber) // Only include members with bag numbers
+        .map((member: any) => member.bagNumber!),
     );
 
     // Sort alphabetically
@@ -249,27 +249,27 @@ ${formattedBagReport}</pre>
                       {formatTimeString(block.startTime)}
                     </span>
                     <span className="text-muted-foreground text-sm">
-                      {block.timeBlockMembers?.length}/4 bags
+                      {block.members.length}/4 bags
                     </span>
                   </div>
 
-                  {block.timeBlockMembers?.length === 0 ? (
+                  {block.members.length === 0 ? (
                     <p className="text-muted-foreground text-sm italic">
                       No bags assigned
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {block.timeBlockMembers?.map((tbm) => (
+                      {block.members.map((member: any) => (
                         <div
-                          key={`${tbm.memberId}-${tbm.timeBlockId}`}
+                          key={member.id}
                           className="flex items-center justify-between rounded bg-gray-50 px-2 py-1"
                         >
                           <span>
-                            {tbm.member.firstName} {tbm.member.lastName} (
-                            {tbm.member.memberNumber})
+                            {member.firstName} {member.lastName} (
+                            {member.memberNumber})
                           </span>
                           <span className="font-semibold">
-                            Bag #{tbm.member.bagNumber || "N/A"}
+                            Bag #{member.bagNumber || "N/A"}
                           </span>
                         </div>
                       ))}
@@ -278,7 +278,7 @@ ${formattedBagReport}</pre>
                       {Array.from({
                         length: Math.max(
                           0,
-                          4 - (block.timeBlockMembers?.length || 0),
+                          4 - block.members.length,
                         ),
                       }).map((_, i) => (
                         <div

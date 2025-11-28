@@ -31,6 +31,7 @@ type ActionResult = {
 /**
  * Server action to create or replace time blocks for a teesheet
  * Maps config blocks to teesheet time blocks
+ * Only works if all timeblocks are empty (no members, guests, or fills)
  */
 export async function replaceTimeBlocks(
   teesheetId: number,
@@ -39,7 +40,63 @@ export async function replaceTimeBlocks(
   await requireAdmin();
 
   try {
-    // First, delete all existing time blocks for this teesheet
+    // Check if any timeblock has members assigned
+    const membersInTimeblocks = await db
+      .select({ count: sql`count(*)` })
+      .from(timeBlockMembers)
+      .innerJoin(timeBlocks, eq(timeBlockMembers.timeBlockId, timeBlocks.id))
+      .where(eq(timeBlocks.teesheetId, teesheetId));
+
+    if (
+      membersInTimeblocks[0]?.count &&
+      parseInt(String(membersInTimeblocks[0].count)) > 0
+    ) {
+      return {
+        success: false,
+        error: "Cannot replace timeblocks: existing members are assigned",
+      };
+    }
+
+    // Check if any timeblock has guests assigned
+    const guestsInTimeblocks = await db
+      .select({ count: sql`count(*)` })
+      .from(timeBlockGuests)
+      .innerJoin(timeBlocks, eq(timeBlockGuests.timeBlockId, timeBlocks.id))
+      .where(eq(timeBlocks.teesheetId, teesheetId));
+
+    if (
+      guestsInTimeblocks[0]?.count &&
+      parseInt(String(guestsInTimeblocks[0].count)) > 0
+    ) {
+      return {
+        success: false,
+        error: "Cannot replace timeblocks: existing guests are assigned",
+      };
+    }
+
+    // Check if any timeblock has fills assigned
+    const fillsInTimeblocks = await db
+      .select({ count: sql`count(*)` })
+      .from(fills)
+      .innerJoin(timeBlocks, eq(fills.relatedId, timeBlocks.id))
+      .where(
+        and(
+          eq(timeBlocks.teesheetId, teesheetId),
+          eq(fills.relatedType, "timeblock")
+        )
+      );
+
+    if (
+      fillsInTimeblocks[0]?.count &&
+      parseInt(String(fillsInTimeblocks[0].count)) > 0
+    ) {
+      return {
+        success: false,
+        error: "Cannot replace timeblocks: existing fills are assigned",
+      };
+    }
+
+    // All checks passed, delete existing time blocks for this teesheet
     await db.delete(timeBlocks).where(eq(timeBlocks.teesheetId, teesheetId));
 
     // Fetch all config blocks and create time blocks from them
@@ -77,7 +134,6 @@ export async function replaceTimeBlocks(
     }
 
     revalidatePath("/admin");
-    revalidatePath("/teesheet");
     return { success: true };
   } catch (error) {
     console.error("Error replacing time blocks:", error);

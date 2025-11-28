@@ -4,20 +4,22 @@ import { UserMinus, UserPlus } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntitySearchCard } from "~/components/ui/entity-search-card";
-import type {
-  TimeBlockMemberView,
-  TimeBlockFill,
-  FillType,
-} from "~/app/types/TeeSheetTypes";
 import { Badge } from "~/components/ui/badge";
 import { type TimeBlockGuest } from "~/app/types/GuestTypes";
 import { getMemberClassStyling } from "~/lib/utils";
+import { type Member, type Fill, type Guest } from "~/server/db/schema";
 
 type PersonType = "member" | "guest" | "fill";
 
+// Type alias for Member when used in timeblock context
+type TimeBlockMemberView = Member;
+
+// Type alias for Fill when used in timeblock context
+type TimeBlockFill = Fill;
+
 interface TimeBlockPersonItemProps {
   type: PersonType;
-  person: TimeBlockMemberView | TimeBlockGuest;
+  person: Member | TimeBlockGuest;
   onRemove: (id: number, type: PersonType) => Promise<void>;
 }
 
@@ -28,7 +30,7 @@ export const TimeBlockPersonItem = ({
 }: TimeBlockPersonItemProps) => {
   const handleRemove = () => {
     if (type === "member") {
-      onRemove((person as TimeBlockMemberView).id, "member");
+      onRemove((person as Member).id, "member");
     } else {
       onRemove((person as TimeBlockGuest).id, "guest");
     }
@@ -44,7 +46,7 @@ export const TimeBlockPersonItem = ({
   let personStyle = getMemberClassStyling(type === "guest" ? "GUEST" : null);
 
   if (type === "member") {
-    const member = person as TimeBlockMemberView;
+    const member = person as Member;
     firstName = member.firstName;
     lastName = member.lastName;
     subtitle = `#${member.memberNumber}`;
@@ -103,7 +105,7 @@ export const TimeBlockPersonItem = ({
 
 // New component for displaying fills
 interface TimeBlockFillItemProps {
-  fill: TimeBlockFill;
+  fill: Fill;
   onRemove: (fillId: number) => Promise<void>;
 }
 
@@ -331,25 +333,16 @@ export function TimeBlockMemberSearch({
 }
 
 // Search component for adding guests to a time block
-type Guest = {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string | null;
-  phone: string | null;
-};
-
-type Member = {
-  id: number;
-  firstName: string;
-  lastName: string;
-  memberNumber: string;
-};
-
 interface TimeBlockGuestSearchProps {
   searchQuery: string;
   onSearch: (query: string) => void;
-  searchResults: Guest[];
+  searchResults: Array<{
+    id: number;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    phone: string | null;
+  }>;
   isLoading: boolean;
   onAddGuest: (guestId: number) => Promise<void>;
   isTimeBlockFull: boolean;

@@ -210,10 +210,10 @@ export function SidebarActions({
             <DialogTitle>Teesheet Settings</DialogTitle>
           </DialogHeader>
           <TeesheetSettingsModal
-            teesheet={teesheet}
-            isOpen={isSettingsOpen}
-            availableConfigs={availableConfigs}
             onClose={() => setIsSettingsOpen(false)}
+            teesheet={teesheet}
+            timeBlocks={timeBlocks}
+            availableConfigs={availableConfigs}
           />
         </DialogContent>
       </Dialog>

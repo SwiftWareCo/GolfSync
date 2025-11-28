@@ -275,9 +275,7 @@ export async function deleteTimeblockRestriction(id: number) {
     // Revalidate the settings page
     revalidatePath("/admin/settings");
     revalidatePath("/members");
-    revalidatePath("/teesheet");
     revalidatePath("/admin");
-
     return { success: true };
   } catch (error) {
     console.error("Error deleting timeblock restriction:", error);

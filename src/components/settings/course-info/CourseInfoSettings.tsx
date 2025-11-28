@@ -12,7 +12,8 @@ import { Button } from "~/components/ui/button";
 import toast from "react-hot-toast";
 import { NotesEditor } from "./NotesEditor";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { settingsMutations } from "~/server/query-options/settings-mutation-options";
+import { updateCourseInfo } from "~/server/settings/actions";
+import { queryKeys } from "~/server/query-options/query-keys";
 import type { CourseInfo } from "~/server/db/schema";
 
 type CourseInfoProps = {
@@ -23,10 +24,13 @@ export function CourseInfoSettings({ courseInfo }: CourseInfoProps) {
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState(courseInfo?.notes ?? "");
 
-  // Setup mutation with factory pattern
+  // Setup inline mutation
   const updateMutation = useMutation({
-    ...settingsMutations.updateCourseInfo(queryClient),
+    mutationFn: async (data: { notes?: string }) => updateCourseInfo(data),
     onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.settings.courseInfo(),
+      });
       toast.success("Course info saved successfully");
     },
     onError: (error: Error) => {

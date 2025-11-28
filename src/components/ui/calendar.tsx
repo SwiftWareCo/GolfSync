@@ -9,7 +9,6 @@ export interface CalendarProps
   extends Omit<DayPickerProps, "mode" | "selected" | "onSelect"> {
   selected?: Date;
   onSelect?: (date: Date | undefined) => void;
-
 }
 
 function Calendar({
@@ -17,10 +16,7 @@ function Calendar({
   onSelect,
   modifiers,
   modifiersClassNames,
-
 }: CalendarProps) {
-
-
   const [month, setMonth] = useState<Date>(selected || new Date());
   const [numberOfMonths, setNumberOfMonths] = useState(3);
 
@@ -45,7 +41,7 @@ function Calendar({
             newMonth.setMonth(month.getMonth() - 1);
             setMonth(newMonth);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:cursor-pointer hover:bg-org-primary hover:text-white"
+          className="hover:bg-org-primary inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:cursor-pointer hover:text-white"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
@@ -86,7 +82,7 @@ function Calendar({
             newMonth.setMonth(month.getMonth() + 1);
             setMonth(newMonth);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:cursor-pointer hover:bg-org-primary hover:text-white"
+          className="hover:bg-org-primary inline-flex h-10 w-10 items-center justify-center rounded-md transition-colors hover:cursor-pointer hover:text-white"
         >
           <ChevronRight className="h-6 w-6" />
         </button>

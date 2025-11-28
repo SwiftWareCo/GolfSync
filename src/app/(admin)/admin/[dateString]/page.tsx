@@ -60,7 +60,7 @@ export default async function AdminPage({
         <div className="space-y-4 p-6">
           <ConfigSummary
             config={config}
-            timeBlocks={timeBlocks}
+            timeBlocks={timeBlocks.length}
             dateString={dateString}
           />
 

@@ -3,11 +3,11 @@ import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 import { Edit, Check } from "lucide-react";
 import toast from "react-hot-toast";
-import type { TeeSheet } from "~/app/types/TeeSheetTypes";
 import { updateTeesheetGeneralNotes } from "~/server/teesheet/actions";
+import type { Teesheet } from "~/server/db/schema";
 
 interface TeesheetGeneralNotesProps {
-  teesheet: TeeSheet;
+  teesheet: Teesheet;
 }
 
 export function TeesheetGeneralNotes({ teesheet }: TeesheetGeneralNotesProps) {

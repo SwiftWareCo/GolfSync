@@ -57,3 +57,10 @@ export const fillUpdateSchema = createUpdateSchema(fills);
 export type Fill = z.infer<typeof fillSelectSchema>;
 export type FillInsert = z.infer<typeof fillInsertSchema>;
 export type FillUpdate = z.infer<typeof fillUpdateSchema>;
+
+// Fill type constants
+export const FillTypes = {
+  GUEST: "guest_fill",
+  RECIPROCAL: "reciprocal_fill",
+  CUSTOM: "custom_fill",
+} as const;

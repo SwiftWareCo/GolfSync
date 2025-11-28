@@ -102,24 +102,24 @@ export function EntitySearchCard<T extends Entity>({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className={showCreateButton && onCreateNew ? "flex  flex-row items-center justify-between" : undefined}>
         <CardTitle className="flex items-center space-x-2">
           <UserPlus className="h-5 w-5" />
           <span>{title}</span>
         </CardTitle>
+        {showCreateButton && onCreateNew && (
+          <Button
+            onClick={onCreateNew}
+            variant="outline"
+            className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            {createButtonText}
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {showCreateButton && onCreateNew && (
-            <Button
-              onClick={onCreateNew}
-              variant="outline"
-              className="w-full border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-            >
-              <UserPlus className="mr-2 h-4 w-4" />
-              {createButtonText}
-            </Button>
-          )}
           <div
             className={`grid grid-cols-1 gap-4 ${showSelectFilter ? "md:grid-cols-2" : ""}`}
           >

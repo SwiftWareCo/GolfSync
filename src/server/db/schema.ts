@@ -16,12 +16,13 @@ export * from "./schema/misc/course-info.schema";
 
 // Import tables for relations
 import { relations } from "drizzle-orm";
-import { members } from "./schema/core/members.schema";
-import { guests } from "./schema/core/guests.schema";
+import { members, type Member } from "./schema/core/members.schema";
+import { guests, type Guest } from "./schema/core/guests.schema";
 import {
   timeBlocks,
   teesheets,
   paceOfPlay,
+  TimeBlock,
   TimeBlockInsert,
   PaceOfPlay
 } from "./schema/booking/timeblocks.schema";
@@ -295,8 +296,8 @@ export const memberSpeedProfilesRelations = relations(
 );
 
 export type TimeBlockWithRelations = TimeBlockInsert & {
-  timeBlockMembers: TimeBlockMember[];
-  timeBlockGuests: TimeBlockGuest[];
+  members: (Member & Pick<TimeBlockMember, 'bagNumber' | 'checkedIn' | 'checkedInAt'>)[];
+  guests: (Guest & { invitedByMemberId: number })[];
   fills: Fill[];
   paceOfPlay: PaceOfPlay | null;
 };

@@ -29,13 +29,8 @@ export function CalendarPicker({ dateString }: CalendarPickerProps) {
       <CardContent className="p-4">
         <div className="flex justify-center">
           <Calendar
-            mode="single"
             selected={selectedDate}
             onSelect={handleDateSelect}
-            disabled={(date) => {
-              // Optionally disable certain dates
-              return false;
-            }}
             className="rounded-md border"
           />
         </div>

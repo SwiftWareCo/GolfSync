@@ -17,7 +17,7 @@ export function TimeBlockHeader({
   maxPeople = 4,
 }: TimeBlockHeaderProps) {
   const fillsCount = timeBlock.fills?.length || 0;
-  const membersCount = timeBlock.timeBlockMembers?.length || 0;
+  const membersCount = timeBlock.members?.length || 0;
   const totalPeople = membersCount + guestsCount + fillsCount;
 
   return (

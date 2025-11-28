@@ -1,11 +1,11 @@
-import { TeesheetConfig, Timeblocks } from "~/server/db/schema";
+import { TeesheetConfig, TimeBlock } from "~/server/db/schema";
 import { Clock, Users, Calendar } from "lucide-react";
 import { Card, CardContent } from "~/components/ui/card";
 import { formatDate } from "~/lib/dates";
 
 interface ConfigSummaryProps {
   config: TeesheetConfig | null;
-  timeBlocks: Timeblocks[];
+  timeBlocks: number;
   dateString?: string;
 }
 
@@ -58,7 +58,7 @@ export function ConfigSummary({ config, timeBlocks, dateString }: ConfigSummaryP
 
             <div className="flex items-center gap-2 ml-auto">
               <span className="text-sm text-gray-600">
-                <span className="font-semibold text-gray-900">{timeBlocks.length}</span> time blocks
+                <span className="font-semibold text-gray-900">{timeBlocks}</span> time blocks
               </span>
             </div>
           </div>

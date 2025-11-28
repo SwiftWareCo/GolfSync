@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { getBCToday } from "./lib/dates";
 
 const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/api/cron/update-weather"]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
@@ -33,7 +34,7 @@ export default clerkMiddleware(async (auth, req) => {
       }
       // Redirect /admin to /admin/[date]
       if (req.nextUrl.pathname === "/admin") {
-        const today = new Date().toISOString().split("T")[0];
+        const today = getBCToday();
         return NextResponse.redirect(new URL(`/admin/${today}`, req.url));
       }
     }

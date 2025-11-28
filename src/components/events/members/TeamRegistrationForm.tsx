@@ -28,7 +28,7 @@ import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { Users, X, UserPlus } from "lucide-react";
 import { type Event } from "~/app/types/events";
-import { FillTypes } from "~/app/types/TeeSheetTypes";
+import { FillTypes } from "~/server/db/schema/fills.schema";
 
 interface SearchMember {
   id: number;
