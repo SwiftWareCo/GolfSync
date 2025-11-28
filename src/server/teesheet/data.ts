@@ -14,16 +14,19 @@ import { getConfigForDate } from "~/server/settings/data";
 function flattenTimeBlock(rawTimeBlock: any): TimeBlockWithRelations {
   return {
     ...rawTimeBlock,
-    members: rawTimeBlock.timeBlockMembers?.map((tbm: any) => ({
-      ...tbm.member,
-      bagNumber: tbm.bagNumber,
-      checkedIn: tbm.checkedIn,
-      checkedInAt: tbm.checkedInAt,
-    })) ?? [],
-    guests: rawTimeBlock.timeBlockGuests?.map((tbg: any) => ({
-      ...tbg.guest,
-      invitedByMemberId: tbg.invitedByMemberId,
-    })) ?? [],
+    members:
+      rawTimeBlock.timeBlockMembers?.map((tbm: any) => ({
+        ...tbm.member,
+        bagNumber: tbm.bagNumber,
+        checkedIn: tbm.checkedIn,
+        checkedInAt: tbm.checkedInAt,
+      })) ?? [],
+    guests:
+      rawTimeBlock.timeBlockGuests?.map((tbg: any) => ({
+        ...tbg.guest,
+        invitedByMemberId: tbg.invitedByMemberId,
+        invitedByMember: tbg.invitedByMember,
+      })) ?? [],
   };
 }
 

@@ -34,7 +34,7 @@ export function TimeBlockHeader({
             <p className="text-sm text-gray-500">
               {totalPeople} / {maxPeople} people booked
               {totalPeople > 0 &&
-                ` (${membersCount} members, ${guestsCount} guests${fillsCount > 0 ? `, ${fillsCount} fills` : ""}`}
+                ` (${membersCount} members, ${guestsCount} guests${fillsCount > 0 ? `, ${fillsCount} fills` : ""})`}
             </p>
           </div>
         </div>

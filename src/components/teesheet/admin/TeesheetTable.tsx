@@ -3,7 +3,10 @@
 import { useState, useRef } from "react";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
-import { type PlayerData, type PlayerType } from "./time-block-row/PlayerBadge";
+import {
+  type PlayerType,
+  type TimeBlockPlayer,
+} from "./time-block-row/PlayerBadge";
 import { AddPlayerModal } from "~/components/timeblock/AddPlayerModal";
 import { AccountDialog } from "~/components/member-teesheet-client/AccountDialog";
 import {
@@ -27,6 +30,7 @@ type TimeBlockMemberFull = {
   timeBlockId: number;
   memberId: number;
   checkedIn: boolean;
+  checkedInAt: Date | null;
   bookingDate: string;
   bookingTime: string;
   bagNumber: string | null;
@@ -40,6 +44,7 @@ type TimeBlockGuestFull = {
   guestId: number;
   invitedByMemberId: number;
   checkedIn: boolean;
+  checkedInAt: Date | null;
   bookingDate: string;
   bookingTime: string;
   createdAt: Date;
@@ -65,21 +70,22 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     Map<string, TimeBlockMemberFull | TimeBlockGuestFull>
   >(new Map());
 
-  const getPlayersForBlock = (block: any): PlayerData[] => {
-    const players: PlayerData[] = [];
+  const getPlayersForBlock = (block: any): TimeBlockPlayer[] => {
+    const players: TimeBlockPlayer[] = [];
 
     block.timeBlockMembers?.forEach((tbm: TimeBlockMemberFull) => {
       // Store full TimeBlockMember
       playerDataRef.current.set(`member-${tbm.member.id}`, tbm);
 
-      // Return display data
+      // Return display data with proper discriminated union structure
       players.push({
-        id: tbm.member.id,
-        name: `${tbm.member.firstName} ${tbm.member.lastName}`,
         type: "member",
-        memberNumber: tbm.member.memberNumber,
-        class: tbm.member.class,
-        checkedIn: tbm.checkedIn,
+        data: {
+          ...tbm.member,
+          bagNumber: tbm.bagNumber,
+          checkedIn: tbm.checkedIn,
+          checkedInAt: tbm.checkedInAt,
+        },
       });
     });
 
@@ -87,24 +93,23 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
       // Store full TimeBlockGuest
       playerDataRef.current.set(`guest-${tbg.guest.id}`, tbg);
 
-      // Return display data
+      // Return display data with proper discriminated union structure
       players.push({
-        id: tbg.guest.id,
-        name: `${tbg.guest.firstName} ${tbg.guest.lastName}`,
         type: "guest",
-        checkedIn: tbg.checkedIn,
+        data: {
+          ...tbg.guest,
+          invitedByMemberId: tbg.invitedByMemberId,
+          invitedByMember: tbg.invitedByMember,
+          checkedIn: tbg.checkedIn,
+          checkedInAt: tbg.checkedInAt,
+        },
       });
     });
 
     block.fills?.forEach((fill: any) => {
       players.push({
-        id: fill.id,
-        name:
-          fill.fillType === "custom_fill"
-            ? fill.customName || "Custom Fill"
-            : "Fill",
         type: "fill",
-        fillType: fill.fillType,
+        data: fill,
       });
     });
 
@@ -166,10 +171,10 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     }
   };
 
-  const handlePlayerClick = (player: PlayerData) => {
-    console.log(player);
-    const fullData = playerDataRef.current.get(`${player.type}-${player.id}`);
-    console.log("fullData", fullData);
+  const handlePlayerClick = (player: TimeBlockPlayer) => {
+    const fullData = playerDataRef.current.get(
+      `${player.type}-${player.data.id}`,
+    );
     if (player.type === "member" || player.type === "guest") {
       setIsAccountDialogOpen(true);
       setSelectedPlayer(fullData);
@@ -233,6 +238,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   handleCheckInPlayer(block.id, id, type, isCheckedIn)
                 }
                 onPlayerClick={handlePlayerClick}
+                onTimeClick={() => handleAddPlayer(block.id)}
               />
             ))}
           </tbody>

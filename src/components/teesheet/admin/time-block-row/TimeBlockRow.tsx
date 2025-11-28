@@ -1,18 +1,23 @@
 "use client";
 
 import { formatTime12Hour } from "~/lib/dates";
-import { PlayerBadge, type PlayerData, type PlayerType } from "./PlayerBadge";
+import {
+  PlayerBadge,
+  type TimeBlockPlayer,
+  type PlayerType,
+} from "./PlayerBadge";
 import { AddPlayerPlaceholder } from "./AddPlayerPlaceholder";
 
 interface TimeBlockRowProps {
   timeBlockId: number;
   startTime: string;
-  players: PlayerData[];
+  players: TimeBlockPlayer[];
   maxPlayers?: number;
   onAddPlayer: () => void;
   onRemovePlayer: (id: number, type: PlayerType) => void;
   onCheckInPlayer: (id: number, type: PlayerType, isCheckedIn: boolean) => void;
-  onPlayerClick: (player: PlayerData) => void;
+  onPlayerClick: (player: TimeBlockPlayer) => void;
+  onTimeClick?: () => void;
 }
 
 export function TimeBlockRow({
@@ -23,13 +28,17 @@ export function TimeBlockRow({
   onRemovePlayer,
   onCheckInPlayer,
   onPlayerClick,
+  onTimeClick,
 }: TimeBlockRowProps) {
   const slotsAvailable = maxPlayers - players.length;
 
   return (
     <tr className="transition-colors hover:bg-gray-50">
       {/* Time Column */}
-      <td className="px-3 py-3 align-top text-sm font-medium whitespace-nowrap text-gray-900">
+      <td
+        className="cursor-pointer px-3 py-3 align-top text-sm font-medium whitespace-nowrap text-gray-900 hover:text-blue-600 hover:underline"
+        onClick={onTimeClick}
+      >
         {formatTime12Hour(startTime)}
       </td>
 
@@ -38,7 +47,7 @@ export function TimeBlockRow({
         <div className="flex flex-wrap items-center gap-2">
           {players.map((player) => (
             <PlayerBadge
-              key={`${player.type}-${player.id}`}
+              key={`${player.type}-${player.data.id}`}
               player={player}
               onRemove={onRemovePlayer}
               onCheckIn={onCheckInPlayer}

@@ -481,8 +481,6 @@ export function TimeBlockMemberManager({
           <FillForm
             onAddFill={handleAddFill}
             isTimeBlockFull={isTimeBlockFull}
-            maxPeople={MAX_PEOPLE}
-            currentPeopleCount={currentPeople}
           />
         </TabsContent>
       </Tabs>

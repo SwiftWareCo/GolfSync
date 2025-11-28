@@ -63,7 +63,7 @@ export function FillForm({
       // Reset form
       setCustomFillName("");
       setSelectedFillType("guest");
-      toast.success("Fill added");
+      // Toast is shown by parent component (TimeBlockMemberManager)
     } catch (error) {
       console.error("Error adding fill:", error);
       toast.error("Failed to add fill");

@@ -24,14 +24,13 @@ import {
   paceOfPlay,
   TimeBlock,
   TimeBlockInsert,
-  PaceOfPlay
+  PaceOfPlay,
 } from "./schema/booking/timeblocks.schema";
 import {
   timeBlockMembers,
   timeBlockGuests,
   TimeBlockMember,
   TimeBlockGuest,
-
 } from "./schema/booking/members-booking.schema";
 import { eventRegistrations } from "./schema/events/event-registrations.schema";
 import {
@@ -296,8 +295,18 @@ export const memberSpeedProfilesRelations = relations(
 );
 
 export type TimeBlockWithRelations = TimeBlockInsert & {
-  members: (Member & Pick<TimeBlockMember, 'bagNumber' | 'checkedIn' | 'checkedInAt'>)[];
-  guests: (Guest & { invitedByMemberId: number })[];
+  members: (Member &
+    Pick<TimeBlockMember, "bagNumber" | "checkedIn" | "checkedInAt">)[];
+  guests: (Guest & { invitedByMemberId: number; invitedByMember?: Member })[];
   fills: Fill[];
   paceOfPlay: PaceOfPlay | null;
+};
+// Hydrated junction table types with relations
+export type TimeBlockMemberWithMember = TimeBlockMember & {
+  member: Member;
+};
+
+export type TimeBlockGuestWithGuest = TimeBlockGuest & {
+  guest: Guest;
+  invitedByMember: Member;
 };

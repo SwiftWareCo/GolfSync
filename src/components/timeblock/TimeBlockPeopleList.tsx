@@ -5,166 +5,22 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntitySearchCard } from "~/components/ui/entity-search-card";
 import { Badge } from "~/components/ui/badge";
-import { type TimeBlockGuest } from "~/app/types/GuestTypes";
 import { getMemberClassStyling } from "~/lib/utils";
 import { type Member, type Fill, type Guest } from "~/server/db/schema";
+import { TimeBlockPersonItem } from "./TimeBlockPersonItem";
+import { TimeBlockFillItem } from "./TimeBlockFillItem";
 
-type PersonType = "member" | "guest" | "fill";
-
-// Type alias for Member when used in timeblock context
-type TimeBlockMemberView = Member;
-
-// Type alias for Fill when used in timeblock context
-type TimeBlockFill = Fill;
-
-interface TimeBlockPersonItemProps {
-  type: PersonType;
-  person: Member | TimeBlockGuest;
-  onRemove: (id: number, type: PersonType) => Promise<void>;
-}
-
-export const TimeBlockPersonItem = ({
-  type,
-  person,
-  onRemove,
-}: TimeBlockPersonItemProps) => {
-  const handleRemove = () => {
-    if (type === "member") {
-      onRemove((person as Member).id, "member");
-    } else {
-      onRemove((person as TimeBlockGuest).id, "guest");
-    }
-  };
-
-  let firstName = "";
-  let lastName = "";
-  let subtitle = "";
-  let memberInfo = null;
-  let memberClass = "";
-
-  // Get styling according to the person type and class
-  let personStyle = getMemberClassStyling(type === "guest" ? "GUEST" : null);
-
-  if (type === "member") {
-    const member = person as Member;
-    firstName = member.firstName;
-    lastName = member.lastName;
-    subtitle = `#${member.memberNumber}`;
-    memberClass = member.class || "";
-
-    // Get specific styling for this member class
-    personStyle = getMemberClassStyling(member.class);
-  } else {
-    const guest = person as TimeBlockGuest;
-    firstName = guest.firstName;
-    lastName = guest.lastName;
-    subtitle = guest.email || guest.phone || "No contact";
-    memberInfo = (
-      <div>
-        <p className="font-medium">Invited by</p>
-        <p className="text-sm text-gray-500">
-          {guest.invitedByMember?.firstName} {guest.invitedByMember?.lastName} (
-          {guest.invitedByMember?.memberNumber})
-        </p>
-      </div>
-    );
-
-    // Guest styling is already set above
-  }
-
-  return (
-    <div
-      className={`flex items-center justify-between rounded-lg border ${personStyle.border} p-3 transition-colors hover:${personStyle.bg}`}
-    >
-      <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-1">
-        <div>
-          <div className="flex items-center space-x-2">
-            <p className={`font-medium ${personStyle.text}`}>
-              {firstName} {lastName}
-            </p>
-            <Badge
-              variant={
-                type === "guest" ? "outline" : (personStyle.badgeVariant as any)
-              }
-              className="text-xs"
-            >
-              {type === "member" ? memberClass || "Member" : "Guest"}
-            </Badge>
-          </div>
-          <p className="text-sm text-gray-500">{subtitle}</p>
-        </div>
-        {memberInfo}
-      </div>
-      <Button variant="destructive" size="sm" onClick={handleRemove}>
-        <UserMinus className="mr-2 h-4 w-4" />
-        Remove
-      </Button>
-    </div>
-  );
-};
-
-// New component for displaying fills
-interface TimeBlockFillItemProps {
-  fill: Fill;
-  onRemove: (fillId: number) => Promise<void>;
-}
-
-export const TimeBlockFillItem = ({
-  fill,
-  onRemove,
-}: TimeBlockFillItemProps) => {
-  const handleRemove = () => {
-    onRemove(fill.id);
-  };
-
-  const getFillLabel = () => {
-    switch (fill.fillType) {
-      case "guest_fill":
-        return "Guest Fill";
-      case "reciprocal_fill":
-        return "Reciprocal Fill";
-      case "custom_fill":
-        return fill.customName || "Custom Fill";
-      default:
-        return "Fill";
-    }
-  };
-
-  // Use a neutral style for fills
-  const fillStyle = {
-    border: "border-gray-200",
-    bg: "bg-gray-50",
-    text: "text-gray-700",
-    badgeVariant: "secondary",
-  };
-
-  return (
-    <div
-      className={`flex items-center justify-between rounded-lg border ${fillStyle.border} p-3 transition-colors hover:${fillStyle.bg}`}
-    >
-      <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-1">
-        <div>
-          <div className="flex items-center space-x-2">
-            <p className={`font-medium ${fillStyle.text}`}>{getFillLabel()}</p>
-            <Badge variant={fillStyle.badgeVariant as any} className="text-xs">
-              Fill
-            </Badge>
-          </div>
-        </div>
-      </div>
-      <Button variant="destructive" size="sm" onClick={handleRemove}>
-        <UserMinus className="mr-2 h-4 w-4" />
-        Remove
-      </Button>
-    </div>
-  );
+// Type for guest as it comes from TimeBlockWithRelations
+type TimeBlockGuest = Guest & {
+  invitedByMemberId: number;
+  invitedByMember?: Member;
 };
 
 // Update the props interface to include fills
 interface TimeBlockPeopleListProps {
-  members: TimeBlockMemberView[];
+  members: Member[];
   guests: TimeBlockGuest[];
-  fills: TimeBlockFill[];
+  fills: Fill[];
   onRemoveMember: (memberId: number) => Promise<void>;
   onRemoveGuest: (guestId: number) => Promise<void>;
   onRemoveFill: (fillId: number) => Promise<void>;
@@ -185,13 +41,11 @@ export function TimeBlockPeopleList({
   // Calculate total people including fills
   const totalPeople = members.length + guests.length + fills.length;
 
-  const handleRemove = async (id: number, type: PersonType) => {
+  const handleRemove = async (id: number, type: "member" | "guest") => {
     if (type === "member") {
       await onRemoveMember(id);
     } else if (type === "guest") {
       await onRemoveGuest(id);
-    } else {
-      await onRemoveFill(id);
     }
   };
 
@@ -213,11 +67,11 @@ export function TimeBlockPeopleList({
   // Create combined array of members and guests first
   const allPeople = [
     ...members.map((member) => ({
-      type: "member" as PersonType,
+      type: "member" as const,
       data: member,
     })),
     ...guests.map((guest) => ({
-      type: "guest" as PersonType,
+      type: "guest" as const,
       data: guest,
     })),
   ];
@@ -295,12 +149,14 @@ export function TimeBlockMemberSearch({
       noResultsMessage="No members found matching your search"
       itemsPerPage={5}
       renderEntityCard={(member) => {
-        const isAlreadyAdded = existingMembers.some(m => m.id === member.id);
+        const isAlreadyAdded = existingMembers.some((m) => m.id === member.id);
         return (
           <div
             key={member.id}
             className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-              isAlreadyAdded ? 'bg-green-50 border-green-200' : 'hover:bg-gray-50'
+              isAlreadyAdded
+                ? "border-green-200 bg-green-50"
+                : "hover:bg-gray-50"
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -312,7 +168,10 @@ export function TimeBlockMemberSearch({
               </div>
             </div>
             {isAlreadyAdded ? (
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
+              <Badge
+                variant="secondary"
+                className="bg-green-100 text-green-800"
+              >
                 ✓ Added
               </Badge>
             ) : (
@@ -403,12 +262,14 @@ export function TimeBlockGuestSearch({
       createButtonText="Create Guest"
       onCreateNew={onCreateGuest}
       renderEntityCard={(guest) => {
-        const isAlreadyAdded = existingGuests.some(g => g.id === guest.id);
+        const isAlreadyAdded = existingGuests.some((g) => g.id === guest.id);
         return (
           <div
             key={guest.id}
             className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${
-              isAlreadyAdded ? 'bg-green-50 border-green-200' : 'hover:bg-gray-50'
+              isAlreadyAdded
+                ? "border-green-200 bg-green-50"
+                : "hover:bg-gray-50"
             }`}
           >
             <div className="flex items-center space-x-3">
@@ -422,7 +283,10 @@ export function TimeBlockGuestSearch({
               </div>
             </div>
             {isAlreadyAdded ? (
-              <Badge variant="secondary" className="bg-green-100 text-green-800">
+              <Badge
+                variant="secondary"
+                className="bg-green-100 text-green-800"
+              >
                 ✓ Added
               </Badge>
             ) : (

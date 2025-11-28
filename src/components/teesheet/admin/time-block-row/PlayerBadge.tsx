@@ -2,6 +2,7 @@
 
 import { cn } from "~/lib/utils";
 import { getMemberClassStyling } from "~/lib/utils";
+import { getFillLabel } from "~/lib/fills";
 import { UserCheck, UserX, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -10,26 +11,45 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import type {
+  Member,
+  Guest,
+  Fill,
+  TimeBlockMember,
+} from "~/server/db/schema";
 
 export type PlayerType = "member" | "guest" | "fill";
 
-export interface PlayerData {
-  id: number;
-  name: string;
-  type: PlayerType;
-  memberNumber?: string;
-  class?: string;
-  checkedIn?: boolean;
-  fillType?: string;
-  invitedBy?: string;
-}
+// Component-specific discriminated union type using schema types
+export type TimeBlockPlayer =
+  | {
+      type: "member";
+      data: Member &
+        Pick<TimeBlockMember, "bagNumber" | "checkedIn" | "checkedInAt">;
+    }
+  | {
+      type: "guest";
+      data: Guest & {
+        invitedByMemberId: number;
+        invitedByMember?: Pick<
+          Member,
+          "id" | "firstName" | "lastName" | "memberNumber"
+        >;
+        checkedIn?: boolean;
+        checkedInAt?: Date | null;
+      };
+    }
+  | {
+      type: "fill";
+      data: Fill;
+    };
 
 interface PlayerBadgeProps {
-  player: PlayerData;
+  player: TimeBlockPlayer;
   onRemove?: (id: number, type: PlayerType) => void;
   onCheckIn?: (id: number, type: PlayerType, isCheckedIn: boolean) => void;
-  onClick?: (player: PlayerData) => void;
-  onAssignPowerCart?: (player: PlayerData) => void;
+  onClick?: (player: TimeBlockPlayer) => void;
+  onAssignPowerCart?: (player: TimeBlockPlayer) => void;
 }
 
 export function PlayerBadge({
@@ -39,12 +59,28 @@ export function PlayerBadge({
   onClick,
   onAssignPowerCart,
 }: PlayerBadgeProps) {
+  // Extract common data based on discriminated union type
+  const id = player.data.id;
+  const checkedIn =
+    player.type === "member"
+      ? (player.data.checkedIn ?? false)
+      : player.type === "guest"
+        ? (player.data.checkedIn ?? false)
+        : false;
+
+  const name =
+    player.type === "member"
+      ? `${player.data.firstName} ${player.data.lastName}`
+      : player.type === "guest"
+        ? `${player.data.firstName} ${player.data.lastName}`
+        : getFillLabel(player.data);
+
   // Determine styling based on player type and status
   let badgeStyle = "";
-  if (player.checkedIn) {
+  if (checkedIn) {
     badgeStyle = "border-green-300 bg-green-100 text-green-800";
-  } else if (player.type === "member" && player.class) {
-    const style = getMemberClassStyling(player.class);
+  } else if (player.type === "member") {
+    const style = getMemberClassStyling(player.data.class);
     badgeStyle = `${style.bg} ${style.text} ${style.border}`;
   } else if (player.type === "guest") {
     badgeStyle = "border-purple-200 bg-purple-50 text-purple-700";
@@ -57,12 +93,12 @@ export function PlayerBadge({
 
   const handleCheckIn = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onCheckIn?.(player.id, player.type, !!player.checkedIn);
+    onCheckIn?.(id, player.type, checkedIn);
   };
 
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onRemove?.(player.id, player.type);
+    onRemove?.(id, player.type);
   };
 
   const handleClick = (e: React.MouseEvent) => {
@@ -90,34 +126,37 @@ export function PlayerBadge({
               )}
               onClick={handleClick}
             >
-              {player.name}
+              {name}
               {player.type === "guest" && (
                 <span className="ml-1 text-xs opacity-70">G</span>
               )}
               {player.type === "fill" && (
                 <span className="ml-1 text-xs opacity-70">F</span>
               )}
-              {player.checkedIn && (
-                <span className="ml-1 text-green-700">✓</span>
-              )}
+              {checkedIn && <span className="ml-1 text-green-700">✓</span>}
             </span>
           </TooltipTrigger>
           <TooltipContent>
             <p>
-              {player.name}
-              {player.memberNumber && (
-                <span className="text-xs">#{player.memberNumber}</span>
+              {name}
+              {player.type === "member" && (
+                <span className="text-xs"> #{player.data.memberNumber}</span>
               )}
               {player.type === "guest" && (
-                <span className="text-xs"> (Guest) </span>
+                <span className="text-xs"> (Guest)</span>
               )}
             </p>
-            {player.invitedBy && (
-              <p className="text-xs">Invited By: {player.invitedBy}</p>
+            {player.type === "guest" && player.data.invitedByMember && (
+              <p className="text-xs">
+                Invited By: {player.data.invitedByMember.firstName}{" "}
+                {player.data.invitedByMember.lastName}
+              </p>
             )}
-            {player.class && <p className="text-xs">Class: {player.class}</p>}
-            {player.fillType && (
-              <p className="text-xs">Type: {player.fillType}</p>
+            {player.type === "member" && (
+              <p className="text-xs">Class: {player.data.class}</p>
+            )}
+            {player.type === "fill" && (
+              <p className="text-xs">Type: {getFillLabel(player.data)}</p>
             )}
           </TooltipContent>
         </Tooltip>
@@ -131,12 +170,12 @@ export function PlayerBadge({
               onClick={handleCheckIn}
               className={cn(
                 "h-6 w-6 p-0",
-                player.checkedIn
+                checkedIn
                   ? "text-green-700 hover:bg-red-100 hover:text-red-600"
                   : "text-gray-500 hover:bg-green-100 hover:text-green-600",
               )}
             >
-              {player.checkedIn ? (
+              {checkedIn ? (
                 <UserX className="h-3.5 w-3.5" />
               ) : (
                 <UserCheck className="h-3.5 w-3.5" />
