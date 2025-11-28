@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
 import {
@@ -16,10 +17,13 @@ import {
   checkInMember,
   checkInGuest,
 } from "~/server/teesheet/actions";
+import { quickAssignPowerCart } from "~/server/charges/actions";
 import { toast } from "react-hot-toast";
 import { type Member, type Guest } from "~/server/db/schema";
 import { Settings } from "lucide-react";
 import Link from "next/link";
+import { useTeeblockOptimisticUpdate } from "~/hooks/useTeeblockOptimisticUpdate";
+import { teesheetKeys } from "~/services/teesheet/keys";
 
 interface TeesheetTableProps {
   dateString: string;
@@ -54,6 +58,8 @@ type TimeBlockGuestFull = {
 
 export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const { data: queryResult } = useTeesheet(dateString);
+  const queryClient = useQueryClient();
+
   // State for modals
   const [selectedTimeBlockId, setSelectedTimeBlockId] = useState<number | null>(
     null,
@@ -69,6 +75,74 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const playerDataRef = useRef<
     Map<string, TimeBlockMemberFull | TimeBlockGuestFull>
   >(new Map());
+
+  // Mutation for power cart assignment
+  const assignPowerCartMutation = useMutation({
+    mutationFn: quickAssignPowerCart,
+    onMutate: () => {
+      toast.success("Power cart assigned");
+    },
+    onError: () => {
+      toast.error("Failed to assign power cart");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.list(dateString) });
+    },
+  });
+
+  // Mutation for removing players
+  const removePlayerMutation = useMutation({
+    mutationFn: async ({
+      timeBlockId,
+      playerId,
+      type,
+    }: {
+      timeBlockId: number;
+      playerId: number;
+      type: PlayerType;
+    }) => {
+      if (type === "member") {
+        return removeTimeBlockMember(timeBlockId, playerId);
+      } else if (type === "guest") {
+        return removeTimeBlockGuest(timeBlockId, playerId);
+      } else if (type === "fill") {
+        return removeFillFromTimeBlock(timeBlockId, playerId);
+      }
+    },
+    onError: () => {
+      toast.error("Failed to remove player");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.list(dateString) });
+    },
+  });
+
+  // Mutation for checking in/out players
+  const checkInPlayerMutation = useMutation({
+    mutationFn: async ({
+      timeBlockId,
+      playerId,
+      type,
+      isCheckedIn,
+    }: {
+      timeBlockId: number;
+      playerId: number;
+      type: PlayerType;
+      isCheckedIn: boolean;
+    }) => {
+      if (type === "member") {
+        return checkInMember(timeBlockId, playerId, !isCheckedIn);
+      } else if (type === "guest") {
+        return checkInGuest(timeBlockId, playerId, !isCheckedIn);
+      }
+    },
+    onError: () => {
+      toast.error("Failed to update check-in status");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.list(dateString) });
+    },
+  });
 
   const getPlayersForBlock = (block: any): TimeBlockPlayer[] => {
     const players: TimeBlockPlayer[] = [];
@@ -116,59 +190,56 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     return players;
   };
 
+  const getOtherMembers = (
+    block: any,
+  ): Array<{ id: number; firstName: string; lastName: string }> => {
+    return (
+      block.timeBlockMembers?.map(
+        (tbm: TimeBlockMemberFull) => ({
+          id: tbm.member.id,
+          firstName: tbm.member.firstName,
+          lastName: tbm.member.lastName,
+        }),
+      ) || []
+    );
+  };
+
   const handleAddPlayer = (timeBlockId: number) => {
     setSelectedTimeBlockId(timeBlockId);
     setIsAddPlayerModalOpen(true);
   };
 
-  const handleRemovePlayer = async (
+  const handleRemovePlayer = (
     timeBlockId: number,
     playerId: number,
     type: PlayerType,
   ) => {
-    let result;
-    try {
-      if (type === "member") {
-        result = await removeTimeBlockMember(timeBlockId, playerId);
-      } else if (type === "guest") {
-        result = await removeTimeBlockGuest(timeBlockId, playerId);
-      } else if (type === "fill") {
-        result = await removeFillFromTimeBlock(timeBlockId, playerId);
-      }
-
-      if (result && !result.success) {
-        toast.error(result.error || "Failed to remove player");
-      } else if (result && result.success) {
-        toast.success("Player removed");
-        // Query invalidation is handled by the hook/polling or we could manually invalidate here
-      }
-    } catch (error) {
-      console.error("Error removing player:", error);
-      toast.error("An error occurred");
-    }
+    removePlayerMutation.mutate({ timeBlockId, playerId, type });
   };
 
-  const handleCheckInPlayer = async (
+  const handleCheckInPlayer = (
     timeBlockId: number,
     playerId: number,
     type: PlayerType,
     isCheckedIn: boolean,
   ) => {
-    let result;
-    try {
-      if (type === "member") {
-        result = await checkInMember(timeBlockId, playerId, !isCheckedIn);
-      } else if (type === "guest") {
-        result = await checkInGuest(timeBlockId, playerId, !isCheckedIn);
-      }
+    checkInPlayerMutation.mutate({
+      timeBlockId,
+      playerId,
+      type,
+      isCheckedIn,
+    });
+  };
 
-      if (result && !result.success) {
-        toast.error(result.error || "Failed to update check-in status");
-      }
-    } catch (error) {
-      console.error("Error checking in player:", error);
-      toast.error("An error occurred");
-    }
+  const handleAssignPowerCart = (memberId: number) => {
+    assignPowerCartMutation.mutate({
+      memberId,
+      numHoles: 18,
+      isSplit: false,
+      isMedical: false,
+      staffInitials: "",
+      date: new Date(),
+    });
   };
 
   const handlePlayerClick = (player: TimeBlockPlayer) => {
@@ -238,6 +309,8 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   handleCheckInPlayer(block.id, id, type, isCheckedIn)
                 }
                 onPlayerClick={handlePlayerClick}
+                onAssignPowerCart={handleAssignPowerCart}
+                otherMembers={getOtherMembers(block)}
                 onTimeClick={() => handleAddPlayer(block.id)}
               />
             ))}

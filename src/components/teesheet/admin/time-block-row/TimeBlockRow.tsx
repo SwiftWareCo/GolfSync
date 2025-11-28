@@ -17,6 +17,8 @@ interface TimeBlockRowProps {
   onRemovePlayer: (id: number, type: PlayerType) => void;
   onCheckInPlayer: (id: number, type: PlayerType, isCheckedIn: boolean) => void;
   onPlayerClick: (player: TimeBlockPlayer) => void;
+  onAssignPowerCart?: (memberId: number) => void;
+  otherMembers?: Array<{ id: number; firstName: string; lastName: string }>;
   onTimeClick?: () => void;
 }
 
@@ -28,6 +30,8 @@ export function TimeBlockRow({
   onRemovePlayer,
   onCheckInPlayer,
   onPlayerClick,
+  onAssignPowerCart,
+  otherMembers = [],
   onTimeClick,
 }: TimeBlockRowProps) {
   const slotsAvailable = maxPlayers - players.length;
@@ -52,6 +56,8 @@ export function TimeBlockRow({
               onRemove={onRemovePlayer}
               onCheckIn={onCheckInPlayer}
               onClick={onPlayerClick}
+              onAssignPowerCart={onAssignPowerCart}
+              otherMembers={otherMembers}
             />
           ))}
 

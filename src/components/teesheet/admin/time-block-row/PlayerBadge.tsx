@@ -11,6 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { QuickCartAssignment } from "~/components/timeblock/QuickCartAssignment";
 import type {
   Member,
   Guest,
@@ -49,7 +50,8 @@ interface PlayerBadgeProps {
   onRemove?: (id: number, type: PlayerType) => void;
   onCheckIn?: (id: number, type: PlayerType, isCheckedIn: boolean) => void;
   onClick?: (player: TimeBlockPlayer) => void;
-  onAssignPowerCart?: (player: TimeBlockPlayer) => void;
+  onAssignPowerCart?: (memberId: number) => void;
+  otherMembers?: Array<{ id: number; firstName: string; lastName: string }>;
 }
 
 export function PlayerBadge({
@@ -58,6 +60,7 @@ export function PlayerBadge({
   onCheckIn,
   onClick,
   onAssignPowerCart,
+  otherMembers = [],
 }: PlayerBadgeProps) {
   // Extract common data based on discriminated union type
   const id = player.data.id;
@@ -107,8 +110,6 @@ export function PlayerBadge({
     onClick?.(player);
   };
 
-  const handleAssignPowerCart = () => {};
-
   return (
     <TooltipProvider>
       <div
@@ -121,10 +122,11 @@ export function PlayerBadge({
           <TooltipTrigger asChild>
             <span
               className={cn(
-                "cursor-pointer truncate text-sm font-medium hover:underline",
+                "truncate text-sm font-medium",
                 player.type === "fill" ? "min-w-[80px]" : "min-w-[100px]",
+                player.type !== "fill" && "cursor-pointer hover:underline",
               )}
-              onClick={handleClick}
+              onClick={player.type !== "fill" ? handleClick : undefined}
             >
               {name}
               {player.type === "guest" && (
@@ -163,6 +165,14 @@ export function PlayerBadge({
 
         {/* Actions */}
         <div className="ml-auto flex items-center gap-1">
+          {player.type === "member" && onAssignPowerCart && (
+            <QuickCartAssignment
+              memberId={id}
+              onAssign={() => onAssignPowerCart(id)}
+              otherMembers={otherMembers.filter((m) => m.id !== id)}
+            />
+          )}
+
           {player.type !== "fill" && (
             <Button
               variant="ghost"

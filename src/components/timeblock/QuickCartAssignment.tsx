@@ -11,9 +11,7 @@ import {
 } from "~/components/ui/dialog";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
-import { type PowerCartAssignmentData } from "~/app/types/ChargeTypes";
 import { CarIcon } from "lucide-react";
-import { toast } from "react-hot-toast";
 
 interface Member {
   id: number;
@@ -21,9 +19,19 @@ interface Member {
   lastName: string;
 }
 
+type QuickCartAssignmentData = {
+  memberId: number;
+  numHoles: 9 | 18;
+  isSplit: boolean;
+  splitWithMemberId?: number;
+  isMedical: boolean;
+  staffInitials: string;
+  date: Date;
+};
+
 interface QuickCartAssignmentProps {
   memberId: number;
-  onAssign: (data: PowerCartAssignmentData) => Promise<void>;
+  onAssign: (data: QuickCartAssignmentData) => void;
   otherMembers?: Member[];
 }
 
@@ -40,22 +48,17 @@ export function QuickCartAssignment({
     number | undefined
   >(undefined);
 
-  const handleSubmit = async () => {
-    try {
-      await onAssign({
-        memberId,
-        numHoles,
-        isSplit,
-        splitWithMemberId,
-        isMedical,
-        staffInitials: "",
-        date: new Date(),
-      });
-      toast.success("Power cart assigned successfully");
-      setIsOpen(false);
-    } catch (error) {
-      toast.error("Failed to assign power cart");
-    }
+  const handleSubmit = () => {
+    onAssign({
+      memberId,
+      numHoles,
+      isSplit,
+      splitWithMemberId,
+      isMedical,
+      staffInitials: "",
+      date: new Date(),
+    });
+    setIsOpen(false);
   };
 
   return (
