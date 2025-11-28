@@ -15,14 +15,12 @@ import {
   Settings,
 } from "lucide-react";
 import { getBCToday } from "~/lib/dates";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
+
 import { BagReportDialog } from "~/components/settings/teesheet/BagReportDialog";
-import type { TeesheetConfig, TeesheetConfigWithBlocks } from "~/server/db/schema";
+import type {
+  TeesheetConfig,
+  TeesheetConfigWithBlocks,
+} from "~/server/db/schema";
 import { TeesheetSettingsModal } from "../TeesheetSettingsModal";
 import type { Teesheet } from "~/server/db/schema";
 import { AdminLotteryEntryModal } from "~/components/lottery/AdminLotteryEntryModal";
@@ -203,20 +201,14 @@ export function SidebarActions({
         </Button>
       </div>
 
-      {/* Teesheet Settings Dialog */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-h-[80vh] max-w-4xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Teesheet Settings</DialogTitle>
-          </DialogHeader>
-          <TeesheetSettingsModal
-            onClose={() => setIsSettingsOpen(false)}
-            teesheet={teesheet}
-            timeBlocks={timeBlocks}
-            availableConfigs={availableConfigs}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* Teesheet Settings Modal */}
+      <TeesheetSettingsModal
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        teesheet={teesheet}
+        timeBlocks={timeBlocks}
+        availableConfigs={availableConfigs}
+      />
 
       <AdminLotteryEntryModal
         open={isLotteryEntryModalOpen}

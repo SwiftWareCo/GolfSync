@@ -38,7 +38,6 @@ export async function replaceTimeBlocks(
   config: TeesheetConfig,
 ): Promise<ActionResult> {
   await requireAdmin();
-
   try {
     // Check if any timeblock has members assigned
     const membersInTimeblocks = await db
@@ -46,6 +45,7 @@ export async function replaceTimeBlocks(
       .from(timeBlockMembers)
       .innerJoin(timeBlocks, eq(timeBlockMembers.timeBlockId, timeBlocks.id))
       .where(eq(timeBlocks.teesheetId, teesheetId));
+
 
     if (
       membersInTimeblocks[0]?.count &&
@@ -82,8 +82,8 @@ export async function replaceTimeBlocks(
       .where(
         and(
           eq(timeBlocks.teesheetId, teesheetId),
-          eq(fills.relatedType, "timeblock")
-        )
+          eq(fills.relatedType, "timeblock"),
+        ),
       );
 
     if (
@@ -126,6 +126,12 @@ export async function replaceTimeBlocks(
       if (timeBlocksData.length > 0) {
         await db.insert(timeBlocks).values(timeBlocksData);
       }
+
+      // Update the teesheet's configId to reflect the new configuration
+      await db
+        .update(teesheets)
+        .set({ configId: config.id })
+        .where(eq(teesheets.id, teesheetId));
     } catch (error) {
       return {
         success: false,

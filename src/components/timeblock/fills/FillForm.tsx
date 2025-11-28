@@ -17,8 +17,6 @@ interface FillFormProps {
   onAddFill: (fillType: string, customName?: string) => void | Promise<void>;
   isDisabled?: boolean;
   isTimeBlockFull?: boolean;
-  maxPeople?: number;
-  currentPeopleCount?: number;
 }
 
 const PRESET_FILL_TYPES = [
@@ -31,8 +29,6 @@ export function FillForm({
   onAddFill,
   isDisabled = false,
   isTimeBlockFull = false,
-  maxPeople,
-  currentPeopleCount,
 }: FillFormProps) {
   const [selectedFillType, setSelectedFillType] = useState<string>("guest");
   const [customFillName, setCustomFillName] = useState("");
@@ -41,9 +37,7 @@ export function FillForm({
   const isCustomFill = selectedFillType === "custom";
   const isFull = isDisabled || isTimeBlockFull;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleAddClick = async () => {
     if (isFull) {
       toast.error("No spaces available");
       return;
@@ -79,7 +73,7 @@ export function FillForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-1">
+    <div className="space-y-4 p-1">
       <div className="space-y-2">
         <Label htmlFor="fillType">Fill Type</Label>
         <Select
@@ -115,15 +109,14 @@ export function FillForm({
       )}
 
       <Button
-        type="submit"
+        type="button"
+        onClick={handleAddClick}
         disabled={
-          isFull ||
-          isSubmitting ||
-          (isCustomFill && !customFillName.trim())
+          isFull || isSubmitting || (isCustomFill && !customFillName.trim())
         }
       >
         {isSubmitting ? "Adding..." : "Add Fill"}
       </Button>
-    </form>
+    </div>
   );
 }

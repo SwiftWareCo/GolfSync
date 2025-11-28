@@ -94,6 +94,7 @@ export async function updateTeesheetVisibility(
   teesheetId: number,
   isPublic: boolean,
   privateMessage?: string,
+  disallowMemberBooking?: boolean,
 ) {
   const { userId } = await requireAdmin();
   const publishedBy = userId;
@@ -112,6 +113,11 @@ export async function updateTeesheetVisibility(
     if (privateMessage !== undefined) {
       updateData.privateMessage = privateMessage;
     }
+  }
+
+  // Update disallowMemberBooking if provided
+  if (disallowMemberBooking !== undefined) {
+    updateData.disallowMemberBooking = disallowMemberBooking;
   }
 
   const [updatedTeesheet] = await db
