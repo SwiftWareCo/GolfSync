@@ -3,20 +3,8 @@
 import { useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { TimeBlockHeader } from "./TimeBlockHeader";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { memberQueryOptions, guestQueryOptions } from "~/server/query-options";
-import {
-  addMemberToTimeBlock,
-} from "~/server/members/actions";
-import {
-  addGuestToTimeBlock,
-} from "~/server/guests/actions";
-import {
-  addFillToTimeBlock,
-  removeFillFromTimeBlock,
-  removeTimeBlockMember,
-  removeTimeBlockGuest,
-} from "~/server/teesheet/actions";
 import { checkTimeblockRestrictionsAction } from "~/server/timeblock-restrictions/actions";
 import type { TimeBlockWithRelations } from "~/server/db/schema";
 import {
@@ -29,11 +17,17 @@ import toast from "react-hot-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { type RestrictionViolation } from "~/app/types/RestrictionTypes";
 import { RestrictionViolationAlert } from "~/components/settings/timeblock-restrictions/RestrictionViolationAlert";
-import {  getBCToday } from "~/lib/dates";
 import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
 import { createGuest } from "~/server/guests/actions";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
-import { useTeeblockOptimisticUpdate } from "~/hooks/useTeeblockOptimisticUpdate";
+import {
+  createAddMemberMutation,
+  createRemoveMemberMutation,
+  createAddGuestMutation,
+  createRemoveGuestMutation,
+  createAddFillMutation,
+  createRemoveFillMutation,
+} from "~/services/teesheet/mutations";
 
 interface TimeBlockMemberManagerProps {
   timeBlock: TimeBlockWithRelations;
@@ -44,16 +38,45 @@ export function TimeBlockMemberManager({
   timeBlock,
   dateString,
 }: TimeBlockMemberManagerProps) {
-  // Optimistic update hook
-  const {
-    optimisticallyAddMember,
-    optimisticallyRemoveMember,
-    optimisticallyAddGuest,
-    optimisticallyRemoveGuest,
-    optimisticallyAddFill,
-    optimisticallyRemoveFill,
-    rollback,
-  } = useTeeblockOptimisticUpdate(dateString, timeBlock.id as number);
+  // TanStack Query mutations with proper optimistic updates
+  const addMemberMutation = useMutation({
+    ...createAddMemberMutation(dateString, timeBlock.id as number),
+    onSuccess: () => toast.success("Member added"),
+    onError: () => toast.error("Failed to add member"),
+  });
+
+  const removeMemberMutation = useMutation({
+    ...createRemoveMemberMutation(dateString, timeBlock.id as number),
+    onSuccess: () => toast.success("Member removed"),
+    onError: () => toast.error("Failed to remove member"),
+  });
+
+  const addGuestMutation = useMutation({
+    ...createAddGuestMutation(dateString, timeBlock.id as number),
+    onSuccess: () => {
+      toast.success("Guest added");
+      setSelectedMemberId(null);
+    },
+    onError: () => toast.error("Failed to add guest"),
+  });
+
+  const removeGuestMutation = useMutation({
+    ...createRemoveGuestMutation(dateString, timeBlock.id as number),
+    onSuccess: () => toast.success("Guest removed"),
+    onError: () => toast.error("Failed to remove guest"),
+  });
+
+  const addFillMutation = useMutation({
+    ...createAddFillMutation(dateString, timeBlock.id as number),
+    onSuccess: () => toast.success("Fill added"),
+    onError: () => toast.error("Failed to add fill"),
+  });
+
+  const removeFillMutation = useMutation({
+    ...createRemoveFillMutation(dateString, timeBlock.id as number),
+    onSuccess: () => toast.success("Fill removed"),
+    onError: () => toast.error("Failed to remove fill"),
+  });
 
   // Extract members and guests from flattened structure
   const members = timeBlock.members || [];
@@ -62,11 +85,15 @@ export function TimeBlockMemberManager({
 
   // Member search state and query
   const [memberSearchQuery, setMemberSearchQuery] = useState("");
-  const memberSearchQuery_ = useQuery(memberQueryOptions.search(memberSearchQuery));
+  const memberSearchQuery_ = useQuery(
+    memberQueryOptions.search(memberSearchQuery),
+  );
 
   // Guest search state and query
   const [guestSearchQuery, setGuestSearchQuery] = useState("");
-  const guestSearchQuery_ = useQuery(guestQueryOptions.search(guestSearchQuery));
+  const guestSearchQuery_ = useQuery(
+    guestQueryOptions.search(guestSearchQuery),
+  );
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
 
   // Restriction violation state
@@ -203,41 +230,11 @@ export function TimeBlockMemberManager({
   };
 
   const performAddMember = async (memberId: number) => {
-    const { previousData } = optimisticallyAddMember(memberId, {});
-
-    try {
-      const result = await addMemberToTimeBlock(timeBlock.id as number, memberId);
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to add member");
-        rollback(previousData);
-      } else {
-        toast.success("Member added");
-      }
-    } catch (error) {
-      console.error("Error adding member:", error);
-      toast.error("Error adding member");
-      rollback(previousData);
-    }
+    addMemberMutation.mutate(memberId);
   };
 
   const handleRemoveMember = async (memberId: number) => {
-    const { previousData } = optimisticallyRemoveMember(memberId);
-
-    try {
-      const result = await removeTimeBlockMember(timeBlock.id as number, memberId);
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to remove member");
-        rollback(previousData);
-      } else {
-        toast.success("Member removed");
-      }
-    } catch (error) {
-      console.error("Error removing member:", error);
-      toast.error("Error removing member");
-      rollback(previousData);
-    }
+    removeMemberMutation.mutate(memberId);
   };
 
   const handleAddGuest = async (guestId: number) => {
@@ -283,46 +280,11 @@ export function TimeBlockMemberManager({
   };
 
   const performAddGuest = async (guestId: number, invitingMemberId: number) => {
-    const { previousData } = optimisticallyAddGuest(guestId, invitingMemberId, {});
-
-    try {
-      const result = await addGuestToTimeBlock(
-        timeBlock.id as number,
-        guestId,
-        invitingMemberId,
-      );
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to add guest");
-        rollback(previousData);
-      } else {
-        toast.success("Guest added");
-        setSelectedMemberId(null);
-      }
-    } catch (error) {
-      console.error("Error adding guest:", error);
-      toast.error("Error adding guest");
-      rollback(previousData);
-    }
+    addGuestMutation.mutate({ guestId, invitingMemberId });
   };
 
   const handleRemoveGuest = async (guestId: number) => {
-    const { previousData } = optimisticallyRemoveGuest(guestId);
-
-    try {
-      const result = await removeTimeBlockGuest(timeBlock.id as number  , guestId);
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to remove guest");
-        rollback(previousData);
-      } else {
-        toast.success("Guest removed");
-      }
-    } catch (error) {
-      console.error("Error removing guest:", error);
-      toast.error("Error removing guest");
-      rollback(previousData);
-    }
+    removeGuestMutation.mutate(guestId);
   };
 
   const handleMemberSelect = (memberId: number) => {
@@ -370,47 +332,11 @@ export function TimeBlockMemberManager({
 
   const handleAddFill = async (fillType: string, customName?: string) => {
     if (isTimeBlockFull) return;
-
-    const { previousData } = optimisticallyAddFill(fillType, customName);
-
-    try {
-      const result = await addFillToTimeBlock(
-        timeBlock.id as number,
-        fillType,
-        1, // Add one fill
-        customName,
-      );
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to add fill");
-        rollback(previousData);
-      } else {
-        toast.success("Fill added");
-      }
-    } catch (error) {
-      console.error("Error adding fill:", error);
-      toast.error("Error adding fill");
-      rollback(previousData);
-    }
+    addFillMutation.mutate({ fillType, customName });
   };
 
   const handleRemoveFill = async (fillId: number) => {
-    const { previousData } = optimisticallyRemoveFill(fillId);
-
-    try {
-      const result = await removeFillFromTimeBlock(timeBlock.id as number, fillId);
-
-      if (!result.success) {
-        toast.error(result.error || "Failed to remove fill");
-        rollback(previousData);
-      } else {
-        toast.success("Fill removed");
-      }
-    } catch (error) {
-      console.error("Error removing fill:", error);
-      toast.error("Error removing fill");
-      rollback(previousData);
-    }
+    removeFillMutation.mutate(fillId);
   };
 
   return (
@@ -443,10 +369,7 @@ export function TimeBlockMemberManager({
         <TabsContent value="members" className="space-y-6">
           <TimeBlockMemberSearch
             searchQuery={memberSearchQuery}
-            onSearch={(query: string) => {
-              setMemberSearchQuery(query);
-              debouncedMemberSearch(query);
-            }}
+            onSearch={debouncedMemberSearch}
             searchResults={memberSearchResults}
             isLoading={isMemberSearching}
             onAddMember={handleAddMember}
@@ -457,13 +380,9 @@ export function TimeBlockMemberManager({
 
         <TabsContent value="guests">
           <div className="space-y-4">
-      
             <TimeBlockGuestSearch
               searchQuery={guestSearchQuery}
-              onSearch={(query: string) => {
-                setGuestSearchQuery(query);
-                debouncedGuestSearch(query);
-              }}
+              onSearch={debouncedGuestSearch}
               searchResults={guestSearchResults}
               isLoading={isGuestSearching}
               onAddGuest={handleAddGuest}

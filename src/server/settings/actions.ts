@@ -10,7 +10,7 @@ import {
 } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 
-import { updateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "~/lib/auth-server";
 import { generateTimeBlocks } from "~/lib/utils";
 import type {
@@ -35,7 +35,7 @@ export async function deleteTeesheetConfig(
 
   await db.delete(teesheetConfigs).where(eq(teesheetConfigs.id, configId));
 
-  updateTag("teesheet-configs");
+  revalidatePath("/admin/settings");
 }
 
 // Update or create course info
@@ -63,7 +63,8 @@ export async function updateCourseInfo(data: { notes?: string }) {
         .where(eq(courseInfo.id, existing.id))
         .returning();
 
-      updateTag("course-info");
+      revalidatePath("/admin/settings");
+      revalidatePath("/members");
       return { success: true };
     } else {
       // Create new record - without weather fields
@@ -78,7 +79,8 @@ export async function updateCourseInfo(data: { notes?: string }) {
         })
         .returning();
 
-      updateTag("course-info");
+      revalidatePath("/admin/settings");
+      revalidatePath("/members");
       return { success: true, data: created[0] };
     }
   } catch (error) {
@@ -130,7 +132,7 @@ export async function updateTeesheetVisibility(
     throw new Error("Failed to update teesheet visibility");
   }
 
-  updateTag("teesheets");
+  revalidatePath("/admin/settings");
 }
 
 /**
@@ -157,7 +159,7 @@ export async function updateLotterySettings(
     .set(updateData)
     .where(eq(teesheets.id, teesheetId));
 
-  updateTag("teesheets");
+  revalidatePath("/admin/settings");
 }
 
 /**
@@ -199,7 +201,7 @@ export async function createTeesheetConfig(
         .returning();
     }
 
-    updateTag("teesheet-configs");
+    revalidatePath("/admin/settings");
     return { success: true, data: { ...createdConfig, blocks: createdBlocks } };
   } catch (error) {
     console.error("Error creating teesheet config:", error);
@@ -259,7 +261,7 @@ export async function updateTeesheetConfig(
         .returning();
     }
 
-    updateTag("teesheet-configs");
+    revalidatePath("/admin/settings");
     return { success: true, data: { ...updatedConfig, blocks: createdBlocks } };
   } catch (error) {
     console.error("Error updating teesheet config:", error);

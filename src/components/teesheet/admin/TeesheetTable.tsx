@@ -1,13 +1,10 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
-import {
-  type PlayerType,
-  type TimeBlockPlayer,
-} from "./time-block-row/PlayerBadge";
+import { type PlayerType } from "./time-block-row/PlayerBadge";
 import { AddPlayerModal } from "~/components/timeblock/AddPlayerModal";
 import { AccountDialog } from "~/components/member-teesheet-client/AccountDialog";
 import {
@@ -19,42 +16,13 @@ import {
 } from "~/server/teesheet/actions";
 import { quickAssignPowerCart } from "~/server/charges/actions";
 import { toast } from "react-hot-toast";
-import { type Member, type Guest } from "~/server/db/schema";
 import { Settings } from "lucide-react";
 import Link from "next/link";
-import { useTeeblockOptimisticUpdate } from "~/hooks/useTeeblockOptimisticUpdate";
 import { teesheetKeys } from "~/services/teesheet/keys";
 
 interface TeesheetTableProps {
   dateString: string;
 }
-
-type TimeBlockMemberFull = {
-  id: number;
-  timeBlockId: number;
-  memberId: number;
-  checkedIn: boolean;
-  checkedInAt: Date | null;
-  bookingDate: string;
-  bookingTime: string;
-  bagNumber: string | null;
-  createdAt: Date;
-  member: Member;
-};
-
-type TimeBlockGuestFull = {
-  id: number;
-  timeBlockId: number;
-  guestId: number;
-  invitedByMemberId: number;
-  checkedIn: boolean;
-  checkedInAt: Date | null;
-  bookingDate: string;
-  bookingTime: string;
-  createdAt: Date;
-  guest: Guest;
-  invitedByMember: Member;
-};
 
 export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const { data: queryResult } = useTeesheet(dateString);
@@ -68,13 +36,8 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
 
-  // Use the fresh data from the query if available, otherwise fall back to initial server props
+  // Use the fresh data from the query if available
   const timeBlocks = queryResult?.timeBlocks ?? [];
-
-  // ✅ Properly typed Map with composite keys
-  const playerDataRef = useRef<
-    Map<string, TimeBlockMemberFull | TimeBlockGuestFull>
-  >(new Map());
 
   // Mutation for power cart assignment
   const assignPowerCartMutation = useMutation({
@@ -86,7 +49,9 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
       toast.error("Failed to assign power cart");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.list(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
     },
   });
 
@@ -113,7 +78,9 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
       toast.error("Failed to remove player");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.list(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.list(dateString),
+      });
     },
   });
 
@@ -140,67 +107,21 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
       toast.error("Failed to update check-in status");
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.list(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.list(dateString),
+      });
     },
   });
-
-  const getPlayersForBlock = (block: any): TimeBlockPlayer[] => {
-    const players: TimeBlockPlayer[] = [];
-
-    block.timeBlockMembers?.forEach((tbm: TimeBlockMemberFull) => {
-      // Store full TimeBlockMember
-      playerDataRef.current.set(`member-${tbm.member.id}`, tbm);
-
-      // Return display data with proper discriminated union structure
-      players.push({
-        type: "member",
-        data: {
-          ...tbm.member,
-          bagNumber: tbm.bagNumber,
-          checkedIn: tbm.checkedIn,
-          checkedInAt: tbm.checkedInAt,
-        },
-      });
-    });
-
-    block.timeBlockGuests?.forEach((tbg: TimeBlockGuestFull) => {
-      // Store full TimeBlockGuest
-      playerDataRef.current.set(`guest-${tbg.guest.id}`, tbg);
-
-      // Return display data with proper discriminated union structure
-      players.push({
-        type: "guest",
-        data: {
-          ...tbg.guest,
-          invitedByMemberId: tbg.invitedByMemberId,
-          invitedByMember: tbg.invitedByMember,
-          checkedIn: tbg.checkedIn,
-          checkedInAt: tbg.checkedInAt,
-        },
-      });
-    });
-
-    block.fills?.forEach((fill: any) => {
-      players.push({
-        type: "fill",
-        data: fill,
-      });
-    });
-
-    return players;
-  };
 
   const getOtherMembers = (
     block: any,
   ): Array<{ id: number; firstName: string; lastName: string }> => {
     return (
-      block.timeBlockMembers?.map(
-        (tbm: TimeBlockMemberFull) => ({
-          id: tbm.member.id,
-          firstName: tbm.member.firstName,
-          lastName: tbm.member.lastName,
-        }),
-      ) || []
+      block.timeBlockMembers?.map((tbm: any) => ({
+        id: tbm.member.id,
+        firstName: tbm.member.firstName,
+        lastName: tbm.member.lastName,
+      })) || []
     );
   };
 
@@ -242,13 +163,10 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     });
   };
 
-  const handlePlayerClick = (player: TimeBlockPlayer) => {
-    const fullData = playerDataRef.current.get(
-      `${player.type}-${player.data.id}`,
-    );
+  const handlePlayerClick = (player: any) => {
     if (player.type === "member" || player.type === "guest") {
       setIsAccountDialogOpen(true);
-      setSelectedPlayer(fullData);
+      setSelectedPlayer(player.data);
     }
   };
 
@@ -300,7 +218,9 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                 key={block.id}
                 timeBlockId={block.id}
                 startTime={block.startTime}
-                players={getPlayersForBlock(block)}
+                members={block.timeBlockMembers || []}
+                guests={block.timeBlockGuests || []}
+                fills={block.fills || []}
                 onAddPlayer={() => handleAddPlayer(block.id)}
                 onRemovePlayer={(id, type) =>
                   handleRemovePlayer(block.id, id, type)

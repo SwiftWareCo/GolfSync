@@ -247,7 +247,6 @@ export async function getChargeHistory(filters: ChargeFilters) {
 
 // Get pending charges count for notifications
 export async function getPendingChargesCount() {
-  'use cache'
   const [powerCartCount, generalCount] = await Promise.all([
     db
       .select({ count: sql<number>`cast(count(*) as integer)` })

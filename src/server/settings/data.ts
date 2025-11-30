@@ -1,5 +1,4 @@
 import "server-only";
-import { cacheTag } from "next/cache";
 import { db } from "~/server/db";
 import { eq, sql } from "drizzle-orm";
 import {
@@ -69,20 +68,16 @@ export async function getConfigForDate(
 export async function getTeesheetConfigs(): Promise<
   TeesheetConfigWithBlocks[]
 > {
-  "use cache";
   const configs = await db.query.teesheetConfigs.findMany({
     with: { blocks: { orderBy: (blocks, { asc }) => [asc(blocks.sortOrder)] } },
     orderBy: (teesheetConfigs, { asc }) => [asc(teesheetConfigs.name)],
   });
 
-  cacheTag("teesheet-configs");
   return configs;
 }
 
-// Get course info 
+// Get course info
 export async function getCourseInfo() {
-  "use cache";
-  cacheTag("course-info");
   const info = await db.query.courseInfo.findFirst({});
 
   if (!info) {

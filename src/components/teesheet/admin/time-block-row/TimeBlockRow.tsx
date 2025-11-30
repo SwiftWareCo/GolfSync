@@ -7,11 +7,42 @@ import {
   type PlayerType,
 } from "./PlayerBadge";
 import { AddPlayerPlaceholder } from "./AddPlayerPlaceholder";
+import type { Member, Guest, Fill } from "~/server/db/schema";
+
+// Separate typed interfaces for each entity
+export type TimeBlockMemberFull = {
+  id: number;
+  timeBlockId: number;
+  memberId: number;
+  checkedIn: boolean;
+  checkedInAt: Date | null;
+  bookingDate: string;
+  bookingTime: string;
+  bagNumber: string | null;
+  createdAt: Date;
+  member: Member;
+};
+
+export type TimeBlockGuestFull = {
+  id: number;
+  timeBlockId: number;
+  guestId: number;
+  invitedByMemberId: number;
+  checkedIn: boolean;
+  checkedInAt: Date | null;
+  bookingDate: string;
+  bookingTime: string;
+  createdAt: Date;
+  guest: Guest;
+  invitedByMember: Member;
+};
 
 interface TimeBlockRowProps {
   timeBlockId: number;
   startTime: string;
-  players: TimeBlockPlayer[];
+  members: TimeBlockMemberFull[];
+  guests: TimeBlockGuestFull[];
+  fills: Fill[];
   maxPlayers?: number;
   onAddPlayer: () => void;
   onRemovePlayer: (id: number, type: PlayerType) => void;
@@ -24,7 +55,9 @@ interface TimeBlockRowProps {
 
 export function TimeBlockRow({
   startTime,
-  players,
+  members,
+  guests,
+  fills,
   maxPlayers = 4,
   onAddPlayer,
   onRemovePlayer,
@@ -34,7 +67,8 @@ export function TimeBlockRow({
   otherMembers = [],
   onTimeClick,
 }: TimeBlockRowProps) {
-  const slotsAvailable = maxPlayers - players.length;
+  const totalPlayers = members.length + guests.length + fills.length;
+  const slotsAvailable = maxPlayers - totalPlayers;
 
   return (
     <tr className="transition-colors hover:bg-gray-50">
@@ -49,10 +83,19 @@ export function TimeBlockRow({
       {/* Players Column */}
       <td className="px-3 py-2 align-middle">
         <div className="flex flex-wrap items-center gap-2">
-          {players.map((player) => (
+          {/* Render members */}
+          {members.map((tbm) => (
             <PlayerBadge
-              key={`${player.type}-${player.data.id}`}
-              player={player}
+              key={`member-${tbm.member.id}`}
+              player={{
+                type: "member",
+                data: {
+                  ...tbm.member,
+                  bagNumber: tbm.bagNumber,
+                  checkedIn: tbm.checkedIn,
+                  checkedInAt: tbm.checkedInAt,
+                },
+              }}
               onRemove={onRemovePlayer}
               onCheckIn={onCheckInPlayer}
               onClick={onPlayerClick}
@@ -61,11 +104,43 @@ export function TimeBlockRow({
             />
           ))}
 
+          {/* Render guests */}
+          {guests.map((tbg) => (
+            <PlayerBadge
+              key={`guest-${tbg.guest.id}`}
+              player={{
+                type: "guest",
+                data: {
+                  ...tbg.guest,
+                  invitedByMemberId: tbg.invitedByMemberId,
+                  invitedByMember: tbg.invitedByMember,
+                  checkedIn: tbg.checkedIn,
+                  checkedInAt: tbg.checkedInAt,
+                },
+              }}
+              onRemove={onRemovePlayer}
+              onCheckIn={onCheckInPlayer}
+              onClick={onPlayerClick}
+            />
+          ))}
+
+          {/* Render fills */}
+          {fills.map((fill) => (
+            <PlayerBadge
+              key={`fill-${fill.id}`}
+              player={{
+                type: "fill",
+                data: fill,
+              }}
+              onRemove={onRemovePlayer}
+            />
+          ))}
+
           {/* Add Player Placeholder if slots available */}
           {slotsAvailable > 0 && (
             <AddPlayerPlaceholder
               onClick={onAddPlayer}
-              compact={players.length > 0}
+              compact={totalPlayers > 0}
             />
           )}
         </div>

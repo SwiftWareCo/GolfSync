@@ -20,7 +20,7 @@ export default async function AdminLayout({
   return (
     <div className={GeistSans.variable}>
       <div className="bg-org-secondary min-h-screen">
-          <NavigationClient chargesCount={pendingCounts.total} />
+        <NavigationClient chargesCount={pendingCounts.total} />
         <main className="container mx-auto px-4 py-8 pt-24">{children}</main>
       </div>
     </div>
