@@ -244,23 +244,6 @@ export async function getEventRegistrations(
   return registrationsWithTeamMembers as EventRegistration[];
 }
 
-// Check if a member is registered for an event
-export async function isMemberRegistered(
-  eventId: number,
-  memberId: number,
-): Promise<boolean> {
-  const registration = await db.query.eventRegistrations.findFirst({
-    where: and(
-      eq(eventRegistrations.eventId, eventId),
-      or(
-        eq(eventRegistrations.memberId, memberId),
-        sql`${memberId} = ANY(team_member_ids)`,
-      ),
-    ),
-  });
-
-  return !!registration;
-}
 
 // Get a member's event registrations
 export async function getMemberEventRegistrations(memberId: number) {

@@ -5,7 +5,6 @@ import { events, eventRegistrations, eventDetails, members } from "~/server/db/s
 import { eq, and, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
-import { isMemberRegistered } from "./data";
 import { z } from "zod";
 
 // Validation schema for event

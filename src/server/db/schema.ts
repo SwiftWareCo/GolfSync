@@ -296,7 +296,7 @@ export const memberSpeedProfilesRelations = relations(
 
 export type TimeBlockWithRelations = TimeBlockInsert & {
   members: (Member &
-    Pick<TimeBlockMember, "bagNumber" | "checkedIn" | "checkedInAt">)[];
+    Pick<TimeBlockMember, "checkedIn" | "checkedInAt">)[];
   guests: (Guest & { invitedByMemberId: number; invitedByMember?: Member })[];
   fills: Fill[];
   paceOfPlay: PaceOfPlay | null;

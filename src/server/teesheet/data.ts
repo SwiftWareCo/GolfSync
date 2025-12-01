@@ -17,7 +17,7 @@ function flattenTimeBlock(rawTimeBlock: any): TimeBlockWithRelations {
     members:
       rawTimeBlock.timeBlockMembers?.map((tbm: any) => ({
         ...tbm.member,
-        bagNumber: tbm.bagNumber,
+        bagNumber: tbm.member.bagNumber,
         checkedIn: tbm.checkedIn,
         checkedInAt: tbm.checkedInAt,
       })) ?? [],

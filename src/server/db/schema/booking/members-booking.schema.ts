@@ -42,7 +42,6 @@ export const timeBlockMembers = createTable(
     bookingTime: varchar("booking_time", { length: 5 }).notNull(),
     checkedIn: boolean("checked_in").default(false),
     checkedInAt: timestamp("checked_in_at", { withTimezone: true }),
-    bagNumber: varchar("bag_number", { length: 10 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
