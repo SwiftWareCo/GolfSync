@@ -2,7 +2,7 @@ import {
   getPushNotificationStats,
   getMembersCountByClass,
 } from "~/server/pwa/data";
-import { getMemberClasses } from "~/server/member-classes/data";
+import { getActiveMemberClasses } from "~/server/member-classes/data";
 import { NotificationDashboard } from "~/components/admin/notifications/NotificationDashboard";
 import { PageHeader } from "~/components/ui/page-header";
 
@@ -11,7 +11,7 @@ export default async function AdminNotificationsPage() {
   const [statsResult, memberClassesData, classCountsResult] = await Promise.all(
     [
       getPushNotificationStats(),
-      getMemberClasses(),
+      getActiveMemberClasses(),
       getMembersCountByClass([]), // Fetch counts for all classes
     ],
   );

@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { memberClasses, members } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { type MemberClassInsert } from "~/server/db/schema";
-import { getMemberClasses, getAllMemberClasses, getMemberClassById } from "./data";
+import { getActiveMemberClasses, getAllMemberClasses, getMemberClassById } from "./data";
 
 export interface ActionResult {
   success: boolean;
@@ -15,7 +15,7 @@ export interface ActionResult {
 // Query actions for client components
 export async function getMemberClassesAction() {
   try {
-    const classes = await getMemberClasses();
+    const classes = await getActiveMemberClasses();
     return { success: true, data: classes };
   } catch (error) {
     console.error("Error fetching member classes:", error);

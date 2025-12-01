@@ -6,7 +6,7 @@ import {
   getTimeblockRestrictions,
   getTimeblockOverrides,
 } from "~/server/timeblock-restrictions/data";
-import { getMemberClasses, getAllMemberClasses } from "~/server/member-classes/data";
+import { getActiveMemberClasses, getAllMemberClasses } from "~/server/member-classes/data";
 import { TimeblockRestrictionsSettings } from "~/components/settings/timeblock-restrictions/TimeblockRestrictionsSettings";
 import { CourseInfoSettings } from "~/components/settings/course-info/CourseInfoSettings";
 import { getCourseInfo } from "~/server/settings/data";
@@ -40,7 +40,7 @@ async function ConfigurationsTab() {
 async function RestrictionsTab() {
   const [memberClasses, timeblockRestrictionsResult, allMemberClasses] =
     await Promise.all([
-      getMemberClasses(),
+      getActiveMemberClasses(),
       getTimeblockRestrictions(),
       getAllMemberClasses(),
     ]);
@@ -74,7 +74,7 @@ async function OverridesTab() {
 
 async function NotificationsTab() {
   const [memberClasses, statsResult, classCountsResult] = await Promise.all([
-    getMemberClasses(),
+    getActiveMemberClasses(),
     getPushNotificationStats(),
     getMembersCountByClass([]),
   ]);

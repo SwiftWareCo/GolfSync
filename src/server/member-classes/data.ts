@@ -5,7 +5,7 @@ import { eq, asc } from "drizzle-orm";
 import type { MemberClass } from "~/server/db/schema";
 
 // Get all member classes ordered by sortOrder then label
-export async function getMemberClasses(): Promise<MemberClass[]> {
+export async function getActiveMemberClasses(): Promise<MemberClass[]> {
   return await db.query.memberClasses.findMany({
     where: eq(memberClasses.isActive, true),
     orderBy: [asc(memberClasses.sortOrder), asc(memberClasses.label)],
