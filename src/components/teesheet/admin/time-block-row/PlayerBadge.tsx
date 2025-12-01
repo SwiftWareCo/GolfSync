@@ -26,7 +26,7 @@ export type TimeBlockPlayer =
   | {
       type: "member";
       data: Member &
-        Pick<TimeBlockMember, "bagNumber" | "checkedIn" | "checkedInAt">;
+        Pick<TimeBlockMember, "checkedIn" | "checkedInAt">;
     }
   | {
       type: "guest";

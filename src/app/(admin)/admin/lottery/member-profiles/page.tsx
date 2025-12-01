@@ -1,37 +1,18 @@
+import { Suspense } from "react";
 import { PageHeader } from "~/components/ui/page-header";
-import { Button } from "~/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
-import { MemberProfilesDashboard } from "~/components/lottery/MemberProfilesDashboard";
-import {
-  getMemberProfilesWithFairness,
-  getMemberProfileStats,
-} from "~/server/lottery/member-profiles-data";
+import { StatisticsCards } from "~/components/lottery/member-profiles/StatisticsCards";
+import { ControlPanel } from "~/components/lottery/member-profiles/ControlPanel";
+import { SearchAndFilters } from "~/components/lottery/member-profiles/SearchAndFilters";
+import { MemberProfilesTable } from "~/components/lottery/member-profiles/MemberProfilesTable";
+import { StatisticsSkeleton } from "~/components/lottery/member-profiles/skeletons";
+import { getMemberProfilesWithFairness } from "~/server/lottery/member-profiles-data";
+import { Card, CardContent } from "~/components/ui/card";
+
+export const dynamic = "force-dynamic";
 
 export default async function MemberProfilesPage() {
-  // Fetch all member profiles with speed and fairness data
-  const [profilesResult, statsResult] = await Promise.all([
-    getMemberProfilesWithFairness(),
-    getMemberProfileStats(),
-  ]);
-
-  if (!profilesResult.success) {
-    return (
-      <div className="container mx-auto max-w-7xl p-6">
-        <div className="mb-6">
-          <PageHeader
-            title="Member Profiles Management"
-            description="Manage member speed classifications, fairness scores, and lottery priority"
-          />
-        </div>
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <p className="text-red-700">
-            Error loading member profiles: {profilesResult.error}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  // Fetch member profiles
+  const profiles = await getMemberProfilesWithFairness();
 
   return (
     <div className="container mx-auto max-w-7xl p-6">
@@ -43,11 +24,29 @@ export default async function MemberProfilesPage() {
         />
       </div>
 
-      {/* Main Dashboard */}
-      <MemberProfilesDashboard
-        profiles={profilesResult.profiles || []}
-        stats={statsResult.stats}
-      />
+      {/* Statistics Cards with Suspense */}
+      <Suspense fallback={<StatisticsSkeleton />}>
+        <StatisticsCards />
+      </Suspense>
+
+      {/* Control Panel */}
+      <div className="mt-6">
+        <ControlPanel />
+      </div>
+
+      {/* Search and Filters */}
+      <div className="mt-6">
+        <Card>
+          <CardContent className="pt-6">
+            <SearchAndFilters />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Member Profiles Table */}
+      <div className="mt-6">
+        <MemberProfilesTable profiles={profiles} />
+      </div>
     </div>
   );
 }
