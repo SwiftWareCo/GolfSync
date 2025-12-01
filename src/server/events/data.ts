@@ -18,100 +18,46 @@ import {
 } from "~/app/types/events";
 import { getBCToday } from "~/lib/dates";
 
-// Database event type
-type DbEvent = {
-  id: number;
-  name: string;
-  description: string;
-  eventType: string;
-  startDate: string;
-  endDate: string;
-  startTime?: string | null;
-  endTime?: string | null;
-  location?: string | null;
-  capacity?: number | null;
-  requiresApproval: boolean;
-  registrationDeadline?: string | null;
-  isActive: boolean;
-  memberClasses: string[];
-  createdAt: Date;
-  updatedAt?: Date | null;
-  details?: {
-    format?: string | null;
-    rules?: string | null;
-    prizes?: string | null;
-    entryFee?: number | null;
-    additionalInfo?: string | null;
-  } | null;
-};
-
 // Get all events
-export async function getEvents(options?: {
-  includeRegistrations?: boolean;
-}): Promise<EventWithRegistrations[]> {
-  const rows = (await db.query.events.findMany({
+export async function getEvents(): Promise<EventWithRegistrations[]> {
+  const rows = await db.query.events.findMany({
     with: {
       details: true,
+      registrations: {
+        with: {
+          member: true,
+        },
+      },
     },
     orderBy: [desc(events.startDate)],
-  })) as DbEvent[];
+  });
 
-  // Get registration counts for each event
-  const results = await Promise.all(
-    rows.map(async (event) => {
-      // Get active registrations count (approved + pending only, not rejected)
-      // Count actual participants: 1 (captain) + team members + fills
-      const registrationsCount = await db
-        .select({
-          total: sql<number>`COALESCE(SUM(
-            1 +
-            COALESCE(array_length(team_member_ids, 1), 0) +
-            COALESCE(jsonb_array_length(fills), 0)
-          ), 0)`
-        })
-        .from(eventRegistrations)
-        .where(
-          and(
-            eq(eventRegistrations.eventId, event.id),
-            or(
-              eq(eventRegistrations.status, "APPROVED"),
-              eq(eventRegistrations.status, "PENDING"),
-            ),
-          ),
-        )
-        .then((res) => res[0]?.total || 0);
+  return rows.map((event) => {
+    // Count actual participants: 1 (captain) + team members + fills
+    // Only count approved and pending registrations
+    const activeRegistrations = event.registrations?.filter(
+      (reg) => reg.status === "APPROVED" || reg.status === "PENDING"
+    ) || [];
 
-      // Get pending registrations count
-      const pendingRegistrationsCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(eventRegistrations)
-        .where(
-          and(
-            eq(eventRegistrations.eventId, event.id),
-            eq(eventRegistrations.status, "PENDING"),
-          ),
-        )
-        .then((res) => res[0]?.count || 0);
+    const registrationsCount = activeRegistrations.reduce((sum, reg) => {
+      const teamMembersCount = reg.teamMemberIds?.length || 0;
+      const fillsCount = Array.isArray(reg.fills) ? reg.fills.length : 0;
+      return sum + 1 + teamMembersCount + fillsCount;
+    }, 0);
 
-      // Get registrations if needed for admin
-      let eventRegistrationsData: EventRegistration[] = [];
-      if (options?.includeRegistrations) {
-        eventRegistrationsData = await getEventRegistrations(event.id);
-      }
+    // Get pending registrations count
+    const pendingRegistrationsCount = event.registrations?.filter(
+      (reg) => reg.status === "PENDING"
+    ).length || 0;
 
-      return {
-        ...event,
-        eventType: event.eventType as EventType,
-        registrationsCount,
-        pendingRegistrationsCount,
-        registrations: options?.includeRegistrations
-          ? eventRegistrationsData
-          : undefined,
-      } as EventWithRegistrations;
-    }),
-  );
-
-  return results;
+    return {
+      ...event,
+      eventType: event.eventType as EventType,
+      registrationsCount,
+      pendingRegistrationsCount,
+      registrations: event.registrations,
+    } as EventWithRegistrations;
+  });
 }
 
 // Get upcoming events
@@ -127,82 +73,58 @@ export async function getUpcomingEvents(
 
   const whereClause = sql`start_date >= ${today} AND is_active = true ${memberClassCondition}`;
 
-  const rows = (await db.query.events.findMany({
+  const rows = await db.query.events.findMany({
     where: whereClause,
     orderBy: [asc(events.startDate)],
     with: {
       details: true,
+      registrations: true,
     },
     limit,
-  })) as DbEvent[];
+  });
 
-  // Get registration counts for each event
-  const results = await Promise.all(
-    rows.map(async (event) => {
-      // Count actual participants: 1 (captain) + team members + fills
-      const registrationsCount = await db
-        .select({
-          total: sql<number>`COALESCE(SUM(
-            1 +
-            COALESCE(array_length(team_member_ids, 1), 0) +
-            COALESCE(jsonb_array_length(fills), 0)
-          ), 0)`
-        })
-        .from(eventRegistrations)
-        .where(
-          and(
-            eq(eventRegistrations.eventId, event.id),
-            or(
-              eq(eventRegistrations.status, "APPROVED"),
-              eq(eventRegistrations.status, "PENDING"),
-            ),
-          ),
-        )
-        .then((res) => res[0]?.total || 0);
+  return rows.map((event) => {
+    // Count actual participants: 1 (captain) + team members + fills
+    const activeRegistrations = event.registrations?.filter(
+      (reg) => reg.status === "APPROVED" || reg.status === "PENDING"
+    ) || [];
 
-      return {
-        ...event,
-        eventType: event.eventType as EventType,
-        registrationsCount,
-      } as Event;
-    }),
-  );
+    const registrationsCount = activeRegistrations.reduce((sum, reg) => {
+      const teamMembersCount = reg.teamMemberIds?.length || 0;
+      const fillsCount = Array.isArray(reg.fills) ? reg.fills.length : 0;
+      return sum + 1 + teamMembersCount + fillsCount;
+    }, 0);
 
-  return results;
+    return {
+      ...event,
+      eventType: event.eventType as EventType,
+      registrationsCount,
+    } as Event;
+  });
 }
 
 // Get a single event by ID
 export async function getEventById(eventId: number): Promise<Event | null> {
-  const event = (await db.query.events.findFirst({
+  const event = await db.query.events.findFirst({
     where: eq(events.id, eventId),
     with: {
       details: true,
+      registrations: true,
     },
-  })) as DbEvent | null;
+  });
 
   if (!event) return null;
 
-  // Get active registration count (approved + pending only)
   // Count actual participants: 1 (captain) + team members + fills
-  const registrationsCount = await db
-    .select({
-      total: sql<number>`COALESCE(SUM(
-        1 +
-        COALESCE(array_length(team_member_ids, 1), 0) +
-        COALESCE(jsonb_array_length(fills), 0)
-      ), 0)`
-    })
-    .from(eventRegistrations)
-    .where(
-      and(
-        eq(eventRegistrations.eventId, eventId),
-        or(
-          eq(eventRegistrations.status, "APPROVED"),
-          eq(eventRegistrations.status, "PENDING"),
-        ),
-      ),
-    )
-    .then((res) => res[0]?.total || 0);
+  const activeRegistrations = event.registrations?.filter(
+    (reg) => reg.status === "APPROVED" || reg.status === "PENDING"
+  ) || [];
+
+  const registrationsCount = activeRegistrations.reduce((sum, reg) => {
+    const teamMembersCount = reg.teamMemberIds?.length || 0;
+    const fillsCount = Array.isArray(reg.fills) ? reg.fills.length : 0;
+    return sum + 1 + teamMembersCount + fillsCount;
+  }, 0);
 
   return {
     ...event,
@@ -265,59 +187,38 @@ export async function getEventsForClass(memberClass: string) {
   const today = getBCToday();
   const whereClause = sql`start_date >= ${today} AND is_active = true AND (member_classes IS NULL OR array_length(member_classes, 1) IS NULL OR ${memberClass} = ANY(member_classes))`;
 
-  const dbEvents = (await db.query.events.findMany({
+  const dbEvents = await db.query.events.findMany({
     where: whereClause,
     orderBy: [desc(events.startDate)],
     with: {
       details: true,
+      registrations: true,
     },
-  })) as DbEvent[];
+  });
 
-  // Get registration counts for each event
-  const results = await Promise.all(
-    dbEvents.map(async (event) => {
-      // Count actual participants: 1 (captain) + team members + fills
-      const registrationsCount = await db
-        .select({
-          total: sql<number>`COALESCE(SUM(
-            1 +
-            COALESCE(array_length(team_member_ids, 1), 0) +
-            COALESCE(jsonb_array_length(fills), 0)
-          ), 0)`
-        })
-        .from(eventRegistrations)
-        .where(
-          and(
-            eq(eventRegistrations.eventId, event.id),
-            or(
-              eq(eventRegistrations.status, "APPROVED"),
-              eq(eventRegistrations.status, "PENDING"),
-            ),
-          ),
-        )
-        .then((res) => res[0]?.total || 0);
+  return dbEvents.map((event) => {
+    // Count actual participants: 1 (captain) + team members + fills
+    const activeRegistrations = event.registrations?.filter(
+      (reg) => reg.status === "APPROVED" || reg.status === "PENDING"
+    ) || [];
 
-      const pendingRegistrationsCount = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(eventRegistrations)
-        .where(
-          and(
-            eq(eventRegistrations.eventId, event.id),
-            eq(eventRegistrations.status, "PENDING"),
-          ),
-        )
-        .then((res) => res[0]?.count || 0);
+    const registrationsCount = activeRegistrations.reduce((sum, reg) => {
+      const teamMembersCount = reg.teamMemberIds?.length || 0;
+      const fillsCount = Array.isArray(reg.fills) ? reg.fills.length : 0;
+      return sum + 1 + teamMembersCount + fillsCount;
+    }, 0);
 
-      return {
-        ...event,
-        eventType: event.eventType as EventType,
-        registrationsCount,
-        pendingRegistrationsCount,
-      } as Event;
-    }),
-  );
+    const pendingRegistrationsCount = event.registrations?.filter(
+      (reg) => reg.status === "PENDING"
+    ).length || 0;
 
-  return results;
+    return {
+      ...event,
+      eventType: event.eventType as EventType,
+      registrationsCount,
+      pendingRegistrationsCount,
+    } as Event;
+  });
 }
 
 // Get member's registration for a specific event with team member details

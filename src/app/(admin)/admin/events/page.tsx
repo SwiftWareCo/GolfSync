@@ -7,7 +7,7 @@ import { EventDialog } from "~/components/events/admin/EventDialog";
 
 export default async function EventsPage() {
   const [events, memberClasses] = await Promise.all([
-    getEvents({ includeRegistrations: true }),
+    getEvents(),
     getActiveMemberClasses(),
   ]);
 
