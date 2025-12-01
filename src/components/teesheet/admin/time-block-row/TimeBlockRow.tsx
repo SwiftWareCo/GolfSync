@@ -9,32 +9,19 @@ import {
 import { AddPlayerPlaceholder } from "./AddPlayerPlaceholder";
 import type { Member, Guest, Fill } from "~/server/db/schema";
 
-// Separate typed interfaces for each entity
-export type TimeBlockMemberFull = {
-  id: number;
-  timeBlockId: number;
-  memberId: number;
+// Flattened member type (from TimeBlockWithRelations)
+export type TimeBlockMemberFull = Member & {
+  bagNumber: string | null;
   checkedIn: boolean;
   checkedInAt: Date | null;
-  bookingDate: string;
-  bookingTime: string;
-  bagNumber: string | null;
-  createdAt: Date;
-  member: Member;
 };
 
-export type TimeBlockGuestFull = {
-  id: number;
-  timeBlockId: number;
-  guestId: number;
+// Flattened guest type (from TimeBlockWithRelations)
+export type TimeBlockGuestFull = Guest & {
   invitedByMemberId: number;
-  checkedIn: boolean;
-  checkedInAt: Date | null;
-  bookingDate: string;
-  bookingTime: string;
-  createdAt: Date;
-  guest: Guest;
-  invitedByMember: Member;
+  invitedByMember?: Member;
+  checkedIn?: boolean;
+  checkedInAt?: Date | null;
 };
 
 interface TimeBlockRowProps {
@@ -84,17 +71,12 @@ export function TimeBlockRow({
       <td className="px-3 py-2 align-middle">
         <div className="flex flex-wrap items-center gap-2">
           {/* Render members */}
-          {members.map((tbm) => (
+          {members.map((member) => (
             <PlayerBadge
-              key={`member-${tbm.member.id}`}
+              key={`member-${member.id}`}
               player={{
                 type: "member",
-                data: {
-                  ...tbm.member,
-                  bagNumber: tbm.bagNumber,
-                  checkedIn: tbm.checkedIn,
-                  checkedInAt: tbm.checkedInAt,
-                },
+                data: member,
               }}
               onRemove={onRemovePlayer}
               onCheckIn={onCheckInPlayer}
@@ -105,18 +87,12 @@ export function TimeBlockRow({
           ))}
 
           {/* Render guests */}
-          {guests.map((tbg) => (
+          {guests.map((guest) => (
             <PlayerBadge
-              key={`guest-${tbg.guest.id}`}
+              key={`guest-${guest.id}`}
               player={{
                 type: "guest",
-                data: {
-                  ...tbg.guest,
-                  invitedByMemberId: tbg.invitedByMemberId,
-                  invitedByMember: tbg.invitedByMember,
-                  checkedIn: tbg.checkedIn,
-                  checkedInAt: tbg.checkedInAt,
-                },
+                data: guest,
               }}
               onRemove={onRemovePlayer}
               onCheckIn={onCheckInPlayer}

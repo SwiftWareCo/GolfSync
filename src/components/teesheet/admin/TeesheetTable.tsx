@@ -39,77 +39,231 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   // Use the fresh data from the query if available
   const timeBlocks = queryResult?.timeBlocks ?? [];
 
+  // Mutation for removing members with cache optimism
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ timeBlockId, memberId }: { timeBlockId: number; memberId: number }) =>
+      removeTimeBlockMember(timeBlockId, memberId),
+
+    onMutate: async ({ timeBlockId, memberId }: { timeBlockId: number; memberId: number }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlockId
+              ? { ...block, members: block.members.filter((m: any) => m.id !== memberId) }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (err, vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+    },
+  });
+
+  // Mutation for removing guests with cache optimism
+  const removeGuestMutation = useMutation({
+    mutationFn: ({ timeBlockId, guestId }: { timeBlockId: number; guestId: number }) =>
+      removeTimeBlockGuest(timeBlockId, guestId),
+
+    onMutate: async ({ timeBlockId, guestId }: { timeBlockId: number; guestId: number }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlockId
+              ? { ...block, guests: block.guests.filter((g: any) => g.id !== guestId) }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+    },
+  });
+
+  // Mutation for removing fills with cache optimism
+  const removeFillMutation = useMutation({
+    mutationFn: ({ timeBlockId, fillId }: { timeBlockId: number; fillId: number }) =>
+      removeFillFromTimeBlock(timeBlockId, fillId),
+
+    onMutate: async ({ timeBlockId, fillId }: { timeBlockId: number; fillId: number }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlockId
+              ? { ...block, fills: block.fills.filter((f: any) => f.id !== fillId) }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+    },
+  });
+
+  // Mutation for checking in/out members with cache optimism
+  const checkInMemberMutation = useMutation({
+    mutationFn: ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) =>
+      checkInMember(timeBlockId, playerId, !isCheckedIn),
+
+    onMutate: async ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlockId
+              ? {
+                  ...block,
+                  members: block.members.map((m: any) =>
+                    m.id === playerId
+                      ? { ...m, checkedIn: !isCheckedIn, checkedInAt: !isCheckedIn ? new Date() : null }
+                      : m
+                  ),
+                }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+    },
+  });
+
+  // Mutation for checking in/out guests with cache optimism
+  const checkInGuestMutation = useMutation({
+    mutationFn: ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) =>
+      checkInGuest(timeBlockId, playerId, !isCheckedIn),
+
+    onMutate: async ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlockId
+              ? {
+                  ...block,
+                  guests: block.guests.map((g: any) =>
+                    g.id === playerId
+                      ? { ...g, checkedIn: !isCheckedIn, checkedInAt: !isCheckedIn ? new Date() : null }
+                      : g
+                  ),
+                }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+    },
+  });
+
   // Mutation for power cart assignment
   const assignPowerCartMutation = useMutation({
-    mutationFn: quickAssignPowerCart,
-    onMutate: () => {
-      toast.success("Power cart assigned");
+    mutationFn: (variables: {
+      memberId: number;
+      numHoles: 9 | 18;
+      isSplit: boolean;
+      isMedical: boolean;
+      staffInitials: string;
+      date: Date;
+    }) => quickAssignPowerCart(variables),
+
+    onMutate: async (variables: {
+      memberId: number;
+      numHoles: 9 | 18;
+      isSplit: boolean;
+      isMedical: boolean;
+      staffInitials: string;
+      date: Date;
+    }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+      return { previous };
     },
-    onError: () => {
+
+    onError: (_err, _variables, context) => {
       toast.error("Failed to assign power cart");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: teesheetKeys.detail(dateString),
-      });
-    },
-  });
-
-  // Mutation for removing players
-  const removePlayerMutation = useMutation({
-    mutationFn: async ({
-      timeBlockId,
-      playerId,
-      type,
-    }: {
-      timeBlockId: number;
-      playerId: number;
-      type: PlayerType;
-    }) => {
-      if (type === "member") {
-        return removeTimeBlockMember(timeBlockId, playerId);
-      } else if (type === "guest") {
-        return removeTimeBlockGuest(timeBlockId, playerId);
-      } else if (type === "fill") {
-        return removeFillFromTimeBlock(timeBlockId, playerId);
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
       }
     },
-    onError: () => {
-      toast.error("Failed to remove player");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: teesheetKeys.list(dateString),
-      });
-    },
-  });
 
-  // Mutation for checking in/out players
-  const checkInPlayerMutation = useMutation({
-    mutationFn: async ({
-      timeBlockId,
-      playerId,
-      type,
-      isCheckedIn,
-    }: {
-      timeBlockId: number;
-      playerId: number;
-      type: PlayerType;
-      isCheckedIn: boolean;
-    }) => {
-      if (type === "member") {
-        return checkInMember(timeBlockId, playerId, !isCheckedIn);
-      } else if (type === "guest") {
-        return checkInGuest(timeBlockId, playerId, !isCheckedIn);
+    onSettled: (_data, error) => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("Power cart assigned");
       }
-    },
-    onError: () => {
-      toast.error("Failed to update check-in status");
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: teesheetKeys.list(dateString),
-      });
     },
   });
 
@@ -117,10 +271,10 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     block: any,
   ): Array<{ id: number; firstName: string; lastName: string }> => {
     return (
-      block.timeBlockMembers?.map((tbm: any) => ({
-        id: tbm.member.id,
-        firstName: tbm.member.firstName,
-        lastName: tbm.member.lastName,
+      block.members?.map((member: any) => ({
+        id: member.id,
+        firstName: member.firstName,
+        lastName: member.lastName,
       })) || []
     );
   };
@@ -135,7 +289,13 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     playerId: number,
     type: PlayerType,
   ) => {
-    removePlayerMutation.mutate({ timeBlockId, playerId, type });
+    if (type === "member") {
+      removeMemberMutation.mutate({ timeBlockId, memberId: playerId });
+    } else if (type === "guest") {
+      removeGuestMutation.mutate({ timeBlockId, guestId: playerId });
+    } else if (type === "fill") {
+      removeFillMutation.mutate({ timeBlockId, fillId: playerId });
+    }
   };
 
   const handleCheckInPlayer = (
@@ -144,12 +304,11 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     type: PlayerType,
     isCheckedIn: boolean,
   ) => {
-    checkInPlayerMutation.mutate({
-      timeBlockId,
-      playerId,
-      type,
-      isCheckedIn,
-    });
+    if (type === "member") {
+      checkInMemberMutation.mutate({ timeBlockId, playerId, isCheckedIn });
+    } else if (type === "guest") {
+      checkInGuestMutation.mutate({ timeBlockId, playerId, isCheckedIn });
+    }
   };
 
   const handleAssignPowerCart = (memberId: number) => {
@@ -166,7 +325,11 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const handlePlayerClick = (player: any) => {
     if (player.type === "member" || player.type === "guest") {
       setIsAccountDialogOpen(true);
-      setSelectedPlayer(player.data);
+      setSelectedPlayer({
+        member: player.type === "member" ? player.data : undefined,
+        guest: player.type === "guest" ? player.data : undefined,
+        isMemberAccount: player.type === "member",
+      });
     }
   };
 
@@ -218,8 +381,8 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                 key={block.id}
                 timeBlockId={block.id}
                 startTime={block.startTime}
-                members={block.timeBlockMembers || []}
-                guests={block.timeBlockGuests || []}
+                members={block.members || []}
+                guests={block.guests || []}
                 fills={block.fills || []}
                 onAddPlayer={() => handleAddPlayer(block.id)}
                 onRemovePlayer={(id, type) =>

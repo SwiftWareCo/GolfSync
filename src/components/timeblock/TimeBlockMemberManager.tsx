@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 import { TimeBlockHeader } from "./TimeBlockHeader";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { memberQueryOptions, guestQueryOptions } from "~/server/query-options";
 import { checkTimeblockRestrictionsAction } from "~/server/timeblock-restrictions/actions";
 import type { TimeBlockWithRelations } from "~/server/db/schema";
@@ -20,14 +20,10 @@ import { RestrictionViolationAlert } from "~/components/settings/timeblock-restr
 import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
 import { createGuest } from "~/server/guests/actions";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
-import {
-  createAddMemberMutation,
-  createRemoveMemberMutation,
-  createAddGuestMutation,
-  createRemoveGuestMutation,
-  createAddFillMutation,
-  createRemoveFillMutation,
-} from "~/services/teesheet/mutations";
+import { removeTimeBlockMember, removeTimeBlockGuest, addFillToTimeBlock, removeFillFromTimeBlock } from "~/server/teesheet/actions";
+import { addMemberToTimeBlock } from "~/server/members/actions";
+import { addGuestToTimeBlock } from "~/server/guests/actions";
+import { teesheetKeys } from "~/services/teesheet/keys";
 
 interface TimeBlockMemberManagerProps {
   timeBlock: TimeBlockWithRelations;
@@ -38,44 +34,273 @@ export function TimeBlockMemberManager({
   timeBlock,
   dateString,
 }: TimeBlockMemberManagerProps) {
-  // TanStack Query mutations with proper optimistic updates
+  const queryClient = useQueryClient();
+
+  // Mutation for adding members with cache optimism
   const addMemberMutation = useMutation({
-    ...createAddMemberMutation(dateString, timeBlock.id as number),
-    onSuccess: () => toast.success("Member added"),
-    onError: () => toast.error("Failed to add member"),
+    mutationFn: (memberId: number) =>
+      addMemberToTimeBlock(timeBlock.id as number, memberId),
+
+    onMutate: async (memberId: number) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? {
+                  ...block,
+                  members: [
+                    ...(block.members || []),
+                    {
+                      id: memberId,
+                      firstName: "",
+                      lastName: "",
+                      memberNumber: "",
+                      username: "",
+                      email: "",
+                      bagNumber: null,
+                      checkedIn: false,
+                      checkedInAt: null,
+                    },
+                  ],
+                }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+      toast.error("Failed to add member");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      toast.success("Member added");
+    },
   });
 
+  // Mutation for removing members with cache optimism
   const removeMemberMutation = useMutation({
-    ...createRemoveMemberMutation(dateString, timeBlock.id as number),
-    onSuccess: () => toast.success("Member removed"),
-    onError: () => toast.error("Failed to remove member"),
+    mutationFn: (memberId: number) =>
+      removeTimeBlockMember(timeBlock.id as number, memberId),
+
+    onMutate: async (memberId: number) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? { ...block, members: (block.members || []).filter((m: any) => m.id !== memberId) }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+      toast.error("Failed to remove member");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      toast.success("Member removed");
+    },
   });
 
+  // Mutation for adding guests with cache optimism
   const addGuestMutation = useMutation({
-    ...createAddGuestMutation(dateString, timeBlock.id as number),
-    onSuccess: () => {
+    mutationFn: ({ guestId, invitingMemberId }: { guestId: number; invitingMemberId: number }) =>
+      addGuestToTimeBlock(timeBlock.id as number, guestId, invitingMemberId),
+
+    onMutate: async ({ guestId, invitingMemberId }: { guestId: number; invitingMemberId: number }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? {
+                  ...block,
+                  guests: [
+                    ...(block.guests || []),
+                    {
+                      id: guestId,
+                      firstName: "",
+                      lastName: "",
+                      email: null,
+                      phone: null,
+                      invitedByMemberId: invitingMemberId,
+                      invitedByMember: {},
+                    },
+                  ],
+                }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+      toast.error("Failed to add guest");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
       toast.success("Guest added");
       setSelectedMemberId(null);
     },
-    onError: () => toast.error("Failed to add guest"),
   });
 
+  // Mutation for removing guests with cache optimism
   const removeGuestMutation = useMutation({
-    ...createRemoveGuestMutation(dateString, timeBlock.id as number),
-    onSuccess: () => toast.success("Guest removed"),
-    onError: () => toast.error("Failed to remove guest"),
+    mutationFn: (guestId: number) =>
+      removeTimeBlockGuest(timeBlock.id as number, guestId),
+
+    onMutate: async (guestId: number) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? { ...block, guests: (block.guests || []).filter((g: any) => g.id !== guestId) }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+      toast.error("Failed to remove guest");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      toast.success("Guest removed");
+    },
   });
 
+  // Mutation for adding fills with cache optimism
   const addFillMutation = useMutation({
-    ...createAddFillMutation(dateString, timeBlock.id as number),
-    onSuccess: () => toast.success("Fill added"),
-    onError: () => toast.error("Failed to add fill"),
+    mutationFn: ({ fillType, customName }: { fillType: string; customName?: string }) =>
+      addFillToTimeBlock(timeBlock.id as number, fillType, 1, customName),
+
+    onMutate: async ({ fillType, customName }: { fillType: string; customName?: string }) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? {
+                  ...block,
+                  fills: [
+                    ...(block.fills || []),
+                    {
+                      id: -Date.now(),
+                      relatedType: "timeblock" as const,
+                      relatedId: timeBlock.id,
+                      fillType,
+                      customName: customName || null,
+                      createdAt: new Date(),
+                      updatedAt: null,
+                    },
+                  ],
+                }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+      toast.error("Failed to add fill");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      toast.success("Fill added");
+    },
   });
 
+  // Mutation for removing fills with cache optimism
   const removeFillMutation = useMutation({
-    ...createRemoveFillMutation(dateString, timeBlock.id as number),
-    onSuccess: () => toast.success("Fill removed"),
-    onError: () => toast.error("Failed to remove fill"),
+    mutationFn: (fillId: number) =>
+      removeFillFromTimeBlock(timeBlock.id as number, fillId),
+
+    onMutate: async (fillId: number) => {
+      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
+      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? { ...block, fills: (block.fills || []).filter((f: any) => f.id !== fillId) }
+              : block
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+      }
+      toast.error("Failed to remove fill");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      toast.success("Fill removed");
+    },
   });
 
   // Extract members and guests from flattened structure
