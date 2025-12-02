@@ -1,16 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
-import { ChevronDown, ChevronUp, ShieldAlert } from "lucide-react";
+import { ShieldAlert } from "lucide-react";
 import { PaceOfPlayCard } from "~/components/pace-of-play/PaceOfPlayCard";
 import { PaceOfPlayUpdateModal } from "~/components/pace-of-play/PaceOfPlayUpdateModal";
 import { CombinedTurnFinishModal } from "~/components/pace-of-play/CombinedTurnFinishModal";
 import { AdminPaceOfPlayModal } from "~/components/pace-of-play/AdminPaceOfPlayModal";
-import { type TimeBlockWithPaceOfPlay } from "~/app/types/PaceOfPlayTypes";
-import { useRouter } from "next/navigation";
+import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
+import { formatTime12Hour } from "~/lib/dates";
 
 interface FinishPageClientProps {
   initialTimeBlocks:
@@ -27,18 +27,11 @@ export function FinishPageClient({
   isAdmin = false,
 }: FinishPageClientProps) {
   const { user } = useUser();
-  const router = useRouter();
 
   // Handle both data structures - simple array for members, object for admins
-  const [timeBlocks, setTimeBlocks] = useState<{
-    regular: TimeBlockWithPaceOfPlay[];
-    missedTurns: TimeBlockWithPaceOfPlay[];
-  }>(() => {
-    if (Array.isArray(initialTimeBlocks)) {
-      return { regular: initialTimeBlocks, missedTurns: [] };
-    }
-    return initialTimeBlocks;
-  });
+  const timeBlocks = Array.isArray(initialTimeBlocks)
+    ? { regular: initialTimeBlocks, missedTurns: [] }
+    : initialTimeBlocks;
 
   const [selectedTimeBlock, setSelectedTimeBlock] =
     useState<TimeBlockWithPaceOfPlay | null>(null);
@@ -48,29 +41,6 @@ export function FinishPageClient({
   const [adminModalMode, setAdminModalMode] = useState<
     "turn" | "finish" | "both"
   >("finish");
-  const [showMissedTurns, setShowMissedTurns] = useState(isAdmin); // Auto-show for admins
-
-  useEffect(() => {
-    if (Array.isArray(initialTimeBlocks)) {
-      setTimeBlocks({ regular: initialTimeBlocks, missedTurns: [] });
-    } else {
-      setTimeBlocks(initialTimeBlocks);
-    }
-  }, [initialTimeBlocks]);
-
-  // Auto-refresh for admin only
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const intervalId = setInterval(
-      () => {
-        router.refresh();
-      },
-      2 * 60 * 1000,
-    );
-
-    return () => clearInterval(intervalId);
-  }, [isAdmin, router]);
 
   const handleUpdateFinish = (timeBlock: TimeBlockWithPaceOfPlay) => {
     setSelectedTimeBlock(timeBlock);
@@ -96,9 +66,6 @@ export function FinishPageClient({
     setIsCombinedModalOpen(false);
     setIsAdminModalOpen(false);
     setSelectedTimeBlock(null);
-    if (isAdmin) {
-      router.refresh();
-    }
   };
 
   return (
@@ -117,113 +84,41 @@ export function FinishPageClient({
         </CardContent>
       </Card>
 
-      {/* Regular Finish Groups */}
-      <div className="mb-8">
-        <h2 className="mb-4 text-lg font-semibold">Groups Ready for Finish</h2>
-        <div className="space-y-4">
-          {timeBlocks.regular.length === 0 ? (
-            <div className="py-8 text-center">
-              <h3 className="mb-2 text-xl font-bold">
-                No groups ready for finish
-              </h3>
-              <p className="text-muted-foreground">
-                There are currently no groups that have recorded their turn time
-                and need to check in at the finish.
-              </p>
-            </div>
-          ) : (
-            timeBlocks.regular.map((timeBlock) => (
-              <PaceOfPlayCard
-                key={timeBlock.id}
-                timeBlock={timeBlock}
-                onUpdateFinish={() => handleUpdateFinish(timeBlock)}
-                showFinishButton={true}
-              />
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Admin Toggle Button - Only show if admin or there are missed turns */}
-      {(isAdmin || timeBlocks.missedTurns.length > 0) && (
-        <div className="mb-4">
-          <Button
-            variant="outline"
-            onClick={() => setShowMissedTurns(!showMissedTurns)}
-            className="w-full border-dashed"
-          >
-            <ShieldAlert className="mr-2 h-4 w-4 text-amber-500" />
-            {showMissedTurns ? "Hide" : "Show"}{" "}
-            {isAdmin ? "Advanced Controls" : "Admin Controls"}
-            {showMissedTurns ? (
-              <ChevronUp className="ml-2 h-4 w-4" />
-            ) : (
-              <ChevronDown className="ml-2 h-4 w-4" />
-            )}
-          </Button>
-        </div>
-      )}
-
-      {/* Missed Turn Groups - Only shown when toggled */}
-      {showMissedTurns && (
-        <div className="mt-8 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="mb-4 flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-amber-500" />
-            <h2 className="text-lg font-semibold text-amber-800">
-              {isAdmin
-                ? "Advanced Controls & Groups Missing Turn Time"
-                : "Groups Missing Turn Time"}
-            </h2>
-          </div>
-          <p className="mb-4 text-sm text-amber-700">
-            {isAdmin
-              ? "As an administrator, you can manually set times, handle missed turns, and override pace of play records."
-              : "This section allows administrators to handle exceptional cases where groups missed recording their turn time."}
-          </p>
+      {/* Two-column layout: Main content + Sidebar */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
+        {/* Left Column: Regular Finish Groups */}
+        <div>
+          <h2 className="mb-4 text-lg font-semibold">
+            Groups Ready for Finish
+          </h2>
           <div className="space-y-4">
-            {timeBlocks.missedTurns.length === 0 ? (
+            {timeBlocks.regular.length === 0 ? (
               <div className="py-8 text-center">
                 <h3 className="mb-2 text-xl font-bold">
-                  No groups with missed turns
+                  No groups ready for finish
                 </h3>
                 <p className="text-muted-foreground">
-                  All active groups have recorded their turn time.
+                  There are currently no groups that have recorded their turn
+                  time and need to check in at the finish.
                 </p>
               </div>
             ) : (
-              timeBlocks.missedTurns.map((timeBlock) => (
+              timeBlocks.regular.map((timeBlock) => (
                 <div key={timeBlock.id} className="space-y-2">
                   <PaceOfPlayCard
                     timeBlock={timeBlock}
-                    onUpdateFinish={() => handleCombinedUpdate(timeBlock)}
+                    onUpdateFinish={() => handleUpdateFinish(timeBlock)}
                     showFinishButton={true}
-                    isMissedTurn={true}
                   />
                   {isAdmin && (
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleAdminUpdate(timeBlock, "turn")}
-                        className="border-amber-300 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                      >
-                        Set Turn Time
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
                         onClick={() => handleAdminUpdate(timeBlock, "finish")}
                         className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
                       >
-                        Set Finish Time
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAdminUpdate(timeBlock, "both")}
-                        className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                      >
-                        Set Both Times
+                        Set Custom Finish Time
                       </Button>
                     </div>
                   )}
@@ -232,7 +127,95 @@ export function FinishPageClient({
             )}
           </div>
         </div>
-      )}
+
+        {/* Right Column: Sticky Sidebar (Admin Controls & Missed Turns) */}
+        {(isAdmin || timeBlocks.missedTurns.length > 0) && (
+          <div className="lg:sticky lg:top-4 lg:h-fit">
+            <Card className="border-amber-200 bg-amber-50">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-amber-800">
+                  <ShieldAlert className="h-5 w-5" />
+                  {isAdmin
+                    ? "Advanced Controls & Missed Turns"
+                    : "Groups Missing Turn Time"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-sm text-amber-700">
+                  {isAdmin
+                    ? "As an administrator, you can manually set times, handle missed turns, and override pace of play records."
+                    : "This section allows administrators to handle exceptional cases where groups missed recording their turn time."}
+                </p>
+                <div className="space-y-3">
+                  {timeBlocks.missedTurns.length === 0 ? (
+                    <div className="rounded-lg bg-white p-4 text-center">
+                      <p className="text-sm text-gray-600">
+                        No groups with missed turns
+                      </p>
+                    </div>
+                  ) : (
+                    timeBlocks.missedTurns.map((timeBlock) => (
+                      <div
+                        key={timeBlock.id}
+                        className="space-y-2 rounded-lg bg-white p-3"
+                      >
+                        {/* Miniaturized group info */}
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold">
+                              {formatTime12Hour(timeBlock.startTime)} Group
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {timeBlock.playerNames || "No players"} (
+                              {timeBlock.numPlayers})
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Admin action buttons */}
+                        {isAdmin && (
+                          <div className="grid grid-cols-1 gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleAdminUpdate(timeBlock, "turn")
+                              }
+                              className="h-8 border-amber-300 text-xs text-amber-600 hover:bg-amber-50"
+                            >
+                              Set Turn Time
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleAdminUpdate(timeBlock, "finish")
+                              }
+                              className="h-8 border-green-300 text-xs text-green-600 hover:bg-green-50"
+                            >
+                              Set Finish Time
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                handleAdminUpdate(timeBlock, "both")
+                              }
+                              className="h-8 border-blue-300 text-xs text-blue-600 hover:bg-blue-50"
+                            >
+                              Set Both Times
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
 
       {/* Regular Finish Modal */}
       <PaceOfPlayUpdateModal

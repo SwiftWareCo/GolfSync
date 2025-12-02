@@ -9,7 +9,7 @@ export default async function FinishPage() {
   );
 
   return (
-    <div className="container mx-auto max-w-4xl py-6">
+    <div className="container mx-auto max-w-7xl py-6">
       <FinishPageClient
         initialTimeBlocks={timeBlocksData.regular}
         isAdmin={false}

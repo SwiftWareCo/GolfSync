@@ -13,7 +13,7 @@ import {
 import { cn } from "~/lib/utils";
 import { PaceOfPlayCard } from "~/components/pace-of-play/PaceOfPlayCard";
 import { PaceOfPlayUpdateModal } from "~/components/pace-of-play/PaceOfPlayUpdateModal";
-import { type TimeBlockWithPaceOfPlay } from "~/app/types/PaceOfPlayTypes";
+import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
 import { useUser } from "@clerk/nextjs";
 
 interface PaceOfPlayClientProps {

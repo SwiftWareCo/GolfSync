@@ -6,7 +6,7 @@ export default async function TurnPage() {
   const timeBlocks = await getTimeBlocksAtTurn(parseDate(getBCToday()));
 
   return (
-    <div className="container mx-auto max-w-4xl py-6">
+    <div className="container mx-auto max-w-7xl py-6">
       <TurnPageClient initialTimeBlocks={timeBlocks} isAdmin={false} />
     </div>
   );

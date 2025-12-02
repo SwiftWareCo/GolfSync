@@ -13,10 +13,23 @@ import { Calendar, Clock, MessageSquare } from "lucide-react";
 import { formatDateStringToWords, formatTimeString } from "~/lib/utils";
 import { formatTime12Hour } from "~/lib/dates";
 import { PaceOfPlayStatus } from "~/components/pace-of-play/PaceOfPlayStatus";
-import type {
-  PaceOfPlayHistoryItem,
-  PaceOfPlayStatus as PaceOfPlayStatusType,
-} from "~/app/types/PaceOfPlayTypes";
+
+// Using schema-inferred return type from getMemberPaceOfPlayHistory
+type PaceOfPlayHistoryItem = {
+  id: number;
+  timeBlockId: number;
+  date: string;
+  startTime: string;
+  actualStartTime: Date | null;
+  turn9Time: Date | null;
+  finishTime: Date | null;
+  expectedStartTime: Date;
+  expectedTurn9Time: Date;
+  expectedFinishTime: Date;
+  status: string;
+  notes: string | null;
+  createdAt: Date;
+};
 
 interface PaceOfPlayHistoryDialogProps {
   isOpen: boolean;

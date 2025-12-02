@@ -10,16 +10,20 @@ import {
   timeBlocks,
   timeBlockGuests,
   guests,
+  type PaceOfPlay,
+  type PaceOfPlayInsert,
+  type TimeBlock,
 } from "../db/schema";
 
-import type {
-  PaceOfPlayStatus,
-  TimeBlockWithPaceOfPlay,
-} from "~/app/types/PaceOfPlayTypes";
+// Re-export schema types for convenience
+export type { PaceOfPlay, PaceOfPlayInsert };
 
-export type { PaceOfPlayStatus, TimeBlockWithPaceOfPlay };
-export type PaceOfPlayRecord = typeof paceOfPlay.$inferSelect;
-export type PaceOfPlayInsert = typeof paceOfPlay.$inferInsert;
+// Composed type for time blocks with pace of play data
+export type TimeBlockWithPaceOfPlay = TimeBlock & {
+  paceOfPlay: PaceOfPlay | null;
+  playerNames: string;
+  numPlayers: number;
+};
 
 // Create or update pace of play record
 export async function upsertPaceOfPlay(
@@ -59,11 +63,6 @@ export async function upsertPaceOfPlay(
 
 // Get pace of play by timeBlockId
 export async function getPaceOfPlayByTimeBlockId(timeBlockId: number) {
-  // First, get the actual timeBlock to see the real tee time
-  const timeBlockData = await db.query.timeBlocks.findFirst({
-    where: eq(timeBlocks.id, timeBlockId),
-  });
-
   const paceData = await db.query.paceOfPlay.findFirst({
     where: eq(paceOfPlay.timeBlockId, timeBlockId),
   });
@@ -134,7 +133,6 @@ export async function getOngoingPaceOfPlay(date: Date) {
 
 // Get active time blocks at the turn (have started but not recorded turn time)
 export async function getTimeBlocksAtTurn(date: Date) {
-
   const formattedDate = date.toISOString().split("T")[0];
 
   const result = await db
@@ -180,7 +178,6 @@ export async function getTimeBlocksAtFinish(
   missedTurns: TimeBlockWithPaceOfPlay[];
 }> {
   const formattedDate = date.toISOString().split("T")[0];
-
 
   // Base query conditions
   const baseConditions = [

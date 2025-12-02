@@ -5,7 +5,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
 import { type PlayerType } from "./time-block-row/PlayerBadge";
-import { TimeBlockNote, TimeBlockNoteEditor } from "~/components/timeblock/TimeBlockNotes";
+import {
+  TimeBlockNote,
+  TimeBlockNoteEditor,
+} from "~/components/timeblock/TimeBlockNotes";
 import { AddPlayerModal } from "~/components/timeblock/AddPlayerModal";
 import { AccountDialog } from "~/components/member-teesheet-client/AccountDialog";
 import {
@@ -38,19 +41,36 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
-  const [editingNoteTimeBlockId, setEditingNoteTimeBlockId] = useState<number | null>(null);
+  const [editingNoteTimeBlockId, setEditingNoteTimeBlockId] = useState<
+    number | null
+  >(null);
 
   // Use the fresh data from the query if available
   const timeBlocks = queryResult?.timeBlocks ?? [];
 
   // Mutation for removing members with cache optimism
   const removeMemberMutation = useMutation({
-    mutationFn: ({ timeBlockId, memberId }: { timeBlockId: number; memberId: number }) =>
-      removeTimeBlockMember(timeBlockId, memberId),
+    mutationFn: ({
+      timeBlockId,
+      memberId,
+    }: {
+      timeBlockId: number;
+      memberId: number;
+    }) => removeTimeBlockMember(timeBlockId, memberId),
 
-    onMutate: async ({ timeBlockId, memberId }: { timeBlockId: number; memberId: number }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      timeBlockId,
+      memberId,
+    }: {
+      timeBlockId: number;
+      memberId: number;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -58,8 +78,11 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
           ...old,
           timeBlocks: old.timeBlocks.map((block: any) =>
             block.id === timeBlockId
-              ? { ...block, members: block.members.filter((m: any) => m.id !== memberId) }
-              : block
+              ? {
+                  ...block,
+                  members: block.members.filter((m: any) => m.id !== memberId),
+                }
+              : block,
           ),
         };
       });
@@ -70,12 +93,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     onError: (err, vars, context) => {
       toast.error("Failed to remove player");
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("Player removed");
       }
@@ -84,12 +112,27 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   // Mutation for removing guests with cache optimism
   const removeGuestMutation = useMutation({
-    mutationFn: ({ timeBlockId, guestId }: { timeBlockId: number; guestId: number }) =>
-      removeTimeBlockGuest(timeBlockId, guestId),
+    mutationFn: ({
+      timeBlockId,
+      guestId,
+    }: {
+      timeBlockId: number;
+      guestId: number;
+    }) => removeTimeBlockGuest(timeBlockId, guestId),
 
-    onMutate: async ({ timeBlockId, guestId }: { timeBlockId: number; guestId: number }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      timeBlockId,
+      guestId,
+    }: {
+      timeBlockId: number;
+      guestId: number;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -97,8 +140,11 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
           ...old,
           timeBlocks: old.timeBlocks.map((block: any) =>
             block.id === timeBlockId
-              ? { ...block, guests: block.guests.filter((g: any) => g.id !== guestId) }
-              : block
+              ? {
+                  ...block,
+                  guests: block.guests.filter((g: any) => g.id !== guestId),
+                }
+              : block,
           ),
         };
       });
@@ -109,12 +155,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     onError: (_err, _vars, context) => {
       toast.error("Failed to remove player");
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("Player removed");
       }
@@ -123,12 +174,27 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   // Mutation for removing fills with cache optimism
   const removeFillMutation = useMutation({
-    mutationFn: ({ timeBlockId, fillId }: { timeBlockId: number; fillId: number }) =>
-      removeFillFromTimeBlock(timeBlockId, fillId),
+    mutationFn: ({
+      timeBlockId,
+      fillId,
+    }: {
+      timeBlockId: number;
+      fillId: number;
+    }) => removeFillFromTimeBlock(timeBlockId, fillId),
 
-    onMutate: async ({ timeBlockId, fillId }: { timeBlockId: number; fillId: number }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      timeBlockId,
+      fillId,
+    }: {
+      timeBlockId: number;
+      fillId: number;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -136,8 +202,11 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
           ...old,
           timeBlocks: old.timeBlocks.map((block: any) =>
             block.id === timeBlockId
-              ? { ...block, fills: block.fills.filter((f: any) => f.id !== fillId) }
-              : block
+              ? {
+                  ...block,
+                  fills: block.fills.filter((f: any) => f.id !== fillId),
+                }
+              : block,
           ),
         };
       });
@@ -147,23 +216,47 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
     },
   });
 
   // Mutation for checking in/out members with cache optimism
   const checkInMemberMutation = useMutation({
-    mutationFn: ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) =>
-      checkInMember(timeBlockId, playerId, !isCheckedIn),
+    mutationFn: ({
+      timeBlockId,
+      playerId,
+      isCheckedIn,
+    }: {
+      timeBlockId: number;
+      playerId: number;
+      isCheckedIn: boolean;
+    }) => checkInMember(timeBlockId, playerId, !isCheckedIn),
 
-    onMutate: async ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      timeBlockId,
+      playerId,
+      isCheckedIn,
+    }: {
+      timeBlockId: number;
+      playerId: number;
+      isCheckedIn: boolean;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -175,11 +268,15 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   ...block,
                   members: block.members.map((m: any) =>
                     m.id === playerId
-                      ? { ...m, checkedIn: !isCheckedIn, checkedInAt: !isCheckedIn ? new Date() : null }
-                      : m
+                      ? {
+                          ...m,
+                          checkedIn: !isCheckedIn,
+                          checkedInAt: !isCheckedIn ? new Date() : null,
+                        }
+                      : m,
                   ),
                 }
-              : block
+              : block,
           ),
         };
       });
@@ -190,12 +287,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     onError: (_err, _vars, context) => {
       toast.error("Failed to update check-in status");
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("Check-in status updated");
       }
@@ -204,12 +306,31 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   // Mutation for checking in/out guests with cache optimism
   const checkInGuestMutation = useMutation({
-    mutationFn: ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) =>
-      checkInGuest(timeBlockId, playerId, !isCheckedIn),
+    mutationFn: ({
+      timeBlockId,
+      playerId,
+      isCheckedIn,
+    }: {
+      timeBlockId: number;
+      playerId: number;
+      isCheckedIn: boolean;
+    }) => checkInGuest(timeBlockId, playerId, !isCheckedIn),
 
-    onMutate: async ({ timeBlockId, playerId, isCheckedIn }: { timeBlockId: number; playerId: number; isCheckedIn: boolean }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      timeBlockId,
+      playerId,
+      isCheckedIn,
+    }: {
+      timeBlockId: number;
+      playerId: number;
+      isCheckedIn: boolean;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -221,11 +342,15 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   ...block,
                   guests: block.guests.map((g: any) =>
                     g.id === playerId
-                      ? { ...g, checkedIn: !isCheckedIn, checkedInAt: !isCheckedIn ? new Date() : null }
-                      : g
+                      ? {
+                          ...g,
+                          checkedIn: !isCheckedIn,
+                          checkedInAt: !isCheckedIn ? new Date() : null,
+                        }
+                      : g,
                   ),
                 }
-              : block
+              : block,
           ),
         };
       });
@@ -236,12 +361,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     onError: (_err, _vars, context) => {
       toast.error("Failed to update check-in status");
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("Check-in status updated");
       }
@@ -267,20 +397,29 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
       staffInitials: string;
       date: Date;
     }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
       return { previous };
     },
 
     onError: (_err, _variables, context) => {
       toast.error("Failed to assign power cart");
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("Power cart assigned");
       }
@@ -289,15 +428,22 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   // Mutation for checking in all time block participants
   const checkInAllMutation = useMutation({
-    mutationFn: ({ timeBlockId, isCheckedIn }: { timeBlockId: number; isCheckedIn: boolean }) =>
-      checkInAllTimeBlockParticipants(timeBlockId, isCheckedIn),
+    mutationFn: ({
+      timeBlockId,
+      isCheckedIn,
+    }: {
+      timeBlockId: number;
+      isCheckedIn: boolean;
+    }) => checkInAllTimeBlockParticipants(timeBlockId, isCheckedIn),
 
     onError: (_err) => {
       toast.error("Failed to check in all participants");
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("All participants checked in");
       }
@@ -306,15 +452,22 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   // Mutation for updating time block notes
   const updateNotesMutation = useMutation({
-    mutationFn: ({ timeBlockId, notes }: { timeBlockId: number; notes: string | null }) =>
-      updateTimeBlockNotes(timeBlockId, notes),
+    mutationFn: ({
+      timeBlockId,
+      notes,
+    }: {
+      timeBlockId: number;
+      notes: string | null;
+    }) => updateTimeBlockNotes(timeBlockId, notes),
 
     onError: (_err) => {
       toast.error("Failed to update notes");
     },
 
     onSettled: (_data, error) => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       if (!error) {
         toast.success("Notes updated");
       }
@@ -405,7 +558,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
             resolve(true);
           },
           onError: () => resolve(false),
-        }
+        },
       );
     });
   };
@@ -439,7 +592,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   return (
     <div className="rounded-lg bg-white shadow">
-      <div className="rounded-lg p-1 border-1 border-org-primary shadow-2xl">
+      <div className="border-org-primary rounded-lg border-1 p-1 shadow-2xl">
         <table className="w-full table-auto">
           <thead className="bg-gray-100 text-xs font-semibold text-gray-600 uppercase">
             <tr>
@@ -452,7 +605,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 ">
+          <tbody className="divide-y divide-gray-200">
             {timeBlocks.map((block: any) => (
               <React.Fragment key={block.id}>
                 {/* Note row - displayed above time block if notes exist or editing */}
@@ -469,7 +622,9 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                       ) : (
                         <TimeBlockNote
                           notes={block.notes}
-                          onEditClick={() => setEditingNoteTimeBlockId(block.id)}
+                          onEditClick={() =>
+                            setEditingNoteTimeBlockId(block.id)
+                          }
                           timeBlockId={block.id}
                           onSaveNotes={handleSaveNote}
                         />
@@ -486,6 +641,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   members={block.members || []}
                   guests={block.guests || []}
                   fills={block.fills || []}
+                  paceOfPlay={block.paceOfPlay || null}
                   onAddPlayer={() => handleAddPlayer(block.id)}
                   onRemovePlayer={(id, type) =>
                     handleRemovePlayer(block.id, id, type)
@@ -524,7 +680,6 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
           player={selectedPlayer}
         />
       )}
-
     </div>
   );
 }

@@ -7,13 +7,17 @@ import {
   getPaceOfPlayByDate,
   upsertPaceOfPlay,
   type PaceOfPlayInsert,
-  type PaceOfPlayRecord,
+  type PaceOfPlay,
   getMemberPaceOfPlayHistory,
 } from "./data";
-import { type PaceOfPlayStatus } from "~/app/types/PaceOfPlayTypes";
 import { db } from "../db";
-import { and, eq } from "drizzle-orm";
-import { timeBlocks } from "../db/schema";
+import { and, eq, sql } from "drizzle-orm";
+import {
+  timeBlocks,
+  timeBlockMembers,
+  paceOfPlay,
+  memberSpeedProfiles,
+} from "../db/schema";
 
 // Constants for expected pace durations in minutes
 const EXPECTED_TURN_DURATION = 120; // 2 hours to reach the turn
@@ -38,12 +42,23 @@ function calculateExpectedTimes(startTime: Date) {
   };
 }
 
+// Define pace status type based on schema varchar field
+type PaceStatus =
+  | "pending"
+  | "on_time"
+  | "behind"
+  | "ahead"
+  | "completed"
+  | "completed_on_time"
+  | "completed_early"
+  | "completed_late";
+
 // Helper to determine pace of play status
 function determinePaceStatus(
   actualTime: Date | null,
   expectedTime: Date,
   isFinish = false,
-): PaceOfPlayStatus {
+): PaceStatus {
   if (!actualTime) return "pending";
 
   const diffMinutes = Math.floor(
@@ -143,7 +158,6 @@ export async function updateTurnTime(
     .from(timeBlocks)
     .where(eq(timeBlocks.id, timeBlockId));
 
-
   // Ensure we're using the correct expected time
   const expectedTurn9Time = currentPace.expectedTurn9Time
     ? new Date(currentPace.expectedTurn9Time)
@@ -195,9 +209,128 @@ export async function updateFinishTime(
   };
 
   await upsertPaceOfPlay(timeBlockId, paceData);
+
+  // Update member speed profiles after completing a round
+  await updateMemberSpeedProfiles(
+    timeBlockId,
+    currentPace.startTime!,
+    finishTime,
+  );
+
   revalidatePath("/admin/pace-of-play");
   revalidatePath("/admin/pace-of-play/finish");
+  revalidatePath("/admin");
   return { success: true };
+}
+
+// Helper function to update member speed profiles after a round completes
+async function updateMemberSpeedProfiles(
+  timeBlockId: number,
+  startTime: Date,
+  finishTime: Date,
+) {
+  try {
+    // Calculate round duration in minutes
+    const roundDurationMinutes = Math.floor(
+      (finishTime.getTime() - startTime.getTime()) / (1000 * 60),
+    );
+
+    // Get all members in this timeblock
+    const timeBlockData = await db.query.timeBlocks.findFirst({
+      where: eq(timeBlocks.id, timeBlockId),
+      with: {
+        timeBlockMembers: {
+          with: { member: true },
+        },
+      },
+    });
+
+    if (!timeBlockData?.timeBlockMembers) {
+      return;
+    }
+
+    // Update speed profile for each member
+    for (const tbm of timeBlockData.timeBlockMembers) {
+      const memberId = tbm.memberId;
+
+      // Get member's completed rounds from last 3 months
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+      const completedRounds = await db
+        .select({
+          startTime: paceOfPlay.startTime,
+          finishTime: paceOfPlay.finishTime,
+        })
+        .from(paceOfPlay)
+        .innerJoin(timeBlocks, eq(paceOfPlay.timeBlockId, timeBlocks.id))
+        .innerJoin(
+          timeBlockMembers,
+          eq(timeBlocks.id, timeBlockMembers.timeBlockId),
+        )
+        .where(
+          and(
+            eq(timeBlockMembers.memberId, memberId),
+            sql`${paceOfPlay.finishTime} IS NOT NULL`,
+            sql`${paceOfPlay.startTime} IS NOT NULL`,
+            sql`${paceOfPlay.createdAt} >= ${threeMonthsAgo}`,
+          ),
+        );
+
+      // Calculate average duration
+      const durations = completedRounds
+        .map((round) => {
+          if (!round.startTime || !round.finishTime) return null;
+          return Math.floor(
+            (new Date(round.finishTime).getTime() -
+              new Date(round.startTime).getTime()) /
+              (1000 * 60),
+          );
+        })
+        .filter((d): d is number => d !== null);
+
+      const avgMinutes =
+        durations.length > 0
+          ? Math.round(
+              durations.reduce((sum, d) => sum + d, 0) / durations.length,
+            )
+          : roundDurationMinutes;
+
+      // Determine speed tier based on thresholds
+      // FAST: < 230 minutes (3:50)
+      // AVERAGE: 230-245 minutes (3:50 - 4:05)
+      // SLOW: > 245 minutes
+      let speedTier: "FAST" | "AVERAGE" | "SLOW";
+      if (avgMinutes < 230) {
+        speedTier = "FAST";
+      } else if (avgMinutes <= 245) {
+        speedTier = "AVERAGE";
+      } else {
+        speedTier = "SLOW";
+      }
+
+      // Upsert member speed profile
+      await db
+        .insert(memberSpeedProfiles)
+        .values({
+          memberId,
+          averageMinutes: avgMinutes,
+          speedTier,
+          lastCalculated: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: memberSpeedProfiles.memberId,
+          set: {
+            averageMinutes: avgMinutes,
+            speedTier,
+            lastCalculated: new Date(),
+          },
+        });
+    }
+  } catch (error) {
+    console.error("Error updating member speed profiles:", error);
+    // Don't throw - we don't want to fail the finish time update if speed profile update fails
+  }
 }
 
 // Update both turn and finish times together (for missed turn scenarios)
@@ -257,7 +390,7 @@ export async function updateTurnAndFinishTime(
 // Get pace of play data for a specific timeblock
 export async function getPaceOfPlayData(
   timeBlockId: number,
-): Promise<PaceOfPlayRecord | null> {
+): Promise<PaceOfPlay | null> {
   try {
     const result = await getPaceOfPlayByTimeBlockId(timeBlockId);
     return result || null; // Explicitly return null if result is undefined
@@ -281,12 +414,8 @@ export async function getAllPaceOfPlayForDate(date: Date) {
 export async function getMemberPaceOfPlayHistoryAction(memberId: number) {
   try {
     const history = await getMemberPaceOfPlayHistory(memberId);
-    // Transform the data to match PaceOfPlayHistoryItem interface
-    const transformedHistory = history.map((item) => ({
-      ...item,
-      status: item.status as PaceOfPlayStatus,
-    }));
-    return { success: true, data: transformedHistory };
+    // Return history directly - status is already properly typed from schema
+    return { success: true, data: history };
   } catch (error) {
     console.error("Error fetching member pace of play history:", error);
     return {

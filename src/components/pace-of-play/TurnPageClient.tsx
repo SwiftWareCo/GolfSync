@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -8,8 +8,7 @@ import { Button } from "~/components/ui/button";
 import { PaceOfPlayCard } from "~/components/pace-of-play/PaceOfPlayCard";
 import { PaceOfPlayUpdateModal } from "~/components/pace-of-play/PaceOfPlayUpdateModal";
 import { AdminPaceOfPlayModal } from "~/components/pace-of-play/AdminPaceOfPlayModal";
-import { type TimeBlockWithPaceOfPlay } from "~/app/types/PaceOfPlayTypes";
-import { useRouter } from "next/navigation";
+import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
 
 interface TurnPageClientProps {
   initialTimeBlocks: TimeBlockWithPaceOfPlay[];
@@ -21,32 +20,10 @@ export function TurnPageClient({
   isAdmin = false,
 }: TurnPageClientProps) {
   const { user } = useUser();
-  const router = useRouter();
-  const [timeBlocks, setTimeBlocks] =
-    useState<TimeBlockWithPaceOfPlay[]>(initialTimeBlocks);
   const [selectedTimeBlock, setSelectedTimeBlock] =
     useState<TimeBlockWithPaceOfPlay | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
-
-  // Keep timeBlocks updated when initialTimeBlocks changes
-  useEffect(() => {
-    setTimeBlocks(initialTimeBlocks);
-  }, [initialTimeBlocks]);
-
-  // Auto-refresh for admin only
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const intervalId = setInterval(
-      () => {
-        router.refresh();
-      },
-      2 * 60 * 1000,
-    );
-
-    return () => clearInterval(intervalId);
-  }, [isAdmin, router]);
 
   const handleUpdateTurn = (timeBlock: TimeBlockWithPaceOfPlay) => {
     setSelectedTimeBlock(timeBlock);
@@ -62,9 +39,6 @@ export function TurnPageClient({
     setIsModalOpen(false);
     setIsAdminModalOpen(false);
     setSelectedTimeBlock(null);
-    if (isAdmin) {
-      router.refresh();
-    }
   };
 
   return (
@@ -84,7 +58,7 @@ export function TurnPageClient({
       </Card>
 
       <div className="space-y-4">
-        {timeBlocks.length === 0 ? (
+        {initialTimeBlocks.length === 0 ? (
           <div className="py-12 text-center">
             <h3 className="mb-2 text-xl font-bold">No groups at the turn</h3>
             <p className="text-muted-foreground">
@@ -92,7 +66,7 @@ export function TurnPageClient({
             </p>
           </div>
         ) : (
-          timeBlocks.map((timeBlock) => (
+          initialTimeBlocks.map((timeBlock) => (
             <div key={timeBlock.id} className="space-y-2">
               <PaceOfPlayCard
                 timeBlock={timeBlock}

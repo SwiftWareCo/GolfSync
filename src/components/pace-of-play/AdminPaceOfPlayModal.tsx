@@ -12,7 +12,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { type TimeBlockWithPaceOfPlay } from "~/app/types/PaceOfPlayTypes";
+import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
 import {
   updateTurnTime,
   updateFinishTime,
@@ -23,6 +23,7 @@ import {
   getBCNow,
   getBCToday,
   formatTime,
+  parseDateTime,
 } from "~/lib/dates";
 import { Clock, Save, RotateCcw } from "lucide-react";
 
@@ -118,13 +119,13 @@ export function AdminPaceOfPlayModal({
       let turnDateTime: Date | undefined;
       let finishDateTime: Date | undefined;
 
-      // Parse custom times if provided
+      // Parse custom times if provided - use BC timezone
       if ((mode === "turn" || mode === "both") && customTurnTime) {
-        turnDateTime = new Date(`${customDate}T${customTurnTime}`);
+        turnDateTime = parseDateTime(customDate, customTurnTime);
       }
 
       if ((mode === "finish" || mode === "both") && customFinishTime) {
-        finishDateTime = new Date(`${customDate}T${customFinishTime}`);
+        finishDateTime = parseDateTime(customDate, customFinishTime);
       }
 
       // Validate that we have the required times
@@ -182,7 +183,7 @@ export function AdminPaceOfPlayModal({
 
   const getCurrentTime = () => {
     const now = getBCNow();
-    return formatTime(now);
+    return formatTime12Hour(now);
   };
 
   const title =

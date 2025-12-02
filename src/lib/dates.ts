@@ -43,20 +43,6 @@ export function getBCNow(): Date {
   return toZonedTime(utcNow, BC_TIMEZONE);
 }
 
-/**
- * Converts a UTC date to BC timezone
- */
-export function toBCTime(utcDate: Date): Date {
-  return toZonedTime(utcDate, BC_TIMEZONE);
-}
-
-/**
- * Converts a BC timezone date to UTC for database storage
- */
-export function toUTC(bcDate: Date): Date {
-  return fromZonedTime(bcDate, BC_TIMEZONE);
-}
-
 // ============================================================================
 // PARSING & CREATING DATES
 // ============================================================================
@@ -146,12 +132,21 @@ export function formatTime(time: string | Date): string {
 
 /**
  * Formats time for display in 12-hour format
+ * Handles: HH:MM strings, ISO timestamps, and Date objects
  */
 export function formatTime12Hour(time: string | Date): string {
   if (typeof time === "string") {
+    // Check if it's an ISO timestamp (contains 'T' or full date format)
+    if (time.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(time)) {
+      // It's an ISO timestamp, convert to Date and format in BC timezone
+      return formatInTimeZone(new Date(time), BC_TIMEZONE, "h:mm a");
+    }
+
     // Handle HH:MM format - convert to 12-hour
     if (!/^\d{2}:\d{2}$/.test(time)) {
-      throw new Error(`Invalid time format: ${time}. Expected HH:MM`);
+      throw new Error(
+        `Invalid time format: ${time}. Expected HH:MM or ISO timestamp`,
+      );
     }
 
     const parts = time.split(":");
@@ -289,7 +284,6 @@ export function getDayOfWeek(date: Date | string): number {
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
-
 
 /**
  * Formats an array of day numbers (0-6) to readable text

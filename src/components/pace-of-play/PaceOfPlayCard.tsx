@@ -1,15 +1,11 @@
 import {
   Card,
   CardContent,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
 import { PaceOfPlayStatus, getStatusColor } from "./PaceOfPlayStatus";
-import type {
-  TimeBlockWithPaceOfPlay,
-  PaceOfPlayStatus as PaceOfPlayStatusType,
-} from "~/app/types/PaceOfPlayTypes";
+import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
 import { Button } from "~/components/ui/button";
 import {
   CalendarClock,
@@ -67,7 +63,7 @@ export function PaceOfPlayCard({
   const displayFinishTime = formatPaceOfPlayTime(paceOfPlay?.finishTime);
 
   const statusColor = paceOfPlay
-    ? getStatusColor(paceOfPlay.status as PaceOfPlayStatusType)
+    ? getStatusColor(paceOfPlay.status)
     : "text-gray-600";
 
   return (
@@ -77,11 +73,7 @@ export function PaceOfPlayCard({
           <CardTitle className="text-lg font-bold">
             {displayStartTime} Tee Time
           </CardTitle>
-          {paceOfPlay && (
-            <PaceOfPlayStatus
-              status={paceOfPlay.status as PaceOfPlayStatusType}
-            />
-          )}
+          {paceOfPlay && <PaceOfPlayStatus status={paceOfPlay.status} />}
           <div className="flex items-center gap-2">
             {showStartButton && !timeBlock.paceOfPlay?.startTime && (
               <Button

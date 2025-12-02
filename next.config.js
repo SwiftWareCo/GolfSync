@@ -9,7 +9,8 @@ import "./src/env.js";
 const config = {
   typescript: {
     ignoreBuildErrors: true,
-  }
+  },
+  reactCompiler: true,
 };
 
 export default config;

@@ -1,10 +1,12 @@
 "use client";
 
 import { Badge } from "~/components/ui/badge";
-import { type PaceOfPlayStatus } from "~/app/types/PaceOfPlayTypes";
+
+// Pace status type from schema
+type PaceOfPlayStatus = string;
 
 interface PaceOfPlayStatusProps {
-  status: PaceOfPlayStatus;
+  status: string;
   className?: string;
 }
 
@@ -30,26 +32,11 @@ export function PaceOfPlayStatus({ status, className }: PaceOfPlayStatusProps) {
   const config = statusConfig[status] || statusConfig.pending;
 
   return (
-    <Badge variant={config.variant} className={className}>
-      {config.label}
+    <Badge variant={config?.variant} className={className}>
+      {config?.label}
     </Badge>
   );
 }
 
-export function getStatusColor(status: PaceOfPlayStatus): string {
-  switch (status) {
-    case "on_time":
-    case "completed_on_time":
-      return "text-yellow-600";
-    case "behind":
-    case "completed_late":
-      return "text-red-600";
-    case "ahead":
-    case "completed_early":
-      return "text-green-600";
-    case "completed":
-      return "text-blue-600";
-    default:
-      return "text-gray-600";
-  }
-}
+// Re-export from pace-helpers for backwards compatibility
+export { getPaceStatusColor as getStatusColor } from "~/lib/pace-helpers";
