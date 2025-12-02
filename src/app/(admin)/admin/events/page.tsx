@@ -23,7 +23,7 @@ export default async function EventsPage() {
       </div>
 
       <Suspense fallback={<div>Loading events...</div>}>
-        <EventsList initialEvents={events} memberClasses={memberClasses} />
+        <EventsList events={events} memberClasses={memberClasses} />
       </Suspense>
     </div>
   );

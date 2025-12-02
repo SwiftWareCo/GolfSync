@@ -12,11 +12,11 @@ import {
 } from "~/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { EventForm } from "./EventForm";
-import { type Event as AppEvent } from "~/app/types/events";
+import type { Event } from "~/server/events/data";
 import type { MemberClass } from "~/server/db/schema";
 
 interface EventDialogProps {
-  existingEvent?: AppEvent;
+  existingEvent?: Event;
   triggerButton?: React.ReactNode;
   title?: string;
   description?: string;

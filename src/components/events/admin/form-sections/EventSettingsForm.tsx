@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { type EventFormValues } from "../EventForm";
-import { getDateForDB, getBCToday } from "~/lib/dates";
+import { getDateForDB } from "~/lib/dates";
 
 interface EventSettingsFormProps {
   form: UseFormReturn<EventFormValues>;

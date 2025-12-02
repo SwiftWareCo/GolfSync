@@ -11,16 +11,16 @@ import {
 } from "~/components/ui/select";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { type EventWithRegistrations } from "~/app/types/events";
+import type { EventWithRegistrations } from "~/server/events/data";
 import type { MemberClass } from "~/server/db/schema";
 
 interface EventsListProps {
-  initialEvents: EventWithRegistrations[];
+  events: EventWithRegistrations[];
   memberClasses?: MemberClass[];
 }
 
 export default function EventsList({
-  initialEvents,
+  events,
   memberClasses,
 }: EventsListProps) {
   const [searchTerm, setSearchTerm] = useState("");
@@ -29,13 +29,13 @@ export default function EventsList({
   const [filterApproval, setFilterApproval] = useState<string>("ALL");
 
   // Count events with pending registrations
-  const eventsWithPendingCount = initialEvents.filter(
+  const eventsWithPendingCount = events.filter(
     (event) =>
       event.pendingRegistrationsCount && event.pendingRegistrationsCount > 0,
   ).length;
 
   // Filter events based on search term and filters
-  const filteredEvents = initialEvents.filter((event) => {
+  const filteredEvents = events.filter((event) => {
     // Search filter
     const matchesSearch =
       event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -141,7 +141,7 @@ export default function EventsList({
       )}
 
       <div className="text-muted-foreground mt-4 text-sm">
-        Showing {filteredEvents.length} out of {initialEvents.length} events
+        Showing {filteredEvents.length} out of {events.length} events
       </div>
     </div>
   );

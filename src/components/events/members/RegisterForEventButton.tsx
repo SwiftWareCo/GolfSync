@@ -15,10 +15,9 @@ import { Label } from "~/components/ui/label";
 import { registerForEvent } from "~/server/events/actions";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
-import { type RegisterForEventButtonProps } from "~/app/types/events";
 import TeamRegistrationForm from "./TeamRegistrationForm";
 
-interface ExtendedRegisterForEventButtonProps extends RegisterForEventButtonProps {
+interface ExtendedRegisterForEventButtonProps {
   event?: {
     id: number;
     name: string;
@@ -28,6 +27,11 @@ interface ExtendedRegisterForEventButtonProps extends RegisterForEventButtonProp
     isActive: boolean;
   };
   memberName?: string;
+  eventId: number;
+  memberId: number;
+  disabled?: boolean;
+  requiresApproval?: boolean;
+  className?: string;
 }
 
 export default function RegisterForEventButton({
@@ -48,15 +52,7 @@ export default function RegisterForEventButton({
   if (event && event.teamSize > 1) {
     return (
       <TeamRegistrationForm
-        event={{
-          ...event,
-          description: "",
-          eventType: "TOURNAMENT",
-          startDate: "",
-          endDate: "",
-          memberClasses: [],
-          createdAt: new Date(),
-        }}
+        event={event as any}
         memberId={memberId}
         memberName={memberName || "You"}
         className={className}

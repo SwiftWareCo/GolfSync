@@ -1,7 +1,7 @@
 "use client";
 
 import { EventCard } from "~/components/events/EventCard";
-import { type Event, type EventRegistration } from "~/app/types/events";
+import type { Event, EventRegistration } from "~/server/events/data";
 
 interface EventsListMemberProps {
   initialEvents: Event[];

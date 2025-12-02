@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
-import { type Event } from "~/app/types/events";
+import type { Event } from "~/server/events/data";
 import {
   formatDate,
   formatTime12Hour,
@@ -358,15 +358,15 @@ export function EventTimetableRow({
                 disabled={
                   !event.isActive || isRegistrationClosed || isAtCapacity
                 }
-                requiresApproval={event.requiresApproval}
+                requiresApproval={event.requiresApproval ?? false}
                 className="w-full"
                 event={{
                   id: event.id,
                   name: event.name,
                   teamSize: event.teamSize,
-                  guestsAllowed: event.guestsAllowed,
-                  requiresApproval: event.requiresApproval,
-                  isActive: event.isActive,
+                  guestsAllowed: event.guestsAllowed ?? false,
+                  requiresApproval: event.requiresApproval ?? false,
+                  isActive: event.isActive ?? true,
                 }}
               />
             )}

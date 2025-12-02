@@ -10,7 +10,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Separator } from "~/components/ui/separator";
 import { Users, User, UserCheck } from "lucide-react";
-import { type EventRegistration } from "~/app/types/events";
+import type { EventRegistration } from "~/server/events/data";
 
 interface ViewRegistrationDialogProps {
   isOpen: boolean;
@@ -75,7 +75,7 @@ export function ViewRegistrationDialog({
             <div>
               <DialogTitle className="text-xl">Registration Details</DialogTitle>
               <DialogDescription>
-                {isTeamCaptain ? "You registered this team" : `Registered by ${captain.firstName} ${captain.lastName}`}
+                {isTeamCaptain ? "You registered this team" : captain ? `Registered by ${captain.firstName} ${captain.lastName}` : "Registered by a member"}
               </DialogDescription>
             </div>
             <Badge variant={statusBadge.variant} className={statusBadge.className}>
@@ -93,14 +93,14 @@ export function ViewRegistrationDialog({
             </div>
             <div className="flex items-center gap-3 rounded-lg border bg-org-primary/5 border-org-primary/20 p-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-org-primary text-white text-lg font-medium">
-                {captain.firstName.charAt(0)}
+                {captain?.firstName?.charAt(0)}
               </div>
               <div className="flex-1">
                 <div className="font-medium text-lg">
-                  {captain.firstName} {captain.lastName}
+                  {captain?.firstName} {captain?.lastName}
                   {isTeamCaptain && <span className="text-sm text-gray-600 ml-2">(You)</span>}
                 </div>
-                <div className="text-sm text-gray-600">#{captain.memberNumber}</div>
+                <div className="text-sm text-gray-600">#{captain?.memberNumber}</div>
               </div>
             </div>
           </div>
@@ -122,14 +122,14 @@ export function ViewRegistrationDialog({
                       className="flex items-center gap-3 rounded-lg border p-3"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-sm font-medium">
-                        {member.firstName.charAt(0)}
+                        {member?.firstName?.charAt(0)}
                       </div>
                       <div className="flex-1">
                         <div className="font-medium">
-                          {member.firstName} {member.lastName}
-                          {member.id === currentMemberId && <span className="text-sm text-gray-600 ml-2">(You)</span>}
+                          {member?.firstName} {member?.lastName}
+                          {member?.id === currentMemberId && <span className="text-sm text-gray-600 ml-2">(You)</span>}
                         </div>
-                        <div className="text-sm text-gray-500">#{member.memberNumber}</div>
+                        <div className="text-sm text-gray-500">#{member?.memberNumber}</div>
                       </div>
                     </div>
                   ))}

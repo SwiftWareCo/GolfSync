@@ -6,7 +6,6 @@ import {
   Clock,
   MapPin,
   Users,
-  ChevronRight,
   Trophy,
   Clock10,
   Eye,
@@ -30,18 +29,16 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "~/components/ui/dialog";
 import { Separator } from "~/components/ui/separator";
 import { cn } from "~/lib/utils";
-import Link from "next/link";
 import { EventDialog } from "./admin/EventDialog";
 import { useMediaQuery } from "~/hooks/use-media-query";
 import RegisterForEventButton from "./members/RegisterForEventButton";
 import RegistrationsDialog from "./admin/RegistrationsDialog";
 import DeleteEventButton from "./admin/DeleteEventButton";
 import { ViewRegistrationDialog } from "./members/ViewRegistrationDialog";
-import { type EventCardProps } from "~/app/types/events";
+import type { Event } from "~/server/events/data";
 import type { MemberClass } from "~/server/db/schema";
 import {
   formatDate,
@@ -69,16 +66,32 @@ function getEventTypeBadge(eventType: string) {
 }
 
 // Helper function to format member classes display
-function formatMemberClasses(memberClasses: string[]): string {
+function formatMemberClasses(memberClasses: MemberClass[]): string {
   if (!memberClasses || memberClasses.length === 0) return "";
 
   // If 3 or fewer classes, show them all
   if (memberClasses.length <= 3) {
-    return memberClasses.join(", ");
+    return memberClasses.map((mc) => mc.label).join(", ");
   }
 
   // If more than 3, show count
   return `${memberClasses.length} Classes`;
+}
+
+interface EventCardComponentProps {
+  event: Event;
+  linkPrefix?: string;
+  className?: string;
+  isAdmin?: boolean;
+  isMember?: boolean;
+  memberId?: number;
+  isRegistered?: boolean;
+  registrations?: Event["registrations"];
+  registrationStatus?: string;
+  registrationData?: any;
+  variant?: "default" | "compact";
+  clickableCard?: boolean;
+  memberClasses?: MemberClass[];
 }
 
 export function EventCard({
@@ -93,9 +106,9 @@ export function EventCard({
   registrationStatus,
   registrationData,
   variant = "default",
-  memberClasses = [],
   clickableCard = false,
-}: EventCardProps & { variant?: "default" | "compact"; memberClasses?: MemberClass[]; clickableCard?: boolean }) {
+  memberClasses = [],
+}: EventCardComponentProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [registrationsDialogOpen, setRegistrationsDialogOpen] = useState(false);
   const [viewRegistrationOpen, setViewRegistrationOpen] = useState(false);
@@ -324,15 +337,15 @@ export function EventCard({
                       disabled={
                         !event.isActive || isRegistrationClosed || isAtCapacity
                       }
-                      requiresApproval={event.requiresApproval}
+                      requiresApproval={event.requiresApproval ?? false}
                       className="h-9 flex-1"
                       event={{
                         id: event.id,
                         name: event.name,
                         teamSize: event.teamSize,
-                        guestsAllowed: event.guestsAllowed,
-                        requiresApproval: event.requiresApproval,
-                        isActive: event.isActive,
+                        guestsAllowed: event.guestsAllowed ?? false,
+                        requiresApproval: event.requiresApproval ?? false,
+                        isActive: event.isActive ?? true,
                       }}
                     />
                   )}
@@ -531,15 +544,15 @@ export function EventCard({
                   disabled={
                     !event.isActive || isRegistrationClosed || isAtCapacity
                   }
-                  requiresApproval={event.requiresApproval}
+                  requiresApproval={event.requiresApproval ?? false}
                   className="w-full"
                   event={{
                     id: event.id,
                     name: event.name,
                     teamSize: event.teamSize,
-                    guestsAllowed: event.guestsAllowed,
-                    requiresApproval: event.requiresApproval,
-                    isActive: event.isActive,
+                    guestsAllowed: event.guestsAllowed ?? false,
+                    requiresApproval: event.requiresApproval ?? false,
+                    isActive: event.isActive ?? true,
                   }}
                 />
               )}
@@ -552,9 +565,9 @@ export function EventCard({
           <ViewRegistrationDialog
             isOpen={viewRegistrationOpen}
             onOpenChange={setViewRegistrationOpen}
-            registration={registrationData}
+            registration={registrationData as any}
             currentMemberId={memberId}
-            teamMembers={registrationData.teamMembers}
+            teamMembers={registrationData.teamMembers || []}
           />
         )}
       </>
@@ -669,14 +682,14 @@ export function EventCard({
                 disabled={
                   !event.isActive || isRegistrationClosed || isAtCapacity
                 }
-                requiresApproval={event.requiresApproval}
+                requiresApproval={event.requiresApproval ?? false}
                 event={{
                   id: event.id,
                   name: event.name,
                   teamSize: event.teamSize,
-                  guestsAllowed: event.guestsAllowed,
-                  requiresApproval: event.requiresApproval,
-                  isActive: event.isActive,
+                  guestsAllowed: event.guestsAllowed ?? false,
+                  requiresApproval: event.requiresApproval ?? false,
+                  isActive: event.isActive ?? true,
                 }}
               />
             </div>
@@ -996,14 +1009,14 @@ export function EventCard({
                   eventId={event.id}
                   memberId={memberId}
                   disabled={!event.isActive || isRegistrationClosed}
-                  requiresApproval={event.requiresApproval}
+                  requiresApproval={event.requiresApproval ?? false}
                   event={{
                     id: event.id,
                     name: event.name,
                     teamSize: event.teamSize,
-                    guestsAllowed: event.guestsAllowed,
-                    requiresApproval: event.requiresApproval,
-                    isActive: event.isActive,
+                    guestsAllowed: event.guestsAllowed ?? false,
+                    requiresApproval: event.requiresApproval ?? false,
+                    isActive: event.isActive ?? true,
                   }}
                 />
               </div>

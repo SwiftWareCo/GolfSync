@@ -41,7 +41,12 @@ type Member = {
   firstName: string;
   lastName: string;
   memberNumber: string;
-  class: string;
+  classId: number;
+  memberClass: {
+    id: number;
+    label: string;
+    isActive: boolean;
+  };
 };
 
 type Guest = {
@@ -414,7 +419,7 @@ export function AddRegistrationDialog({
                               {member.firstName} {member.lastName}
                             </div>
                             <div className="text-xs text-gray-500">
-                              #{member.memberNumber} - {member.class}
+                              #{member.memberNumber} - {member.memberClass.label}
                             </div>
                           </div>
                           <UserCheck className="h-4 w-4 text-gray-400" />
@@ -486,7 +491,7 @@ export function AddRegistrationDialog({
                               {member.firstName} {member.lastName}
                             </div>
                             <div className="text-xs text-gray-500">
-                              #{member.memberNumber} - {member.class}
+                              #{member.memberNumber} - {member.memberClass.label}
                             </div>
                           </div>
                           <UserPlus className="h-4 w-4 text-gray-400" />

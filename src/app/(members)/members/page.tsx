@@ -28,7 +28,7 @@ export default async function MembersHome() {
   const upcomingTeeTimes = await getUpcomingTeeTimes(member as Member);
 
   // Get upcoming events for member's class
-  const upcomingEvents = await getUpcomingEvents(3, member?.class);
+  const upcomingEvents = await getUpcomingEvents(3, member?.memberClass?.label);
 
   // Get member registrations for these events
   const memberRegistrations = member?.id
@@ -102,7 +102,7 @@ export default async function MembersHome() {
                     requiresApproval: event.requiresApproval,
                     registrationDeadline: event.registrationDeadline,
                     isActive: event.isActive,
-                    memberClasses: event.memberClasses,
+                    memberClassIds: event.memberClassIds,
                     teamSize: event.teamSize,
                     guestsAllowed: event.guestsAllowed,
                     createdAt: event.createdAt,

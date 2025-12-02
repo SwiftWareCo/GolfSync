@@ -31,7 +31,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Teesheet,
   TeesheetConfig,
-  TeesheetConfigWithBlocks,
   TimeBlock,
 } from "~/server/db/schema";
 import {

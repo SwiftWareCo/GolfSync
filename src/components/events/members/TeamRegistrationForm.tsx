@@ -27,7 +27,7 @@ import { MemberSearchInput } from "~/components/members/MemberSearchInput";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 import { Users, X, UserPlus } from "lucide-react";
-import { type Event } from "~/app/types/events";
+import type { Event } from "~/server/events/data";
 import { FillTypes } from "~/server/db/schema/fills.schema";
 
 interface SearchMember {

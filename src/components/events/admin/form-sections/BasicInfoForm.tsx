@@ -39,10 +39,10 @@ interface BasicInfoFormProps {
 }
 
 export function BasicInfoForm({ form, memberClasses }: BasicInfoFormProps) {
-  // Convert member classes to options with null check
+  // Convert member classes to options with ID values
   const memberClassOptions = (memberClasses || []).map((mc) => ({
     label: mc.label,
-    value: mc.label,
+    value: mc.id.toString(),
   }));
 
   return (
@@ -184,15 +184,15 @@ export function BasicInfoForm({ form, memberClasses }: BasicInfoFormProps) {
 
       <FormField
         control={form.control}
-        name="memberClasses"
+        name="memberClassIds"
         render={({ field }) => (
           <FormItem>
             <FormLabel>Member Classes</FormLabel>
             <FormControl>
               <MultiSelect
-                selected={field.value}
+                selected={field.value.map(String)}
                 options={memberClassOptions}
-                onChange={field.onChange}
+                onChange={(selected) => field.onChange(selected.map(Number))}
                 placeholder="Select member classes"
               />
             </FormControl>

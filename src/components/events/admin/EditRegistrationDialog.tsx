@@ -39,7 +39,12 @@ type Member = {
   firstName: string;
   lastName: string;
   memberNumber: string;
-  class: string;
+  classId: number;
+  memberClass: {
+    id: number;
+    label: string;
+    isActive: boolean;
+  };
 };
 
 type Guest = {
@@ -113,7 +118,7 @@ export function EditRegistrationDialog({
         const fetchTeamMembers = async () => {
           try {
             const members = await getMembersByIds(registration.teamMemberIds);
-            setTeamMembers(members);
+            setTeamMembers(members as any);
           } catch (error) {
             console.error("Error fetching team members:", error);
             toast.error("Failed to load team members");
@@ -381,7 +386,7 @@ export function EditRegistrationDialog({
                               {member.firstName} {member.lastName}
                             </div>
                             <div className="text-xs text-gray-500">
-                              #{member.memberNumber} - {member.class}
+                              #{member.memberNumber} - {member.memberClass.label}
                             </div>
                           </div>
                           <UserPlus className="h-4 w-4 text-gray-400" />

@@ -57,7 +57,7 @@ async function RestrictionsTab() {
   return (
     <TimeblockRestrictionsSettings
       initialRestrictions={timeblockRestrictions}
-      memberClasses={memberClasses}
+      memberClasses={memberClasses.map((mc) => mc.label)}
       allMemberClasses={allMemberClasses}
     />
   );

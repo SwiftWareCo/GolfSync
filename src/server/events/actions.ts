@@ -4,133 +4,55 @@ import { db } from "~/server/db";
 import { events, eventRegistrations, eventDetails, members } from "~/server/db/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-
-import { z } from "zod";
-
-// Validation schema for event
-const eventSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  description: z.string().min(1, "Description is required"),
-  eventType: z.string().min(1, "Event type is required"),
-  startDate: z.string().min(1, "Start date is required"),
-  endDate: z.string().min(1, "End date is required"),
-  startTime: z.string().optional().nullable(),
-  endTime: z.string().optional().nullable(),
-  location: z.string().optional().nullable(),
-  capacity: z.number().int().positive().optional().nullable(),
-  requiresApproval: z.boolean().default(false),
-  registrationDeadline: z.string().optional().nullable(),
-  isActive: z.boolean().default(true),
-  memberClasses: z.array(z.string()).default([]),
-  teamSize: z.number().int().positive().default(1),
-  guestsAllowed: z.boolean().default(false),
-});
-
-// Validation schema for event details
-const eventDetailsSchema = z.object({
-  format: z.string().optional().nullable(),
-  rules: z.string().optional().nullable(),
-  prizes: z.string().optional().nullable(),
-  entryFee: z.number().nonnegative().optional().nullable(),
-  additionalInfo: z.string().optional().nullable(),
-});
+import { requireAdmin, requireAuthentication } from "~/lib/auth-server";
+import type { EventFormValues } from "~/components/events/admin/EventForm";
 
 // Create a new event
-export async function createEvent(formData: {
-  name: string;
-  description: string;
-  eventType: string;
-  startDate: string;
-  endDate: string;
-  startTime?: string;
-  endTime?: string;
-  location?: string;
-  capacity?: number;
-  requiresApproval?: boolean;
-  registrationDeadline?: string;
-  isActive?: boolean;
-  memberClasses?: string[];
-  teamSize?: number;
-  guestsAllowed?: boolean;
-  // Event details
-  format?: string;
-  rules?: string;
-  prizes?: string;
-  entryFee?: number;
-  additionalInfo?: string;
-}) {
+export async function createEvent(data: EventFormValues) {
   try {
-    // Parse and validate event data
-    const eventData = eventSchema.parse({
-      name: formData.name,
-      description: formData.description,
-      eventType: formData.eventType,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      startTime: formData.startTime || null,
-      endTime: formData.endTime || null,
-      location: formData.location || null,
-      capacity: formData.capacity || null,
-      requiresApproval: formData.requiresApproval || false,
-      registrationDeadline: formData.registrationDeadline || null,
-      isActive: formData.isActive ?? true,
-      memberClasses: formData.memberClasses || [],
-      teamSize: formData.teamSize || 1,
-      guestsAllowed: formData.guestsAllowed || false,
-    });
+    await requireAdmin();
 
-    // Insert event
     const result = await db
       .insert(events)
       .values({
-        name: eventData.name,
-        description: eventData.description,
-        eventType: eventData.eventType,
-        startDate: eventData.startDate,
-        endDate: eventData.endDate,
-        startTime: eventData.startTime || undefined,
-        endTime: eventData.endTime || undefined,
-        location: eventData.location || undefined,
-        capacity: eventData.capacity || undefined,
-        requiresApproval: eventData.requiresApproval,
-        registrationDeadline: eventData.registrationDeadline
-          ? eventData.registrationDeadline
-          : undefined,
-        isActive: eventData.isActive,
-        memberClasses: eventData.memberClasses,
-        teamSize: eventData.teamSize,
-        guestsAllowed: eventData.guestsAllowed,
+        name: data.name,
+        description: data.description,
+        eventType: data.eventType,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        location: data.location,
+        capacity: data.capacity,
+        requiresApproval: data.requiresApproval,
+        registrationDeadline: data.registrationDeadline,
+        isActive: data.isActive,
+        memberClassIds: data.memberClassIds,
+        teamSize: data.teamSize,
+        guestsAllowed: data.guestsAllowed,
       })
       .returning();
 
     const newEvent = result[0];
     if (!newEvent) {
-      throw new Error("Failed to create event - no event returned");
+      throw new Error("Failed to create event");
     }
 
-    // Insert event details if available
+    // Insert event details if any fields have values
     if (
-      formData.format ||
-      formData.rules ||
-      formData.prizes ||
-      formData.entryFee ||
-      formData.additionalInfo
+      data.format ||
+      data.rules ||
+      data.prizes ||
+      data.entryFee ||
+      data.additionalInfo
     ) {
-      const detailsData = eventDetailsSchema.parse({
-        format: formData.format || null,
-        rules: formData.rules || null,
-        prizes: formData.prizes || null,
-        entryFee: formData.entryFee || null,
-        additionalInfo: formData.additionalInfo || null,
-      });
-
       await db.insert(eventDetails).values({
         eventId: newEvent.id,
-        format: detailsData.format || undefined,
-        rules: detailsData.rules || undefined,
-        prizes: detailsData.prizes || undefined,
-        entryFee: detailsData.entryFee || undefined,
-        additionalInfo: detailsData.additionalInfo || undefined,
+        format: data.format,
+        rules: data.rules,
+        prizes: data.prizes,
+        entryFee: data.entryFee,
+        additionalInfo: data.additionalInfo,
       });
     }
 
@@ -144,71 +66,28 @@ export async function createEvent(formData: {
 }
 
 // Update an existing event
-export async function updateEvent(
-  eventId: number,
-  formData: {
-    name: string;
-    description: string;
-    eventType: string;
-    startDate: string;
-    endDate: string;
-    startTime?: string;
-    endTime?: string;
-    location?: string;
-    capacity?: number;
-    requiresApproval?: boolean;
-    registrationDeadline?: string;
-    isActive?: boolean;
-    memberClasses?: string[];
-    teamSize?: number;
-    guestsAllowed?: boolean;
-    // Event details
-    format?: string;
-    rules?: string;
-    prizes?: string;
-    entryFee?: number;
-    additionalInfo?: string;
-  },
-) {
+export async function updateEvent(eventId: number, data: EventFormValues) {
   try {
-    // Parse and validate event data
-    const eventData = eventSchema.parse({
-      name: formData.name,
-      description: formData.description,
-      eventType: formData.eventType,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      startTime: formData.startTime || null,
-      endTime: formData.endTime || null,
-      location: formData.location || null,
-      capacity: formData.capacity || null,
-      requiresApproval: formData.requiresApproval || false,
-      registrationDeadline: formData.registrationDeadline || null,
-      isActive: formData.isActive ?? true,
-      memberClasses: formData.memberClasses || [],
-      teamSize: formData.teamSize || 1,
-      guestsAllowed: formData.guestsAllowed || false,
-    });
+    await requireAdmin();
 
-    // Update event
     await db
       .update(events)
       .set({
-        name: eventData.name,
-        description: eventData.description,
-        eventType: eventData.eventType,
-        startDate: eventData.startDate,
-        endDate: eventData.endDate,
-        startTime: eventData.startTime || undefined,
-        endTime: eventData.endTime || undefined,
-        location: eventData.location || undefined,
-        capacity: eventData.capacity || undefined,
-        requiresApproval: eventData.requiresApproval,
-        registrationDeadline: eventData.registrationDeadline || undefined,
-        isActive: eventData.isActive,
-        memberClasses: eventData.memberClasses,
-        teamSize: eventData.teamSize,
-        guestsAllowed: eventData.guestsAllowed,
+        name: data.name,
+        description: data.description,
+        eventType: data.eventType,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        startTime: data.startTime,
+        endTime: data.endTime,
+        location: data.location,
+        capacity: data.capacity,
+        requiresApproval: data.requiresApproval,
+        registrationDeadline: data.registrationDeadline,
+        isActive: data.isActive,
+        memberClassIds: data.memberClassIds,
+        teamSize: data.teamSize,
+        guestsAllowed: data.guestsAllowed,
       })
       .where(eq(events.id, eventId));
 
@@ -217,39 +96,33 @@ export async function updateEvent(
       where: eq(eventDetails.eventId, eventId),
     });
 
-    // Parse details data
-    const detailsData = eventDetailsSchema.parse({
-      format: formData.format || null,
-      rules: formData.rules || null,
-      prizes: formData.prizes || null,
-      entryFee: formData.entryFee || null,
-      additionalInfo: formData.additionalInfo || null,
-    });
-
-    // Only include fields that have values
-    const detailsToUpsert: any = {};
-    if (detailsData.format !== null)
-      detailsToUpsert.format = detailsData.format || undefined;
-    if (detailsData.rules !== null)
-      detailsToUpsert.rules = detailsData.rules || undefined;
-    if (detailsData.prizes !== null)
-      detailsToUpsert.prizes = detailsData.prizes || undefined;
-    if (detailsData.entryFee !== null)
-      detailsToUpsert.entryFee = detailsData.entryFee || undefined;
-    if (detailsData.additionalInfo !== null)
-      detailsToUpsert.additionalInfo = detailsData.additionalInfo || undefined;
-
-    // Update or insert details only if there are values to set
-    if (Object.keys(detailsToUpsert).length > 0) {
+    // Update or insert details only if any fields have values
+    if (
+      data.format ||
+      data.rules ||
+      data.prizes ||
+      data.entryFee ||
+      data.additionalInfo
+    ) {
       if (existingDetails) {
         await db
           .update(eventDetails)
-          .set(detailsToUpsert)
+          .set({
+            format: data.format,
+            rules: data.rules,
+            prizes: data.prizes,
+            entryFee: data.entryFee,
+            additionalInfo: data.additionalInfo,
+          })
           .where(eq(eventDetails.eventId, eventId));
       } else {
         await db.insert(eventDetails).values({
           eventId,
-          ...detailsToUpsert,
+          format: data.format,
+          rules: data.rules,
+          prizes: data.prizes,
+          entryFee: data.entryFee,
+          additionalInfo: data.additionalInfo,
         });
       }
     } else if (existingDetails) {
@@ -271,6 +144,8 @@ export async function updateEvent(
 // Delete an event
 export async function deleteEvent(eventId: number) {
   try {
+    await requireAdmin();
+
     await db.delete(events).where(eq(events.id, eventId));
 
     revalidatePath("/admin/events");
@@ -322,6 +197,7 @@ export async function registerForEvent(
   fills?: Array<{fillType: string; customName?: string}>,
 ) {
   try {
+    await requireAuthentication();
     // Check if captain is already registered (as captain or team member)
     const captainExistingRegistration = await db.query.eventRegistrations.findFirst({
       where: and(
@@ -442,6 +318,7 @@ export async function updateRegistrationStatus(
   notes?: string,
 ) {
   try {
+    await requireAdmin();
     await db
       .update(eventRegistrations)
       .set({
@@ -467,6 +344,7 @@ export async function updateEventRegistrationDetails(
   }
 ) {
   try {
+    await requireAdmin();
     // Get the current registration to check eventId and captain
     const currentRegistration = await db.query.eventRegistrations.findFirst({
       where: eq(eventRegistrations.id, registrationId),
@@ -533,6 +411,7 @@ export async function createEventRegistrationAsAdmin(
   }
 ) {
   try {
+    await requireAdmin();
     // Check if captain is already registered (as captain or team member)
     const captainExistingRegistration = await db.query.eventRegistrations.findFirst({
       where: and(

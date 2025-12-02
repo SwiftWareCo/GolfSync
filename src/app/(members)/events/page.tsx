@@ -14,7 +14,7 @@ export default async function EventsPage() {
   const member = await getMemberData(sessionClaims?.userId as string);
 
   // Get all events for the member's class
-  const events = await getEventsForClass(member?.class!);
+  const events = await getEventsForClass(member?.memberClass?.label!);
 
   // Get member registrations for these events
   const memberRegistrations = member?.id

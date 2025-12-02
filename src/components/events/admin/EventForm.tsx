@@ -10,7 +10,7 @@ import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { createEvent, updateEvent } from "~/server/events/actions";
 import toast from "react-hot-toast";
-import { type EventFormProps } from "~/app/types/events";
+import type { Event } from "~/server/events/data";
 import type { MemberClass } from "~/server/db/schema";
 import { BasicInfoForm } from "./form-sections/BasicInfoForm";
 import { EventDetailsForm } from "./form-sections/EventDetailsForm";
@@ -30,7 +30,7 @@ const formSchema = z.object({
   requiresApproval: z.boolean(),
   registrationDeadline: z.string().optional(),
   isActive: z.boolean(),
-  memberClasses: z.array(z.string()),
+  memberClassIds: z.array(z.number()),
   teamSize: z.coerce.number().int().positive(),
   guestsAllowed: z.boolean(),
   // Tournament/event details
@@ -43,7 +43,9 @@ const formSchema = z.object({
 
 export type EventFormValues = z.infer<typeof formSchema>;
 
-interface EventFormPropsWithMemberClasses extends EventFormProps {
+interface EventFormProps {
+  existingEvent?: Event;
+  onSuccess?: () => void;
   memberClasses: MemberClass[];
 }
 
@@ -51,26 +53,27 @@ export function EventForm({
   existingEvent,
   onSuccess,
   memberClasses,
-}: EventFormPropsWithMemberClasses) {
+}: EventFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
+
+  const today = new Date().toISOString().split("T")[0];
 
   const form = useForm<EventFormValues>({
     defaultValues: {
       name: existingEvent?.name ?? "",
       description: existingEvent?.description ?? "",
       eventType: existingEvent?.eventType ?? "TOURNAMENT",
-      startDate:
-        existingEvent?.startDate ?? new Date().toISOString().split("T")[0],
-      endDate: existingEvent?.endDate ?? new Date().toISOString().split("T")[0],
-      startTime: existingEvent?.startTime ?? "",
-      endTime: existingEvent?.endTime ?? "",
-      location: existingEvent?.location ?? "",
+      startDate: (existingEvent?.startDate as string) ?? today,
+      endDate: (existingEvent?.endDate as string) ?? today,
+      startTime: (existingEvent?.startTime as string) ?? "",
+      endTime: (existingEvent?.endTime as string) ?? "",
+      location: (existingEvent?.location as string) ?? "",
       capacity: existingEvent?.capacity ?? undefined,
       requiresApproval: existingEvent?.requiresApproval ?? false,
       registrationDeadline: existingEvent?.registrationDeadline ?? undefined,
       isActive: existingEvent?.isActive ?? true,
-      memberClasses: existingEvent?.memberClasses ?? [],
+      memberClassIds: existingEvent?.memberClassIds ?? [],
       teamSize: existingEvent?.teamSize ?? 1,
       guestsAllowed: existingEvent?.guestsAllowed ?? false,
       format: existingEvent?.details?.format ?? "",
@@ -80,7 +83,7 @@ export function EventForm({
       additionalInfo: existingEvent?.details?.additionalInfo ?? "",
     },
     resolver: zodResolver(formSchema),
-  });
+  } as any);
 
   // Watch event type to conditionally render fields
   const watchEventType = form.watch("eventType");
@@ -88,22 +91,9 @@ export function EventForm({
   const handleSubmit = form.handleSubmit(async (data: EventFormValues) => {
     setIsSubmitting(true);
     try {
-      // Convert empty strings to undefined to ensure proper null handling
-      const cleanedData = {
-        ...data,
-        startTime: data.startTime ?? undefined,
-        endTime: data.endTime ?? undefined,
-        location: data.location ?? undefined,
-        registrationDeadline: data.registrationDeadline ?? undefined,
-        format: data.format ?? undefined,
-        rules: data.rules ?? undefined,
-        prizes: data.prizes ?? undefined,
-        additionalInfo: data.additionalInfo ?? undefined,
-      };
-
       if (existingEvent) {
         // Update existing event
-        const result = await updateEvent(existingEvent.id, cleanedData);
+        const result = await updateEvent(existingEvent.id, data);
         if (result.success) {
           toast.success("Event updated successfully");
           if (onSuccess) {
@@ -116,7 +106,7 @@ export function EventForm({
         }
       } else {
         // Create new event
-        const result = await createEvent(cleanedData);
+        const result = await createEvent(data);
         if (result.success) {
           toast.success("Event created successfully");
           form.reset();

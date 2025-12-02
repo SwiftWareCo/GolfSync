@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
 import { isAfter, isBefore, startOfDay } from "date-fns";
 import { PageHeader } from "~/components/ui/page-header";
 import { Button } from "~/components/ui/button";
-import { ArrowLeft, Timer } from "lucide-react";
+import {  Timer } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "~/lib/dates";
 import { LotteryDashboard } from "~/components/lottery/LotteryDashboard";
@@ -26,26 +25,20 @@ interface PageProps {
 export default async function LotteryManagementPage({ params }: PageProps) {
   const { date } = await params;
 
-  // Validate date format (should be YYYY-MM-DD)
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(date)) {
-    redirect("/admin");
-  }
+
+
 
   const lotteryDate = new Date(date);
   const today = startOfDay(new Date());
 
-  // Check if date is valid
-  if (isNaN(lotteryDate.getTime())) {
-    redirect("/admin");
-  }
+
 
   // Check and run monthly maintenance if needed
   await checkAndRunMonthlyMaintenance();
 
   // Fetch all data at server level
   const [
-    members,
+    allMembers,
     initialStats,
     lotteryEntries,
     timeBlocks,
@@ -61,6 +54,14 @@ export default async function LotteryManagementPage({ params }: PageProps) {
     getActiveTimeRestrictionsForDate(date),
     getTeesheetWithTimeBlocks(date),
   ]);
+
+  // Transform members to include class property for component compatibility
+  const members = allMembers.map((member) => ({
+    id: member.id,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    class: member.memberClass?.label || "",
+  }));
 
   // Determine lottery status
   const isPastDate = isBefore(lotteryDate, today);
@@ -106,7 +107,14 @@ export default async function LotteryManagementPage({ params }: PageProps) {
         initialTimeBlocks={timeBlocks}
         config={config}
         restrictions={restrictions}
-        teesheetData={teesheetData}
+        teesheetData={{
+          teesheet: teesheetData?.teesheet,
+          config: teesheetData?.config,
+          timeBlocks: teesheetData?.timeBlocks || [],
+          availableConfigs: [],
+          paceOfPlayData: [],
+          date,
+        }}
       />
     </div>
   );
