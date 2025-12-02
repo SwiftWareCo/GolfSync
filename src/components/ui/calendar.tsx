@@ -18,11 +18,11 @@ function Calendar({
   modifiersClassNames,
 }: CalendarProps) {
   const [month, setMonth] = useState<Date>(selected || new Date());
-  const [numberOfMonths, setNumberOfMonths] = useState(3);
+  const [numberOfMonths, setNumberOfMonths] = useState(2);
 
   useEffect(() => {
     const handleResize = () => {
-      setNumberOfMonths(window.innerWidth <= 1024 ? 2 : 3);
+      setNumberOfMonths(window.innerWidth <= 1024 ? 1 : 2);
     };
 
     // Set initial value
@@ -34,7 +34,7 @@ function Calendar({
 
   return (
     <div className="relative w-full max-w-full overflow-hidden">
-      <div className="flex items-center justify-evenly">
+      <div className="flex items-center justify-center gap-4">
         <button
           onClick={() => {
             const newMonth = new Date(month);

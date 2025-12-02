@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
 import { type PlayerType } from "./time-block-row/PlayerBadge";
+import { TimeBlockNote, TimeBlockNoteEditor } from "~/components/timeblock/TimeBlockNotes";
 import { AddPlayerModal } from "~/components/timeblock/AddPlayerModal";
 import { AccountDialog } from "~/components/member-teesheet-client/AccountDialog";
 import {
@@ -13,6 +14,8 @@ import {
   removeFillFromTimeBlock,
   checkInMember,
   checkInGuest,
+  checkInAllTimeBlockParticipants,
+  updateTimeBlockNotes,
 } from "~/server/teesheet/actions";
 import { quickAssignPowerCart } from "~/server/charges/actions";
 import { toast } from "react-hot-toast";
@@ -35,6 +38,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
+  const [editingNoteTimeBlockId, setEditingNoteTimeBlockId] = useState<number | null>(null);
 
   // Use the fresh data from the query if available
   const timeBlocks = queryResult?.timeBlocks ?? [];
@@ -64,13 +68,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     },
 
     onError: (err, vars, context) => {
+      toast.error("Failed to remove player");
       if (context?.previous) {
         queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
       }
     },
 
-    onSettled: () => {
+    onSettled: (_data, error) => {
       queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("Player removed");
+      }
     },
   });
 
@@ -99,13 +107,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error("Failed to remove player");
       if (context?.previous) {
         queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
       }
     },
 
-    onSettled: () => {
+    onSettled: (_data, error) => {
       queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("Player removed");
+      }
     },
   });
 
@@ -176,13 +188,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error("Failed to update check-in status");
       if (context?.previous) {
         queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
       }
     },
 
-    onSettled: () => {
+    onSettled: (_data, error) => {
       queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("Check-in status updated");
+      }
     },
   });
 
@@ -218,13 +234,17 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     },
 
     onError: (_err, _vars, context) => {
+      toast.error("Failed to update check-in status");
       if (context?.previous) {
         queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
       }
     },
 
-    onSettled: () => {
+    onSettled: (_data, error) => {
       queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("Check-in status updated");
+      }
     },
   });
 
@@ -263,6 +283,40 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
       queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
       if (!error) {
         toast.success("Power cart assigned");
+      }
+    },
+  });
+
+  // Mutation for checking in all time block participants
+  const checkInAllMutation = useMutation({
+    mutationFn: ({ timeBlockId, isCheckedIn }: { timeBlockId: number; isCheckedIn: boolean }) =>
+      checkInAllTimeBlockParticipants(timeBlockId, isCheckedIn),
+
+    onError: (_err) => {
+      toast.error("Failed to check in all participants");
+    },
+
+    onSettled: (_data, error) => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("All participants checked in");
+      }
+    },
+  });
+
+  // Mutation for updating time block notes
+  const updateNotesMutation = useMutation({
+    mutationFn: ({ timeBlockId, notes }: { timeBlockId: number; notes: string | null }) =>
+      updateTimeBlockNotes(timeBlockId, notes),
+
+    onError: (_err) => {
+      toast.error("Failed to update notes");
+    },
+
+    onSettled: (_data, error) => {
+      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      if (!error) {
+        toast.success("Notes updated");
       }
     },
   });
@@ -333,6 +387,29 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     }
   };
 
+  const handleCheckInAll = (timeBlockId: number, _isCheckedIn: boolean) => {
+    checkInAllMutation.mutate({ timeBlockId, isCheckedIn: true });
+  };
+
+  const handleToggleNoteEdit = (timeBlockId: number) => {
+    setEditingNoteTimeBlockId(timeBlockId);
+  };
+
+  const handleSaveNote = async (timeBlockId: number, notes: string) => {
+    return new Promise<boolean>((resolve) => {
+      updateNotesMutation.mutate(
+        { timeBlockId, notes },
+        {
+          onSuccess: () => {
+            setEditingNoteTimeBlockId(null);
+            resolve(true);
+          },
+          onError: () => resolve(false),
+        }
+      );
+    });
+  };
+
   const selectedTimeBlock = timeBlocks.find(
     (b: any) => b.id === selectedTimeBlockId,
   );
@@ -362,7 +439,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   return (
     <div className="rounded-lg bg-white shadow">
-      <div className="rounded-lg border shadow">
+      <div className="rounded-lg p-1 border-1 border-org-primary shadow-2xl">
         <table className="w-full table-auto">
           <thead className="bg-gray-100 text-xs font-semibold text-gray-600 uppercase">
             <tr>
@@ -375,27 +452,55 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 ">
             {timeBlocks.map((block: any) => (
-              <TimeBlockRow
-                key={block.id}
-                timeBlockId={block.id}
-                startTime={block.startTime}
-                members={block.members || []}
-                guests={block.guests || []}
-                fills={block.fills || []}
-                onAddPlayer={() => handleAddPlayer(block.id)}
-                onRemovePlayer={(id, type) =>
-                  handleRemovePlayer(block.id, id, type)
-                }
-                onCheckInPlayer={(id, type, isCheckedIn) =>
-                  handleCheckInPlayer(block.id, id, type, isCheckedIn)
-                }
-                onPlayerClick={handlePlayerClick}
-                onAssignPowerCart={handleAssignPowerCart}
-                otherMembers={getOtherMembers(block)}
-                onTimeClick={() => handleAddPlayer(block.id)}
-              />
+              <React.Fragment key={block.id}>
+                {/* Note row - displayed above time block if notes exist or editing */}
+                {block.notes || editingNoteTimeBlockId === block.id ? (
+                  <tr>
+                    <td colSpan={3} className="px-0 py-0">
+                      {editingNoteTimeBlockId === block.id ? (
+                        <TimeBlockNoteEditor
+                          timeBlockId={block.id}
+                          initialNote={block.notes || ""}
+                          onSaveNotes={handleSaveNote}
+                          onCancel={() => setEditingNoteTimeBlockId(null)}
+                        />
+                      ) : (
+                        <TimeBlockNote
+                          notes={block.notes}
+                          onEditClick={() => setEditingNoteTimeBlockId(block.id)}
+                          timeBlockId={block.id}
+                          onSaveNotes={handleSaveNote}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ) : null}
+
+                {/* Time block row */}
+                <TimeBlockRow
+                  key={`row-${block.id}`}
+                  timeBlockId={block.id}
+                  startTime={block.startTime}
+                  members={block.members || []}
+                  guests={block.guests || []}
+                  fills={block.fills || []}
+                  onAddPlayer={() => handleAddPlayer(block.id)}
+                  onRemovePlayer={(id, type) =>
+                    handleRemovePlayer(block.id, id, type)
+                  }
+                  onCheckInPlayer={(id, type, isCheckedIn) =>
+                    handleCheckInPlayer(block.id, id, type, isCheckedIn)
+                  }
+                  onPlayerClick={handlePlayerClick}
+                  onAssignPowerCart={handleAssignPowerCart}
+                  otherMembers={getOtherMembers(block)}
+                  onTimeClick={() => handleAddPlayer(block.id)}
+                  onCheckInAll={handleCheckInAll}
+                  onToggleNoteEdit={handleToggleNoteEdit}
+                />
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -419,6 +524,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
           player={selectedPlayer}
         />
       )}
+
     </div>
   );
 }

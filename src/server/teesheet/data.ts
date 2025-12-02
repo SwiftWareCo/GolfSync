@@ -30,6 +30,28 @@ function flattenTimeBlock(rawTimeBlock: any): TimeBlockWithRelations {
   };
 }
 
+// Helper function to calculate occupancy stats from timeblocks
+function calculateOccupancy(flattenedTimeBlocks: TimeBlockWithRelations[], config: TeesheetConfigWithBlocks | null) {
+  let occupiedSpots = 0;
+  let totalCapacity = 0;
+
+  if (!config?.blocks || config.blocks.length === 0) {
+    return { occupiedSpots: 0, totalCapacity: 0 };
+  }
+
+  // Calculate total capacity
+  totalCapacity = config.blocks.reduce((sum, block) => sum + block.maxPlayers, 0);
+
+  // Calculate occupied spots (members + guests)
+  occupiedSpots = flattenedTimeBlocks.reduce((sum, timeBlock) => {
+    const memberCount = timeBlock.members?.length ?? 0;
+    const guestCount = timeBlock.guests?.length ?? 0;
+    return sum + memberCount + guestCount;
+  }, 0);
+
+  return { occupiedSpots, totalCapacity };
+}
+
 export async function createTimeBlocksForTeesheet(
   teesheetId: number,
   config: TeesheetConfigWithBlocks,
@@ -57,6 +79,8 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
   teesheet: Teesheet;
   config: TeesheetConfigWithBlocks | null;
   timeBlocks: TimeBlockWithRelations[];
+  occupiedSpots: number;
+  totalCapacity: number;
 }> {
   // 1. Check if teesheet exists WITH timeblocks already loaded
   const existingTeesheet = await db.query.teesheets.findFirst({
@@ -78,10 +102,14 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
 
   // 2. If exists return it
   if (existingTeesheet) {
+    const flattenedBlocks = existingTeesheet.timeBlocks.map(flattenTimeBlock);
+    const { occupiedSpots, totalCapacity } = calculateOccupancy(flattenedBlocks, existingTeesheet.config as TeesheetConfigWithBlocks | null);
     return {
       teesheet: existingTeesheet,
       config: existingTeesheet.config as TeesheetConfigWithBlocks | null,
-      timeBlocks: existingTeesheet.timeBlocks.map(flattenTimeBlock),
+      timeBlocks: flattenedBlocks,
+      occupiedSpots,
+      totalCapacity,
     };
   }
 
@@ -104,10 +132,14 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
     hydratedBlocks = await getTimeBlocksForTeesheet(newTeesheet.id);
   }
 
+  const { occupiedSpots, totalCapacity } = calculateOccupancy(hydratedBlocks, config ?? null);
+
   return {
     teesheet: newTeesheet,
     config: config ?? null,
     timeBlocks: hydratedBlocks,
+    occupiedSpots,
+    totalCapacity,
   };
 }
 

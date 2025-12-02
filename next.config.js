@@ -3,7 +3,9 @@
  * for Docker builds.
  */
 import "./src/env.js";
-
+// @ts-check
+ 
+/** @type {import('next').NextConfig} */
 const config = {
   typescript: {
     ignoreBuildErrors: true,

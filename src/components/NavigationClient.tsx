@@ -42,19 +42,19 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
               className="flex-shrink-0 transition-transform hover:scale-105"
             >
               {logoUrl ? (
-                <div className="relative h-10 w-auto">
+                <div className="relative h-7 sm:h-8 md:h-10 w-auto">
                   <Image
                     src={logoUrl}
                     alt={`${organizationName} Logo`}
-                    width={140}
-                    height={40}
+                    width={120}
+                    height={35}
                     className="object-contain"
-                    style={{ height: "auto" }}
+                    style={{ width: "auto", height: "auto" }}
                     priority
                   />
                 </div>
               ) : (
-                <div className="h-10 w-10 rounded-full bg-white/20 shadow-sm" />
+                <div className="h-7 sm:h-8 md:h-10 w-7 sm:w-8 md:w-10 rounded-full bg-white/20 shadow-sm" />
               )}
             </Link>
 

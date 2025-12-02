@@ -15,6 +15,12 @@ import {
   Settings,
 } from "lucide-react";
 import { getBCToday } from "~/lib/dates";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 
 import { BagReportDialog } from "~/components/settings/teesheet/BagReportDialog";
 import type {
@@ -32,6 +38,8 @@ interface SidebarActionsProps {
   config: TeesheetConfigWithBlocks | null;
   timeBlocks: any[];
   availableConfigs: TeesheetConfig[];
+  isTwoDayViewOpen: boolean;
+  onTwoDayViewToggle: (open: boolean) => void;
 }
 
 export function SidebarActions({
@@ -40,6 +48,8 @@ export function SidebarActions({
   config,
   timeBlocks,
   availableConfigs,
+  isTwoDayViewOpen,
+  onTwoDayViewToggle,
 }: SidebarActionsProps) {
   const router = useRouter();
   const today = getBCToday();
@@ -72,8 +82,7 @@ export function SidebarActions({
   };
 
   const handleTwoDayView = () => {
-    // TODO: Implement two-day view logic
-    console.log("Two-day view");
+    onTwoDayViewToggle(!isTwoDayViewOpen);
   };
 
   const handleAutoPopulate = async () => {
@@ -153,16 +162,25 @@ export function SidebarActions({
 
         <div className="border-org-primary/20 w-full border-b" />
 
-        {/* Two Days */}
-        <Button
-          variant="ghost"
-          onClick={handleTwoDayView}
-          title="Two Days"
-          className={sidebarButtonClasses}
-        >
-          <CalendarDays className="h-5 w-5 shrink-0" />
-          <span className={buttonLabelClasses}>Two Days</span>
-        </Button>
+        {/* Two Days - Desktop only */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                onClick={handleTwoDayView}
+                title="Two Days - Desktop only"
+                className={`${sidebarButtonClasses} hidden lg:flex`}
+              >
+                <CalendarDays className="h-5 w-5 shrink-0" />
+                <span className={buttonLabelClasses}>Two Days</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              Desktop only
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         {/* Auto-Populate */}
         <Button

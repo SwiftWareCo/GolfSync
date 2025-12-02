@@ -9,7 +9,7 @@
  * This replaces the mess of date functions in utils.ts with a clean, consistent API
  */
 
-import { format, addDays as dateFnsAddDays } from "date-fns";
+import { addDays as dateFnsAddDays } from "date-fns";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 
 // Hardcoded timezone for BC, Canada (handles PST/PDT automatically)

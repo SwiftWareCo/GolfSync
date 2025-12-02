@@ -1,10 +1,6 @@
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { getTeesheetConfigs } from "~/server/settings/data";
-import { ConfigSummary } from "~/components/teesheet/admin/ConfigSummary";
-import { CalendarPicker } from "~/components/teesheet/admin/CalendarPicker";
-import { GeneralNotes } from "~/components/teesheet/admin/GeneralNotes";
-import { TeesheetTable } from "~/components/teesheet/admin/TeesheetTable";
-import { SidebarActions } from "~/components/teesheet/admin/SidebarActions";
+import { TeesheetViewContainer } from "~/components/teesheet/admin/TeesheetViewContainer";
 import { getQueryClient } from "~/lib/query-client";
 import { teesheetKeys } from "~/services/teesheet/keys";
 import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
@@ -42,39 +38,21 @@ export default async function AdminPage({
     }),
   ]);
 
-  const { teesheet, config, timeBlocks } = result;
+  const { teesheet, config, timeBlocks, occupiedSpots, totalCapacity } = result;
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar */}
-      <SidebarActions
-        teesheet={teesheet}
-        dateString={dateString}
-        config={config}
-        timeBlocks={timeBlocks}
-        availableConfigs={teesheetConfigs}
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="space-y-4 p-6">
-          <ConfigSummary
-            config={config}
-            timeBlocks={timeBlocks.length}
-            dateString={dateString}
-          />
-
-          <CalendarPicker dateString={dateString} />
-
-          <div className="space-y-4">
-            <GeneralNotes teesheet={teesheet} />
-
-            <HydrationBoundary state={dehydrate(queryClient)}>
-              <TeesheetTable dateString={dateString} />
-            </HydrationBoundary>
-          </div>
-        </div>
-      </div>
+      <HydrationBoundary state={dehydrate(queryClient)}>
+        <TeesheetViewContainer
+          dateString={dateString}
+          teesheet={teesheet}
+          config={config}
+          timeBlocks={timeBlocks}
+          teesheetConfigs={teesheetConfigs}
+          occupiedSpots={occupiedSpots}
+          totalCapacity={totalCapacity}
+        />
+      </HydrationBoundary>
     </div>
   );
 }

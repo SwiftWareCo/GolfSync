@@ -8,6 +8,14 @@ import {
 } from "./PlayerBadge";
 import { AddPlayerPlaceholder } from "./AddPlayerPlaceholder";
 import type { Member, Guest, Fill } from "~/server/db/schema";
+import { MoreVertical } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "~/components/ui/dropdown-menu";
 
 // Flattened member type (from TimeBlockWithRelations)
 export type TimeBlockMemberFull = Member & {
@@ -38,9 +46,12 @@ interface TimeBlockRowProps {
   onAssignPowerCart?: (memberId: number) => void;
   otherMembers?: Array<{ id: number; firstName: string; lastName: string }>;
   onTimeClick?: () => void;
+  onCheckInAll?: (timeBlockId: number, isCheckedIn: boolean) => void;
+  onToggleNoteEdit?: (timeBlockId: number) => void;
 }
 
 export function TimeBlockRow({
+  timeBlockId,
   startTime,
   members,
   guests,
@@ -53,6 +64,8 @@ export function TimeBlockRow({
   onAssignPowerCart,
   otherMembers = [],
   onTimeClick,
+  onCheckInAll,
+  onToggleNoteEdit,
 }: TimeBlockRowProps) {
   const totalPlayers = members.length + guests.length + fills.length;
   const slotsAvailable = maxPlayers - totalPlayers;
@@ -122,9 +135,32 @@ export function TimeBlockRow({
         </div>
       </td>
 
-      {/* Actions Column (Placeholder for now, can be expanded) */}
+      {/* Actions Column */}
       <td className="px-2 py-3 text-center align-middle">
-        {/* Additional row actions can go here */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Time block actions"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => onCheckInAll?.(timeBlockId, false)}
+            >
+              Check In All
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onToggleNoteEdit?.(timeBlockId)}
+            >
+              Add Note
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </td>
     </tr>
   );
