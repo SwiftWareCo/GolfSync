@@ -1,6 +1,6 @@
 import { db } from "~/server/db";
 import { members } from "~/server/db/schema";
-import { eq, sql, and, desc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, gte, lte } from "drizzle-orm";
 import type { Member } from "~/app/types/MemberTypes";
 import { timeBlockMembers as timeBlockMembersSchema } from "~/server/db/schema";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
@@ -13,7 +13,7 @@ export function mapMembersToNames(members: Member[]): string[] {
 function convertToMember(row: any): Member {
   return {
     id: row.id,
-    class: row.class,
+    class: row.memberClass?.label ?? row.class ?? '',
     memberNumber: row.memberNumber,
     firstName: row.firstName,
     lastName: row.lastName,
@@ -29,10 +29,12 @@ function convertToMember(row: any): Member {
 }
 
 export async function getMembers(): Promise<Member[]> {
-  const rows = await db
-    .select()
-    .from(members)
-    .orderBy(members.lastName, members.firstName);
+  const rows = await db.query.members.findMany({
+    with: {
+      memberClass: true,
+    },
+    orderBy: (members, { asc }) => [asc(members.lastName), asc(members.firstName)],
+  });
 
   return rows.map(convertToMember);
 }
@@ -40,6 +42,9 @@ export async function getMembers(): Promise<Member[]> {
 export async function getMemberById(id: number): Promise<Member | null> {
   const row = await db.query.members.findFirst({
     where: eq(members.id, id),
+    with: {
+      memberClass: true,
+    },
   });
 
   return row ? convertToMember(row) : null;
@@ -47,13 +52,17 @@ export async function getMemberById(id: number): Promise<Member | null> {
 
 // Single-tenant: no organization filtering needed
 export async function searchMembersList(query: string): Promise<Member[]> {
-  const rows = await db
-    .select()
-    .from(members)
-    .where(
-      sql`CONCAT(${members.firstName}, ' ', ${members.lastName}) ILIKE ${`%${query}%`} OR ${members.memberNumber} ILIKE ${`%${query}%`}`,
-    )
-    .orderBy(members.lastName, members.firstName);
+  const rows = await db.query.members.findMany({
+    where: (members, { or, sql }) =>
+      or(
+        sql`CONCAT(${members.firstName}, ' ', ${members.lastName}) ILIKE ${`%${query}%`}`,
+        sql`${members.memberNumber} ILIKE ${`%${query}%`}`,
+      ),
+    with: {
+      memberClass: true,
+    },
+    orderBy: (members, { asc }) => [asc(members.lastName), asc(members.firstName)],
+  });
 
   return rows.map(convertToMember);
 }
@@ -73,6 +82,9 @@ export async function searchMembers(
         sql`LOWER(${members.memberNumber}) LIKE ${`%${query.toLowerCase()}%`}`,
         sql`LOWER(CONCAT(${members.firstName}, ' ', ${members.lastName})) LIKE ${`%${query.toLowerCase()}%`}`,
       ),
+    with: {
+      memberClass: true,
+    },
     limit: pageSize + 1,
     offset: offset,
     orderBy: (members, { asc }) => [asc(members.lastName)],

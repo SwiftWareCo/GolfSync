@@ -46,7 +46,7 @@ export const members = createTable(
   "members",
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-    class: varchar("class", { length: 50 }).notNull(),
+    classId: integer("class_id").references(() => memberClasses.id).notNull(),
     memberNumber: varchar("member_number", { length: 20 }).notNull(),
     firstName: varchar("first_name", { length: 50 }).notNull(),
     lastName: varchar("last_name", { length: 50 }).notNull(),

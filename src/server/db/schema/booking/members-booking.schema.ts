@@ -16,6 +16,9 @@ import {
 } from "drizzle-zod";
 import { z } from "zod";
 import { createTable } from "../../helpers";
+import { timeBlocks } from "./timeblocks.schema";
+import { members } from "../core/members.schema";
+import { guests } from "../core/guests.schema";
 
 // Time block members (join table)
 export const timeBlockMembers = createTable(
@@ -23,20 +26,10 @@ export const timeBlockMembers = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     timeBlockId: integer("time_block_id")
-      .references(
-        () => {
-          return (require("../../schema") as any).timeBlocks.id;
-        },
-        { onDelete: "cascade" },
-      )
+      .references(() => timeBlocks.id, { onDelete: "cascade" })
       .notNull(),
     memberId: integer("member_id")
-      .references(
-        () => {
-          return (require("../../schema") as any).members.id;
-        },
-        { onDelete: "cascade" },
-      )
+      .references(() => members.id, { onDelete: "cascade" })
       .notNull(),
     bookingDate: date("booking_date").notNull(),
     bookingTime: varchar("booking_time", { length: 5 }).notNull(),
@@ -76,25 +69,13 @@ export const timeBlockGuests = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     timeBlockId: integer("time_block_id")
-      .references(
-        () => {
-          return (require("../../schema") as any).timeBlocks.id;
-        },
-        { onDelete: "cascade" },
-      )
+      .references(() => timeBlocks.id, { onDelete: "cascade" })
       .notNull(),
     guestId: integer("guest_id")
-      .references(
-        () => {
-          return (require("../../schema") as any).guests.id;
-        },
-        { onDelete: "cascade" },
-      )
+      .references(() => guests.id, { onDelete: "cascade" })
       .notNull(),
     invitedByMemberId: integer("invited_by_member_id")
-      .references(() => {
-        return (require("../../schema") as any).members.id;
-      })
+      .references(() => members.id)
       .notNull(),
     bookingDate: date("booking_date").notNull(),
     bookingTime: varchar("booking_time", { length: 5 }).notNull(),

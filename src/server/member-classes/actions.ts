@@ -117,9 +117,9 @@ export async function deleteMemberClassAction(
       throw new Error("Cannot delete system generated member class");
     }
 
-    // Check if any members are using this class (by label)
+    // Check if any members are using this class
     const membersUsingClass = await db.query.members.findFirst({
-      where: eq(members.class, memberClass.label),
+      where: eq(members.classId, id),
     });
 
     if (membersUsingClass) {

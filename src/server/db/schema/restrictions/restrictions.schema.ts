@@ -15,6 +15,9 @@ import {
 } from "drizzle-zod";
 import { z } from "zod";
 import { createTable } from "../../helpers";
+import { timeBlocks } from "../booking/timeblocks.schema";
+import { members } from "../core/members.schema";
+import { guests } from "../core/guests.schema";
 
 // Timeblock restrictions
 export const timeblockRestrictions = createTable(
@@ -33,7 +36,7 @@ export const timeblockRestrictions = createTable(
     restrictionType: varchar("restriction_type", { length: 15 }).notNull(), // 'TIME', 'FREQUENCY', 'AVAILABILITY'
 
     // Entity being restricted (for member class restrictions)
-    memberClasses: varchar("member_classes", { length: 50 }).array(),
+    memberClassIds: integer("member_class_ids").array(),
 
     // Time restriction
     startTime: varchar("start_time", { length: 5 }),
@@ -67,7 +70,6 @@ export const timeblockRestrictions = createTable(
   (table) => [
     index("timeblock_restrictions_category_idx").on(table.restrictionCategory),
     index("timeblock_restrictions_type_idx").on(table.restrictionType),
-    index("timeblock_restrictions_member_classes_idx").on(table.memberClasses),
   ],
 );
 
@@ -79,20 +81,11 @@ export const timeblockOverrides = createTable(
     restrictionId: integer("restriction_id").references(
       () => timeblockRestrictions.id,
     ),
-    timeBlockId: integer("time_block_id").references(
-      () => {
-        return (require("../../schema") as any).timeBlocks.id;
-      },
-      {
-        onDelete: "cascade",
-      },
-    ),
-    memberId: integer("member_id").references(() => {
-      return (require("../../schema") as any).members.id;
+    timeBlockId: integer("time_block_id").references(() => timeBlocks.id, {
+      onDelete: "cascade",
     }),
-    guestId: integer("guest_id").references(() => {
-      return (require("../../schema") as any).guests.id;
-    }),
+    memberId: integer("member_id").references(() => members.id),
+    guestId: integer("guest_id").references(() => guests.id),
     overriddenBy: varchar("overridden_by", { length: 100 }).notNull(),
     reason: text("reason"),
     createdAt: timestamp("created_at", { withTimezone: true })

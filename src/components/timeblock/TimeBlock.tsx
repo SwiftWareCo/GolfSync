@@ -252,7 +252,7 @@ export function TimeBlock({
             <div className="flex flex-wrap items-center gap-1 px-0">
               {/* Members */}
               {membersSorted.map((member) => {
-                const memberStyle = getMemberClassStyling(member.class);
+                const memberStyle = getMemberClassStyling(member.memberClass?.label);
                 const { key, ...memberData } = member;
                 const fullName = `${memberData.firstName} ${memberData.lastName} (${memberData.memberNumber})`;
 

@@ -97,7 +97,7 @@ interface TeesheetPreviewAndArrangeProps {
     id: number;
     firstName: string;
     lastName: string;
-    class: string;
+    memberClass?: { label: string } | null;
   }>;
 }
 
@@ -151,7 +151,7 @@ export function TeesheetPreviewAndArrange({
     members.forEach((member) => {
       map.set(member.id, {
         name: `${member.firstName} ${member.lastName}`,
-        class: member.class,
+        class: member.memberClass?.label ?? '',
       });
     });
     return map;
@@ -849,7 +849,7 @@ export function TeesheetPreviewAndArrange({
                                   id: `${entry.id}-member-${idx}`,
                                   name: member.name,
                                   isGroup: false,
-                                  memberClass: member.class,
+                                  memberClass: member.class, // This comes from memberClassMappings which already uses memberClass?.label
                                   members: [],
                                   preferredWindow: entry.preferredWindow,
                                   alternateWindow:

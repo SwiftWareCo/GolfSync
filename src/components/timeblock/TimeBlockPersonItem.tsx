@@ -43,14 +43,14 @@ export const TimeBlockPersonItem = ({
   let personStyle = getMemberClassStyling(type === "guest" ? "GUEST" : null);
 
   if (type === "member") {
-    const member = person as Member;
+    const member = person as Member & { memberClass?: { label: string } | null };
     firstName = member.firstName;
     lastName = member.lastName;
     subtitle = `#${member.memberNumber}`;
-    memberClass = member.class || "";
+    memberClass = member.memberClass?.label || "";
 
     // Get specific styling for this member class
-    personStyle = getMemberClassStyling(member.class);
+    personStyle = getMemberClassStyling(member.memberClass?.label);
   } else {
     const guest = person as TimeBlockGuest;
     firstName = guest.firstName;

@@ -62,7 +62,7 @@ export async function getMemberTeesheet(date: Date) {
     teesheet,
     config,
     timeBlocks,
-    memberClass: member?.class,
+    memberClass: member?.memberClass?.label,
     memberId: member?.id,
   };
 }
@@ -106,6 +106,9 @@ export async function getMemberData(id?: string) {
   }
   const user = await db.query.members.findFirst({
     where: and(eq(members.id, Number(id))),
+    with: {
+      memberClass: true,
+    },
   });
 
   return user;
@@ -158,7 +161,7 @@ export async function getMemberTeesheetDataWithRestrictions(
     const batchResults = await checkBatchTimeblockRestrictions({
       timeBlocks: timeBlocksForBatch,
       memberId: member.id,
-      memberClass: member.class,
+      memberClass: member.memberClass?.label,
     });
 
     if (Array.isArray(batchResults)) {

@@ -262,7 +262,11 @@ export async function checkInMember(
           eq(timeBlockMembers.memberId, memberId),
         ),
         with: {
-          member: true,
+          member: {
+            with: {
+              memberClass: true,
+            },
+          },
           timeBlock: {
             with: {
               teesheet: true,
@@ -273,7 +277,7 @@ export async function checkInMember(
 
       // Check for frequency violations if member and timeblock exist
       if (memberBooking?.member && memberBooking?.timeBlock?.teesheet) {
-        const memberClass = memberBooking.member.class;
+        const memberClass = memberBooking.member.memberClass?.label || "";
         const bookingDate = memberBooking.timeBlock.teesheet.date;
 
         // Check for active frequency restrictions for this member class
@@ -534,23 +538,30 @@ export async function populateTimeBlocksWithRandomMembers(
 
   try {
     // Get all members in the organization (exclude RESIGNED, SUSPENDED, DINING)
-    const allMembers = await db.query.members.findMany({
-      where: and(
-        sql`${members.class} != 'RESIGNED'`,
-        sql`${members.class} != 'SUSPENDED'`,
-        sql`${members.class} != 'DINING'`,
-        sql`${members.class} != 'STAFF PLAY'`,
-        sql`${members.class} != 'MANAGEMENT'`,
-        sql`${members.class} != 'MGMT / PRO'`,
-        sql`${members.class} != 'HONORARY MALE'`,
-        sql`${members.class} != 'HONORARY FEMALE'`,
-        sql`${members.class} != 'PRIVILEGED MALE'`,
-        sql`${members.class} != 'PRIVILEGED FEMALE'`,
-        sql`${members.class} != 'SENIOR RETIRED MALE'`,
-        sql`${members.class} != 'SENIOR RETIRED FEMALE'`,
-        sql`${members.class} != 'LEAVE OF ABSENCE'`,
-      ),
+    const excludedClasses = new Set([
+      'RESIGNED',
+      'SUSPENDED',
+      'DINING',
+      'STAFF PLAY',
+      'MANAGEMENT',
+      'MGMT / PRO',
+      'HONORARY MALE',
+      'HONORARY FEMALE',
+      'PRIVILEGED MALE',
+      'PRIVILEGED FEMALE',
+      'SENIOR RETIRED MALE',
+      'SENIOR RETIRED FEMALE',
+      'LEAVE OF ABSENCE',
+    ]);
+
+    const allMembersRaw = await db.query.members.findMany({
+      with: { memberClass: true },
     });
+
+    // Filter out excluded classes in JavaScript
+    const allMembers = allMembersRaw.filter(
+      (member) => !excludedClasses.has(member.memberClass?.label || ''),
+    );
 
     if (allMembers.length === 0) {
       return { success: false, error: "No members found in organization" };
@@ -602,7 +613,6 @@ export async function populateTimeBlocksWithRandomMembers(
             memberId: member.id,
             bookingDate: date,
             bookingTime: timeBlock.startTime,
-            bagNumber: member.bagNumber,
             checkedIn: isCheckedIn,
             checkedInAt: null,
           });

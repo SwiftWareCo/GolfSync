@@ -1,6 +1,17 @@
+export interface MemberClass {
+  id: number;
+  label: string;
+  isActive: boolean;
+  sortOrder: number;
+  isSystemGenerated: boolean;
+  createdAt: Date;
+  updatedAt: Date | null;
+}
+
 export interface Member {
   id: number;
-  class: string;
+  classId: number;
+  memberClass?: MemberClass | null;
   memberNumber: string;
   firstName: string;
   lastName: string;

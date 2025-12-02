@@ -16,6 +16,8 @@ import {
 } from "drizzle-zod";
 import { z } from "zod";
 import { createTable } from "../../helpers";
+import { events } from "./events.schema";
+import { members } from "../core/members.schema";
 
 // Event registrations table
 export const eventRegistrations = createTable(
@@ -23,14 +25,10 @@ export const eventRegistrations = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     eventId: integer("event_id")
-      .references(() => {
-        return (require("../../schema") as any).events.id;
-      }, { onDelete: "cascade" })
+      .references(() => events.id, { onDelete: "cascade" })
       .notNull(),
     memberId: integer("member_id")
-      .references(() => {
-        return (require("../../schema") as any).members.id;
-      }, { onDelete: "cascade" })
+      .references(() => members.id, { onDelete: "cascade" })
       .notNull(),
     status: varchar("status", { length: 20 }).default("PENDING").notNull(), // PENDING, APPROVED, REJECTED
     notes: text("notes"),
@@ -41,7 +39,7 @@ export const eventRegistrations = createTable(
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).$onUpdate(
-      () => new Date()
+      () => new Date(),
     ),
   },
   (table) => [
@@ -49,21 +47,18 @@ export const eventRegistrations = createTable(
     index("event_registrations_member_id_idx").on(table.memberId),
     unique("event_registrations_event_member_unq").on(
       table.eventId,
-      table.memberId
+      table.memberId,
     ),
-  ]
+  ],
 );
 
 // Auto-generated schemas for eventRegistrations
-export const eventRegistrationsSelectSchema = createSelectSchema(
-  eventRegistrations
-);
-export const eventRegistrationsInsertSchema = createInsertSchema(
-  eventRegistrations
-);
-export const eventRegistrationsUpdateSchema = createUpdateSchema(
-  eventRegistrations
-);
+export const eventRegistrationsSelectSchema =
+  createSelectSchema(eventRegistrations);
+export const eventRegistrationsInsertSchema =
+  createInsertSchema(eventRegistrations);
+export const eventRegistrationsUpdateSchema =
+  createUpdateSchema(eventRegistrations);
 
 // Relations are defined in schema.ts to avoid circular imports
 // (they reference tables from other domains)

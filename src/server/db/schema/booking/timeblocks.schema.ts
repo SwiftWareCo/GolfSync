@@ -16,6 +16,7 @@ import {
 } from "drizzle-zod";
 import { z } from "zod";
 import { createTable } from "../../helpers";
+import { teesheetConfigs } from "../teesheetConfigs.schema";
 
 // Teesheets table
 export const teesheets = createTable(
@@ -23,12 +24,9 @@ export const teesheets = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     date: date("date").notNull(),
-    configId: integer("config_id").references(
-      () => {
-        return (require("../../schema") as any).teesheetConfigs.id;
-      },
-      { onDelete: "set null" },
-    ),
+    configId: integer("config_id").references(() => teesheetConfigs.id, {
+      onDelete: "set null",
+    }),
     generalNotes: text("general_notes"),
     isPublic: boolean("is_public").default(false).notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }),

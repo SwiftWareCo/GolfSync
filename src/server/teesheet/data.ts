@@ -67,7 +67,7 @@ export async function getTeesheetWithTimeBlocks(dateString: string): Promise<{
       },
       timeBlocks: {
         with: {
-          timeBlockMembers: { with: { member: true } },
+          timeBlockMembers: { with: { member: { with: { memberClass: true } } } },
           timeBlockGuests: { with: { guest: true, invitedByMember: true } },
           fills: true,
           paceOfPlay: true,
@@ -123,7 +123,7 @@ export async function getTimeBlocksForTeesheet(teesheetId: number) {
   const rawTimeBlocks = await db.query.timeBlocks.findMany({
     where: eq(timeBlocks.teesheetId, teesheetId),
     with: {
-      timeBlockMembers: { with: { member: true } },
+      timeBlockMembers: { with: { member: { with: { memberClass: true } } } },
       timeBlockGuests: { with: { guest: true, invitedByMember: true } },
       fills: true,
       paceOfPlay: true,

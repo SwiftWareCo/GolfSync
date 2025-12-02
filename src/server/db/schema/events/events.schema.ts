@@ -35,7 +35,7 @@ export const events = createTable(
     requiresApproval: boolean("requires_approval").default(false),
     registrationDeadline: date("registration_deadline"),
     isActive: boolean("is_active").default(true),
-    memberClasses: varchar("member_classes", { length: 50 }).array(),
+    memberClassIds: integer("member_class_ids").array(),
     teamSize: integer("team_size").default(1).notNull(), // 1, 2, or 4 players
     guestsAllowed: boolean("guests_allowed").default(false).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })

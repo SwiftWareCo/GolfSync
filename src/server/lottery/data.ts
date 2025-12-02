@@ -28,6 +28,9 @@ export async function getLotteryEntryData(
     // Get member data using the external userId from session claims
     const member = await db.query.members.findFirst({
       where: eq(members.id, Number(userId)),
+      with: {
+        memberClass: true,
+      },
     });
 
     if (!member) {
@@ -192,6 +195,9 @@ export async function getLotteryEntriesForDate(date: string) {
       groupEntries.map(async (group) => {
         const groupMembers = await db.query.members.findMany({
           where: inArray(members.id, group.memberIds),
+          with: {
+            memberClass: true,
+          },
         });
         return {
           ...group,

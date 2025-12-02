@@ -51,14 +51,6 @@ export async function addMemberToTimeBlock(
       return { success: false, error: "Teesheet not found" };
     }
 
-    // Get the member to get their bag number
-    const member = await db.query.members.findFirst({
-      where: eq(members.id, memberId),
-      columns: {
-        bagNumber: true,
-      },
-    });
-
     // Get the booking date and time
     const bookingDate = formatDateToYYYYMMDD(teesheet.date);
     const bookingTime = timeBlock.startTime;
@@ -69,7 +61,6 @@ export async function addMemberToTimeBlock(
       memberId,
       bookingDate,
       bookingTime,
-      bagNumber: member?.bagNumber,
     });
 
     // Send push notification to the member (for admin bookings)
@@ -134,7 +125,7 @@ export async function createMember(data: {
   lastName: string;
   username: string;
   email: string;
-  class: string;
+  classId: number;
   gender?: string;
   dateOfBirth?: string;
   handicap?: string;
@@ -161,7 +152,7 @@ export async function updateMember(
     lastName: string;
     username: string;
     email: string;
-    class: string;
+    classId: number;
     gender?: string;
     dateOfBirth?: string;
     handicap?: string;
@@ -204,6 +195,9 @@ export async function getMembersByIds(memberIds: number[]) {
   try {
     const results = await db.query.members.findMany({
       where: (members, { inArray }) => inArray(members.id, memberIds),
+      with: {
+        memberClass: true,
+      },
     });
 
     return results.map((member) => ({
@@ -211,7 +205,7 @@ export async function getMembersByIds(memberIds: number[]) {
       firstName: member.firstName,
       lastName: member.lastName,
       memberNumber: member.memberNumber,
-      class: member.class,
+      class: member.memberClass?.label ?? '',
     }));
   } catch (error) {
     console.error("Error fetching members by IDs:", error);

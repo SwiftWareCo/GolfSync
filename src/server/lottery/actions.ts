@@ -536,7 +536,7 @@ export async function processLotteryForDate(
         return group.members.every((member) => {
           const memberAllowedBlocks = filterBlocksByRestrictions(
             [block],
-            { memberId: member.id, memberClass: member.class },
+            { memberId: member.id, memberClass: member.memberClass?.label || "" },
             date,
             timeRestrictions,
           );
@@ -610,6 +610,9 @@ export async function processLotteryForDate(
       const individualMemberId = entry.memberIds[0];
       const memberData = await db.query.members.findFirst({
         where: eq(members.id, individualMemberId),
+        with: {
+          memberClass: true,
+        },
       });
 
       if (!memberData) continue;
@@ -622,7 +625,7 @@ export async function processLotteryForDate(
         config,
         {
           memberId: individualMemberId,
-          memberClass: memberData.class,
+          memberClass: memberData.memberClass?.label || "",
         },
         date,
         timeRestrictions,
@@ -1032,25 +1035,32 @@ export async function createTestLotteryEntries(
 ): Promise<ActionResult> {
   try {
     // Get active members from database - exclude STAFF and MANAGEMENT classes
-    const allMembers = await db.query.members.findMany({
-      where: and(
-        sql`${members.class} != 'RESIGNED'`,
-        sql`${members.class} != 'SUSPENDED'`,
-        sql`${members.class} != 'DINING'`,
-        sql`${members.class} != 'STAFF'`,
-        sql`${members.class} != 'STAFF PLAY'`,
-        sql`${members.class} != 'MANAGEMENT'`,
-        sql`${members.class} != 'MGMT / PRO'`,
-        sql`${members.class} != 'HONORARY MALE'`,
-        sql`${members.class} != 'HONORARY FEMALE'`,
-        sql`${members.class} != 'PRIVILEGED MALE'`,
-        sql`${members.class} != 'PRIVILEGED FEMALE'`,
-        sql`${members.class} != 'SENIOR RETIRED MALE'`,
-        sql`${members.class} != 'SENIOR RETIRED FEMALE'`,
-        sql`${members.class} != 'LEAVE OF ABSENCE'`,
-      ),
+    const excludedClasses = new Set([
+      'RESIGNED',
+      'SUSPENDED',
+      'DINING',
+      'STAFF',
+      'STAFF PLAY',
+      'MANAGEMENT',
+      'MGMT / PRO',
+      'HONORARY MALE',
+      'HONORARY FEMALE',
+      'PRIVILEGED MALE',
+      'PRIVILEGED FEMALE',
+      'SENIOR RETIRED MALE',
+      'SENIOR RETIRED FEMALE',
+      'LEAVE OF ABSENCE',
+    ]);
+
+    const allMembersRaw = await db.query.members.findMany({
+      with: { memberClass: true },
       limit: 200, // Get more members for realistic data
     });
+
+    // Filter out excluded classes in JavaScript
+    const allMembers = allMembersRaw.filter(
+      (member) => !excludedClasses.has(member.memberClass?.label || ''),
+    );
 
     if (allMembers.length < 20) {
       return {
@@ -1466,11 +1476,16 @@ async function updateFairnessScoresAfterProcessing(
         // Get member details for restriction checking
         const member = await db.query.members.findFirst({
           where: eq(members.id, memberId),
+          with: {
+            memberClass: true,
+          },
         });
 
+        if (!member) continue;
+
         const memberInfo = {
-          memberId,
-          memberClass: member?.class || "",
+          memberId: member.id,
+          memberClass: member.memberClass?.label || "",
         };
 
         // Check what blocks were available without restrictions
@@ -1490,8 +1505,8 @@ async function updateFairnessScoresAfterProcessing(
           allowedBlocks.length === 0 ||
           timeRestrictions.some((restriction) => {
             const appliesToMemberClass =
-              !restriction.memberClasses?.length ||
-              restriction.memberClasses.includes(memberInfo.memberClass);
+              !restriction.memberClassIds?.length ||
+              restriction.memberClassIds.includes(member.classId);
             return (
               restriction.isActive &&
               restriction.restrictionCategory === "MEMBER_CLASS" &&
@@ -1588,11 +1603,14 @@ async function updateFairnessScoresAfterProcessing(
         // Get member details for restriction checking
         const groupOrganizer = await db.query.members.findFirst({
           where: eq(members.id, group.organizerId),
+          with: {
+            memberClass: true,
+          },
         });
 
         const groupMemberInfo = {
           memberId: group.organizerId,
-          memberClass: groupOrganizer?.class || "",
+          memberClass: groupOrganizer?.memberClass?.label || "",
         };
 
         // Check if the group assignment was affected by restrictions from any member
@@ -1603,12 +1621,15 @@ async function updateFairnessScoresAfterProcessing(
         // Get all group members to check restrictions
         const groupMembers = await db.query.members.findMany({
           where: inArray(members.id, group.memberIds),
+          with: {
+            memberClass: true,
+          },
         });
 
         const wasBlockedByRestrictions = groupMembers.some((member) => {
           const memberAllowedBlocks = filterBlocksByRestrictions(
             allBlocks,
-            { memberId: member.id, memberClass: member.class },
+            { memberId: member.id, memberClass: member.memberClass?.label || "" },
             date,
             timeRestrictions,
           );

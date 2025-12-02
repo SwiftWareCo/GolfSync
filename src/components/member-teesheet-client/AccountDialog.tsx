@@ -7,7 +7,7 @@ import {
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent } from "~/components/ui/card";
-import { type Member, type Guest } from "~/server/db/schema";
+import { type Member, type MemberClass, type Guest } from "~/server/db/schema";
 import {
   User,
   Mail,
@@ -33,7 +33,7 @@ type TimeBlockMemberFull = {
   bookingTime: string;
   bagNumber: string | null;
   createdAt: Date;
-  member: Member;
+  member: Member & { memberClass: MemberClass | null };
 };
 
 // Full TimeBlockGuest with nested guest and invitedByMember relations
@@ -166,7 +166,7 @@ export function AccountDialog({
                     )}
 
                     {/* Member Class */}
-                    {player.member.class && (
+                    {player.member.memberClass && (
                       <div className="flex items-center gap-2">
                         <Trophy className="h-4 w-4 flex-shrink-0 text-gray-500" />
                         <div className="min-w-0 flex-1">
@@ -174,7 +174,7 @@ export function AccountDialog({
                             Member Class
                           </p>
                           <Badge variant="outline" className="mt-1 text-xs">
-                            {player.member.class}
+                            {player.member.memberClass.label}
                           </Badge>
                         </div>
                       </div>

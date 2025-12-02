@@ -14,6 +14,7 @@ import {
 import { QuickCartAssignment } from "~/components/timeblock/QuickCartAssignment";
 import type {
   Member,
+  MemberClass,
   Guest,
   Fill,
   TimeBlockMember,
@@ -26,7 +27,9 @@ export type TimeBlockPlayer =
   | {
       type: "member";
       data: Member &
-        Pick<TimeBlockMember, "checkedIn" | "checkedInAt">;
+        Pick<TimeBlockMember, "checkedIn" | "checkedInAt"> & {
+          memberClass?: MemberClass | null;
+        };
     }
   | {
       type: "guest";
@@ -62,6 +65,7 @@ export function PlayerBadge({
   onAssignPowerCart,
   otherMembers = [],
 }: PlayerBadgeProps) {
+
   // Extract common data based on discriminated union type
   const id = player.data.id;
   const checkedIn =
@@ -83,7 +87,7 @@ export function PlayerBadge({
   if (checkedIn) {
     badgeStyle = "border-green-300 bg-green-100 text-green-800";
   } else if (player.type === "member") {
-    const style = getMemberClassStyling(player.data.class);
+    const style = getMemberClassStyling(player.data.memberClass?.label || "");
     badgeStyle = `${style.bg} ${style.text} ${style.border}`;
   } else if (player.type === "guest") {
     badgeStyle = "border-purple-200 bg-purple-50 text-purple-700";
@@ -155,7 +159,7 @@ export function PlayerBadge({
               </p>
             )}
             {player.type === "member" && (
-              <p className="text-xs">Class: {player.data.class}</p>
+              <p className="text-xs">Class: {player.data.memberClass?.label || "N/A"}</p>
             )}
             {player.type === "fill" && (
               <p className="text-xs">Type: {getFillLabel(player.data)}</p>
