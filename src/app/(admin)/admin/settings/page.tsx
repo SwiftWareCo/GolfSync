@@ -35,6 +35,7 @@ import {
 async function ConfigurationsTab() {
   const teesheetConfigs = await getTeesheetConfigs();
 
+
   return (
     <TeesheetConfigs
       configs={teesheetConfigs}

@@ -28,6 +28,7 @@ export function TeesheetConfigs({ configs }: TeesheetConfigsProps) {
   const [deletingConfig, setDeletingConfig] =
     useState<TeesheetConfigWithBlocks | null>(null);
 
+
   const [error, action, isPending] = useActionState(deleteTeesheetConfig, null);
 
   const handleOpenCreateEditor = () => {
@@ -93,9 +94,9 @@ export function TeesheetConfigs({ configs }: TeesheetConfigsProps) {
               ) : (
                 configs.map((config) => (
                   <div
-                    key={config.id}
+                    key={config?.id}
                     className={`group hover:bg-org-primary flex cursor-pointer flex-row items-center justify-between rounded-lg border p-3 transition-colors hover:text-white ${
-                      editorState?.config?.id === config.id
+                      editorState?.config?.id === config?.id
                         ? "bg-org-primary text-white"
                         : ""
                     }`}
