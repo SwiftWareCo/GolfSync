@@ -1,26 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "~/components/ui/dialog";
-import { type TimeblockRestriction } from "./TimeblockRestrictionsSettings";
-import { z } from "zod";
+import { useState, useActionState, startTransition } from "react";
+import type {
+  TimeblockRestriction,
+  TimeblockRestrictionInsert,
+  MemberClass,
+} from "~/server/db/schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Button } from "~/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import {
   Select,
@@ -38,517 +28,370 @@ import {
   updateTimeblockRestriction,
 } from "~/server/timeblock-restrictions/actions";
 import toast from "react-hot-toast";
-import { preserveDate } from "~/lib/utils";
-import { MultiSelect, type OptionType } from "~/components/ui/multi-select";
-import type { MemberClass } from "~/server/db/schema";
+import { MultiSelect } from "~/components/ui/multi-select";
+import { timeblockRestrictionsInsertSchema } from "~/server/db/schema/restrictions/restrictions.schema";
+import { cn } from "~/lib/utils";
 
-// Define the form schema based on the TimeblockRestriction type
-const formSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    description: z.string().nullable().optional(),
-    restrictionCategory: z.enum([
-      "MEMBER_CLASS",
-      "GUEST",
-      "COURSE_AVAILABILITY",
-    ]),
-    restrictionType: z.enum(["TIME", "FREQUENCY", "AVAILABILITY"]),
-    memberClasses: z.array(z.string()).default([]),
-    isActive: z.boolean().default(true),
-    priority: z.coerce.number().default(0),
-    canOverride: z.boolean().default(true),
-
-    // Time restriction fields
-    startTime: z.string().optional(),
-    endTime: z.string().optional(),
-    daysOfWeek: z.array(z.number()).default([]),
-
-    // Date range fields
-    startDate: z
-      .union([z.date(), z.null(), z.string(), z.undefined()])
-      .optional()
-      .nullable(),
-    endDate: z
-      .union([z.date(), z.null(), z.string(), z.undefined()])
-      .optional()
-      .nullable(),
-
-    // Frequency restriction fields
-    maxCount: z.coerce.number().optional().nullable(),
-    periodDays: z.coerce.number().optional().nullable(),
-    applyCharge: z.boolean().default(false),
-    chargeAmount: z.string().optional().nullable(),
-
-    // Course availability fields
-    isFullDay: z.boolean().default(false),
-  })
-  .refine(
-    (data) => {
-      // TIME restrictions require start time, end time, and days
-      if (
-        data.restrictionType === "TIME" &&
-        data.restrictionCategory !== "COURSE_AVAILABILITY"
-      ) {
-        return (
-          data.startTime &&
-          data.startTime.trim() !== "" &&
-          data.endTime &&
-          data.endTime.trim() !== "" &&
-          data.daysOfWeek &&
-          data.daysOfWeek.length > 0
-        );
-      }
-      return true;
-    },
-    {
-      message:
-        "TIME restrictions require start time, end time, and days of week",
-      path: ["startTime"],
-    },
-  )
-  .refine(
-    (data) => {
-      // FREQUENCY restrictions require max count and period days
-      if (data.restrictionType === "FREQUENCY") {
-        return (
-          data.maxCount &&
-          data.maxCount > 0 &&
-          data.periodDays &&
-          data.periodDays > 0
-        );
-      }
-      return true;
-    },
-    {
-      message: "FREQUENCY restrictions require max count and period days",
-      path: ["maxCount"],
-    },
-  )
-  .refine(
-    (data) => {
-      // COURSE_AVAILABILITY restrictions require date range
-      if (data.restrictionCategory === "COURSE_AVAILABILITY") {
-        return data.startDate && data.endDate;
-      }
-      return true;
-    },
-    {
-      message: "Course availability restrictions require start and end dates",
-      path: ["startDate"],
-    },
-  );
-
-export type TimeblockRestrictionFormValues = z.infer<typeof formSchema>;
+type TabType = "basic" | "schedule" | "frequency" | "members";
 
 interface TimeblockRestrictionDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
+  mode: "create" | "edit";
   existingRestriction?: TimeblockRestriction;
   memberClasses?: MemberClass[];
   restrictionCategory: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
-  onSuccess: (restriction: TimeblockRestriction) => void;
+  onSuccess: () => void;
+  onCancel: () => void;
 }
 
 export function TimeblockRestrictionDialog({
-  isOpen,
-  onClose,
+  mode,
   existingRestriction,
   memberClasses = [],
   restrictionCategory,
   onSuccess,
+  onCancel,
 }: TimeblockRestrictionDialogProps) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  // Track if the dialog was previously open to prevent reset loops
-  const [wasOpen, setWasOpen] = useState(false);
-  // Add state to track submission attempts for debugging
-  const [submitAttempts, setSubmitAttempts] = useState(0);
+  const [activeTab, setActiveTab] = useState<TabType>("basic");
 
-  // Convert member classes to options for MultiSelect
-  const memberClassOptions = memberClasses.map((mc) => ({
-    label: mc.label,
-    value: mc.label,
-  }));
-
-  // Determine default restriction type based on category
-  const getDefaultRestrictionType = () => {
-    if (restrictionCategory === "COURSE_AVAILABILITY") return "AVAILABILITY";
-    if (restrictionCategory === "GUEST") return "TIME";
-    return "TIME"; // Default for MEMBER_CLASS
-  };
-
-  // Get default values based on existing restriction or create new ones
-  const getDefaultValues = () => {
+  // Get default values
+  const getDefaultValues = (): Partial<TimeblockRestrictionInsert> => {
     if (existingRestriction) {
-      // Determine if it's a full day restriction based on start/end time
-      const isFullDay =
-        existingRestriction.isFullDay ??
-        (!existingRestriction.startTime && !existingRestriction.endTime);
-
-      // Ensure values are properly formatted
-      const defaultValues = {
-        name: existingRestriction.name || "",
-        description: existingRestriction.description || "",
-        restrictionCategory: existingRestriction.restrictionCategory,
-        restrictionType: existingRestriction.restrictionType,
-        memberClasses: Array.isArray(existingRestriction.memberClasses)
-          ? existingRestriction.memberClasses.filter(
-              (mc) => typeof mc === "string",
-            )
-          : [],
-        isActive: existingRestriction.isActive ?? true,
-        priority: existingRestriction.priority ?? 0,
-        canOverride: existingRestriction.canOverride ?? true,
+      return {
+        name: existingRestriction.name,
+        description: existingRestriction.description,
+        restrictionCategory: existingRestriction.restrictionCategory as
+          | "MEMBER_CLASS"
+          | "GUEST"
+          | "COURSE_AVAILABILITY",
+        restrictionType: existingRestriction.restrictionType as
+          | "TIME"
+          | "FREQUENCY"
+          | "AVAILABILITY",
+        memberClassIds: existingRestriction.memberClassIds || [],
+        isActive: existingRestriction.isActive,
+        priority: existingRestriction.priority,
+        canOverride: existingRestriction.canOverride,
         startTime: existingRestriction.startTime || "06:00",
         endTime: existingRestriction.endTime || "18:00",
         daysOfWeek: existingRestriction.daysOfWeek || [],
         startDate: existingRestriction.startDate || null,
         endDate: existingRestriction.endDate || null,
-        maxCount: existingRestriction.maxCount ?? null,
-        periodDays: existingRestriction.periodDays ?? null,
-        applyCharge: existingRestriction.applyCharge ?? false,
-        chargeAmount: existingRestriction.chargeAmount
-          ? String(existingRestriction.chargeAmount)
-          : "",
-        isFullDay: isFullDay,
+        maxCount: existingRestriction.maxCount,
+        periodDays: existingRestriction.periodDays,
+        applyCharge: existingRestriction.applyCharge || false,
+        chargeAmount: existingRestriction.chargeAmount,
       };
-
-      return defaultValues;
-    } else {
-      const defaultValues = {
-        name: "",
-        description: "",
-        restrictionCategory,
-        restrictionType: getDefaultRestrictionType() as
-          | "TIME"
-          | "FREQUENCY"
-          | "AVAILABILITY",
-        memberClasses:
-          restrictionCategory === "MEMBER_CLASS"
-            ? [memberClasses[0]?.label || ""]
-            : [],
-        isActive: true,
-        priority: 0,
-        canOverride: true,
-        daysOfWeek: [],
-        applyCharge: false,
-        isFullDay: false,
-        startTime: "06:00",
-        endTime: "18:00",
-        startDate: null,
-        endDate: null,
-        maxCount: null,
-        periodDays: null,
-        chargeAmount: "",
-      };
-
-      return defaultValues;
     }
+
+    return {
+      name: "",
+      description: "",
+      restrictionCategory,
+      restrictionType:
+        restrictionCategory === "COURSE_AVAILABILITY" ? "AVAILABILITY" : "TIME",
+      memberClassIds: [],
+      isActive: true,
+      priority: 0,
+      canOverride: true,
+      startTime: "06:00",
+      endTime: "18:00",
+      daysOfWeek: [],
+      startDate: null,
+      endDate: null,
+      maxCount: null,
+      periodDays: null,
+      applyCharge: false,
+      chargeAmount: null,
+    };
   };
 
-  // Setup form with default values
-  const form = useForm<TimeblockRestrictionFormValues>({
-    resolver: zodResolver(formSchema) as any,
+  const form = useForm<TimeblockRestrictionInsert>({
+    resolver: zodResolver(timeblockRestrictionsInsertSchema),
     defaultValues: getDefaultValues(),
   });
 
-  // Watch restriction type for conditional rendering
-  const watchRestrictionType = form.watch("restrictionType");
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+    register,
+  } = form;
 
-  // Reset form when dialog opens/closes or restriction changes
-  useEffect(() => {
-    // Only reset the form when opening the dialog, not closing it
-    if (isOpen && !wasOpen) {
-      const defaultValues = getDefaultValues();
-      form.reset(defaultValues as any);
-      setWasOpen(true);
-    } else if (!isOpen && wasOpen) {
-      setWasOpen(false);
-    }
-  }, [
-    isOpen,
-    existingRestriction,
-    restrictionCategory,
-    memberClasses,
-    form,
-    wasOpen,
-  ]);
+  const watchRestrictionType = watch("restrictionType");
+  const daysOfWeek = watch("daysOfWeek");
 
-  // Submit handler
-  const onSubmit = async (values: TimeblockRestrictionFormValues) => {
-    setIsSubmitting(true);
+  const actionToUse =
+    mode === "edit" ? updateTimeblockRestriction : createTimeblockRestriction;
 
+  const [error, action, isPending] = useActionState(actionToUse, null);
+
+  const onSubmit = handleSubmit(async (data: TimeblockRestrictionInsert) => {
     try {
-      // Prepare the form data
-      const formData = { ...values };
+      if (mode === "edit") {
+        if (!existingRestriction || !existingRestriction.id) {
+          toast.error("Invalid restriction data for update");
+          return;
+        }
 
-      // Handle isFullDay logic: if true, clear time fields
-      if (formData.isFullDay) {
-        formData.startTime = "06:00";
-        formData.endTime = "18:00";
-      }
+        startTransition(async () => {
+          await action({ id: existingRestriction.id, ...data });
 
-      // Handle dates properly using the preserveDate function
-      if (formData.startDate) {
-        formData.startDate = preserveDate(formData.startDate);
-      } else {
-        formData.startDate = null;
-      }
-
-      if (formData.endDate) {
-        formData.endDate = preserveDate(formData.endDate);
-      } else {
-        formData.endDate = null;
-      }
-
-      // Call the appropriate server action
-      let result;
-      if (existingRestriction) {
-        result = await updateTimeblockRestriction({
-          id: existingRestriction.id,
-          ...formData,
+          toast.success("Restriction updated successfully");
+          onSuccess();
         });
       } else {
-        result = await createTimeblockRestriction(formData);
-      }
-
-      if (result && "error" in result) {
-        toast.error(result.error || "Unknown error occurred");
-        return;
-      }
-
-      // Show success message
-      toast.success(
-        existingRestriction
-          ? "Restriction updated successfully"
-          : "Restriction created successfully",
-      );
-
-      // Call onSuccess with the created/updated restriction
-      if (result) {
-        onSuccess(result as unknown as TimeblockRestriction);
+        // Create mode - don't pass id at all
+        startTransition(async () => {
+          await action({ id: 0, ...data });
+          toast.success("Restriction created successfully");
+          onSuccess();
+        });
       }
     } catch (error) {
-      console.error("Error submitting form:", error);
-      toast.error("An error occurred while saving the restriction");
-    } finally {
-      setIsSubmitting(false);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save restriction",
+      );
     }
-  };
+  });
 
-  const handleSubmitClick = () => {
-    setSubmitAttempts((prev) => prev + 1);
-    form.handleSubmit(onSubmit)();
-  };
+  const tabs: { id: TabType; label: string; show: boolean }[] = [
+    { id: "basic", label: "Basic Info", show: true },
+    {
+      id: "schedule",
+      label: "Schedule",
+      show: watchRestrictionType !== "FREQUENCY",
+    },
+    {
+      id: "frequency",
+      label: "Frequency",
+      show: watchRestrictionType === "FREQUENCY",
+    },
+    {
+      id: "members",
+      label: "Member Classes",
+      show: restrictionCategory === "MEMBER_CLASS",
+    },
+  ];
 
-  const handleDialogChange = (open: boolean) => {
-    if (!open) {
-      // Reset submit attempts when closing
-      setSubmitAttempts(0);
-      onClose();
-    }
-  };
+  const visibleTabs = tabs.filter((t) => t.show);
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
-            {existingRestriction
-              ? "Edit Timeblock Restriction"
-              : "Create Timeblock Restriction"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Basic Information */}
-            <div className="grid grid-cols-1 gap-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter restriction name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Enter restriction description"
-                        value={field.value || ""}
-                        onChange={field.onChange}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Restriction Type */}
-            <FormField
-              control={form.control}
-              name="restrictionType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Restriction Type</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select restriction type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="TIME">Time Restriction</SelectItem>
-                      <SelectItem value="FREQUENCY">
-                        Frequency Restriction
-                      </SelectItem>
-                      {restrictionCategory === "COURSE_AVAILABILITY" && (
-                        <SelectItem value="AVAILABILITY">
-                          Course Availability
-                        </SelectItem>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
+    <form onSubmit={onSubmit} className="flex flex-1 flex-col overflow-hidden">
+      <div className="grid flex-1 grid-cols-[200px_1fr] gap-6 overflow-hidden px-6">
+        {/* Sidebar Navigation */}
+        <nav className="space-y-1 border-r pr-4">
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "w-full cursor-pointer rounded-md px-3 py-2 text-left text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-org-primary text-white"
+                  : "hover:bg-org-primary/10",
               )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Form Content */}
+        <div className="space-y-6 overflow-y-auto p-2">
+          {activeTab === "basic" && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  placeholder="Enter restriction name"
+                  {...register("name")}
+                />
+                {errors.name && (
+                  <span className="text-xs text-red-500">
+                    {errors.name.message as string}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Enter restriction description"
+                  {...register("description")}
+                />
+                {errors.description && (
+                  <span className="text-xs text-red-500">
+                    {errors.description.message as string}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="restrictionType">Restriction Type</Label>
+                <Select
+                  onValueChange={(value) =>
+                    setValue("restrictionType", value as any)
+                  }
+                  defaultValue={watch("restrictionType")}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select restriction type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TIME">Time Restriction</SelectItem>
+                    <SelectItem value="FREQUENCY">
+                      Frequency Restriction
+                    </SelectItem>
+                    {restrictionCategory === "COURSE_AVAILABILITY" && (
+                      <SelectItem value="AVAILABILITY">
+                        Course Availability
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {errors.restrictionType && (
+                  <span className="text-xs text-red-500">
+                    {errors.restrictionType.message as string}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Active</Label>
+                    <div className="text-muted-foreground text-sm">
+                      Enable this restriction
+                    </div>
+                  </div>
+                  <Switch
+                    checked={watch("isActive")}
+                    onCheckedChange={(checked) => setValue("isActive", checked)}
+                  />
+                </div>
+
+                <div className="flex flex-row items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <Label className="text-base">Can Override</Label>
+                    <div className="text-muted-foreground text-sm">
+                      Allow admin override
+                    </div>
+                  </div>
+                  <Switch
+                    checked={watch("canOverride")}
+                    onCheckedChange={(checked) =>
+                      setValue("canOverride", checked)
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority</Label>
+                <Input
+                  id="priority"
+                  type="number"
+                  placeholder="0"
+                  {...register("priority", {
+                    setValueAs: (value) => parseInt(value) || 0,
+                  })}
+                />
+                {errors.priority && (
+                  <span className="text-xs text-red-500">
+                    {errors.priority.message as string}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Schedule Tab */}
+          {activeTab === "schedule" && watchRestrictionType === "TIME" && (
+            <TimeRestrictionFields
+              control={control}
+              setValue={setValue}
+              daysOfWeek={daysOfWeek || []}
+              restrictionCategory={restrictionCategory}
+              register={register}
+              errors={errors}
             />
+          )}
 
-            {/* Member Classes (only for MEMBER_CLASS category) */}
-            {restrictionCategory === "MEMBER_CLASS" && (
-              <FormField
-                control={form.control}
-                name="memberClasses"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Member Classes</FormLabel>
-                    <FormControl>
-                      <MultiSelect
-                        options={memberClassOptions}
-                        selected={field.value || []}
-                        onChange={field.onChange}
-                        placeholder="Select member classes"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          {activeTab === "schedule" &&
+            watchRestrictionType === "AVAILABILITY" && (
+              <AvailabilityRestrictionFields
+                control={control}
+                setValue={setValue}
+                watch={watch}
+                register={register}
+                errors={errors}
               />
             )}
 
-            {/* Restriction Type-specific Fields */}
-            {watchRestrictionType === "TIME" && (
-              <TimeRestrictionFields
-                form={form}
-                restrictionCategory={restrictionCategory}
+          {/* Frequency Tab */}
+          {activeTab === "frequency" &&
+            watchRestrictionType === "FREQUENCY" && (
+              <FrequencyRestrictionFields
+                control={control}
+                setValue={setValue}
+                watch={watch}
+                register={register}
+                errors={errors}
               />
             )}
 
-            {watchRestrictionType === "FREQUENCY" && (
-              <FrequencyRestrictionFields form={form} />
+          {/* Member Classes Tab */}
+          {activeTab === "members" &&
+            restrictionCategory === "MEMBER_CLASS" && (
+              <div className="space-y-4 rounded-md border p-4">
+                <Label>Member Classes</Label>
+                <MultiSelect
+                  options={memberClasses.map((mc) => ({
+                    label: mc.label,
+                    value: mc.id.toString(),
+                  }))}
+                  selected={(watch("memberClassIds") || []).map(String)}
+                  onChange={(values) =>
+                    setValue("memberClassIds", values.map(Number))
+                  }
+                  placeholder="Select member classes"
+                />
+                {errors.memberClassIds && (
+                  <span className="text-xs text-red-500">
+                    {errors.memberClassIds.message as string}
+                  </span>
+                )}
+              </div>
             )}
+        </div>
+      </div>
 
-            {watchRestrictionType === "AVAILABILITY" && (
-              <AvailabilityRestrictionFields form={form} />
-            )}
-
-            {/* Settings */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Active</FormLabel>
-                      <div className="text-muted-foreground text-sm">
-                        Enable this restriction
-                      </div>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="canOverride"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel className="text-base">Can Override</FormLabel>
-                      <div className="text-muted-foreground text-sm">
-                        Allow admin override
-                      </div>
-                    </div>
-                    <FormControl>
-                      <Switch
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="priority"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Priority</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 0)
-                        }
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            {/* Submit Button */}
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => onClose()}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? "Saving..."
-                  : existingRestriction
-                    ? "Update Restriction"
-                    : "Create Restriction"}
-              </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
+      <div className="flex gap-3 border-t px-6 pt-4 pb-6">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onCancel}
+          disabled={isPending}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={isPending}
+          className="bg-org-primary hover:bg-org-primary/90"
+        >
+          {isPending
+            ? "Saving..."
+            : mode === "edit"
+              ? "Update Restriction"
+              : "Create Restriction"}
+        </Button>
+      </div>
+    </form>
   );
 }

@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
-import type { QueryOptions } from "./types";
 import { searchMembersAction } from "~/server/members/actions";
 import type { Member } from "~/app/types/MemberTypes";
 

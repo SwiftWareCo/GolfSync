@@ -20,7 +20,12 @@ import { RestrictionViolationAlert } from "~/components/settings/timeblock-restr
 import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
 import { createGuest } from "~/server/guests/actions";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
-import { removeTimeBlockMember, removeTimeBlockGuest, addFillToTimeBlock, removeFillFromTimeBlock } from "~/server/teesheet/actions";
+import {
+  removeTimeBlockMember,
+  removeTimeBlockGuest,
+  addFillToTimeBlock,
+  removeFillFromTimeBlock,
+} from "~/server/teesheet/actions";
 import { addMemberToTimeBlock } from "~/server/members/actions";
 import { addGuestToTimeBlock } from "~/server/guests/actions";
 import { teesheetKeys } from "~/services/teesheet/keys";
@@ -42,8 +47,12 @@ export function TimeBlockMemberManager({
       addMemberToTimeBlock(timeBlock.id as number, memberId),
 
     onMutate: async (memberId: number) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -68,7 +77,7 @@ export function TimeBlockMemberManager({
                     },
                   ],
                 }
-              : block
+              : block,
           ),
         };
       });
@@ -78,13 +87,18 @@ export function TimeBlockMemberManager({
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
       toast.error("Failed to add member");
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       toast.success("Member added");
     },
   });
@@ -95,8 +109,12 @@ export function TimeBlockMemberManager({
       removeTimeBlockMember(timeBlock.id as number, memberId),
 
     onMutate: async (memberId: number) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -104,8 +122,13 @@ export function TimeBlockMemberManager({
           ...old,
           timeBlocks: old.timeBlocks.map((block: any) =>
             block.id === timeBlock.id
-              ? { ...block, members: (block.members || []).filter((m: any) => m.id !== memberId) }
-              : block
+              ? {
+                  ...block,
+                  members: (block.members || []).filter(
+                    (m: any) => m.id !== memberId,
+                  ),
+                }
+              : block,
           ),
         };
       });
@@ -115,25 +138,46 @@ export function TimeBlockMemberManager({
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
       toast.error("Failed to remove member");
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       toast.success("Member removed");
     },
   });
 
   // Mutation for adding guests with cache optimism
   const addGuestMutation = useMutation({
-    mutationFn: ({ guestId, invitingMemberId }: { guestId: number; invitingMemberId: number }) =>
+    mutationFn: ({
+      guestId,
+      invitingMemberId,
+    }: {
+      guestId: number;
+      invitingMemberId: number;
+    }) =>
       addGuestToTimeBlock(timeBlock.id as number, guestId, invitingMemberId),
 
-    onMutate: async ({ guestId, invitingMemberId }: { guestId: number; invitingMemberId: number }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      guestId,
+      invitingMemberId,
+    }: {
+      guestId: number;
+      invitingMemberId: number;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -156,7 +200,7 @@ export function TimeBlockMemberManager({
                     },
                   ],
                 }
-              : block
+              : block,
           ),
         };
       });
@@ -166,13 +210,18 @@ export function TimeBlockMemberManager({
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
       toast.error("Failed to add guest");
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       toast.success("Guest added");
       setSelectedMemberId(null);
     },
@@ -184,8 +233,12 @@ export function TimeBlockMemberManager({
       removeTimeBlockGuest(timeBlock.id as number, guestId),
 
     onMutate: async (guestId: number) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -193,8 +246,13 @@ export function TimeBlockMemberManager({
           ...old,
           timeBlocks: old.timeBlocks.map((block: any) =>
             block.id === timeBlock.id
-              ? { ...block, guests: (block.guests || []).filter((g: any) => g.id !== guestId) }
-              : block
+              ? {
+                  ...block,
+                  guests: (block.guests || []).filter(
+                    (g: any) => g.id !== guestId,
+                  ),
+                }
+              : block,
           ),
         };
       });
@@ -204,25 +262,45 @@ export function TimeBlockMemberManager({
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
       toast.error("Failed to remove guest");
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       toast.success("Guest removed");
     },
   });
 
   // Mutation for adding fills with cache optimism
   const addFillMutation = useMutation({
-    mutationFn: ({ fillType, customName }: { fillType: string; customName?: string }) =>
-      addFillToTimeBlock(timeBlock.id as number, fillType, 1, customName),
+    mutationFn: ({
+      fillType,
+      customName,
+    }: {
+      fillType: string;
+      customName?: string;
+    }) => addFillToTimeBlock(timeBlock.id as number, fillType, 1, customName),
 
-    onMutate: async ({ fillType, customName }: { fillType: string; customName?: string }) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+    onMutate: async ({
+      fillType,
+      customName,
+    }: {
+      fillType: string;
+      customName?: string;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -245,7 +323,7 @@ export function TimeBlockMemberManager({
                     },
                   ],
                 }
-              : block
+              : block,
           ),
         };
       });
@@ -255,13 +333,18 @@ export function TimeBlockMemberManager({
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
       toast.error("Failed to add fill");
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       toast.success("Fill added");
     },
   });
@@ -272,8 +355,12 @@ export function TimeBlockMemberManager({
       removeFillFromTimeBlock(timeBlock.id as number, fillId),
 
     onMutate: async (fillId: number) => {
-      await queryClient.cancelQueries({ queryKey: teesheetKeys.detail(dateString) });
-      const previous = queryClient.getQueryData(teesheetKeys.detail(dateString));
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
 
       queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
         if (!old) return old;
@@ -281,8 +368,13 @@ export function TimeBlockMemberManager({
           ...old,
           timeBlocks: old.timeBlocks.map((block: any) =>
             block.id === timeBlock.id
-              ? { ...block, fills: (block.fills || []).filter((f: any) => f.id !== fillId) }
-              : block
+              ? {
+                  ...block,
+                  fills: (block.fills || []).filter(
+                    (f: any) => f.id !== fillId,
+                  ),
+                }
+              : block,
           ),
         };
       });
@@ -292,13 +384,18 @@ export function TimeBlockMemberManager({
 
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(teesheetKeys.detail(dateString), context.previous);
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
       }
       toast.error("Failed to remove fill");
     },
 
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: teesheetKeys.detail(dateString) });
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
       toast.success("Fill removed");
     },
   });
@@ -358,7 +455,7 @@ export function TimeBlockMemberManager({
   // Check for restrictions before adding a member
   const checkMemberRestrictions = async (
     memberId: number,
-    memberClass: string,
+    memberClassId: number,
   ) => {
     try {
       // Use the dateString parameter passed to component
@@ -367,7 +464,7 @@ export function TimeBlockMemberManager({
       // Check for restrictions first
       const checkResult = await checkTimeblockRestrictionsAction({
         memberId,
-        memberClass,
+        memberClassId,
         bookingDateString,
         bookingTime: timeBlock.startTime,
       });
@@ -433,7 +530,7 @@ export function TimeBlockMemberManager({
       // Check for restrictions first
       const hasViolations = await checkMemberRestrictions(
         memberId,
-        memberToAdd.class || "",
+        memberToAdd.classId,
       );
 
       if (hasViolations) {

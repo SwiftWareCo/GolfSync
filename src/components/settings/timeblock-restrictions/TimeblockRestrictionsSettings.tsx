@@ -22,71 +22,22 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "~/components/ui/dialog";
-import type { MemberClass } from "~/server/db/schema";
-import { useQuery } from "@tanstack/react-query";
-import { restrictionsQueryOptions } from "~/server/query-options/restrictions-query-options";
-
-export type TimeblockRestriction = {
-  id: number;
-  name: string;
-  description: string | null;
-  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
-  restrictionType: "TIME" | "FREQUENCY" | "AVAILABILITY";
-  memberClasses?: string[];
-  startTime?: string;
-  endTime?: string;
-  daysOfWeek?: number[];
-  startDate?: Date | null;
-  endDate?: Date | null;
-  maxCount?: number;
-  periodDays?: number;
-  applyCharge?: boolean;
-  chargeAmount?: number;
-  isFullDay?: boolean;
-  weatherStatus?: string;
-  rainfall?: string;
-  availabilityNotes?: string;
-  isActive: boolean;
-  canOverride: boolean;
-  priority: number;
-  createdAt: Date;
-  updatedAt: Date | null;
-  lastUpdatedBy?: string;
-};
+import type { MemberClass, TimeblockRestriction } from "~/server/db/schema";
 
 interface TimeblockRestrictionsSettingsProps {
-  initialRestrictions: TimeblockRestriction[];
-  memberClasses: string[];
+  restrictions: TimeblockRestriction[];
   allMemberClasses?: MemberClass[];
 }
 
 export function TimeblockRestrictionsSettings({
-  initialRestrictions,
-  memberClasses,
+  restrictions,
   allMemberClasses = [],
 }: TimeblockRestrictionsSettingsProps) {
-  // Use TanStack Query for restrictions
-  const { data: restrictions = initialRestrictions, isLoading } = useQuery(
-    restrictionsQueryOptions.all()
-  );
-
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("memberClass");
-  const [selectedRestrictionId, setSelectedRestrictionId] = useState<
-    number | null
-  >(null);
 
-  // Reset selectedRestrictionId when tabs change
   const handleTabChange = (value: string) => {
     setSelectedTab(value);
-    // Clear any selected restriction to prevent dialog from opening
-    setSelectedRestrictionId(null);
-  };
-
-  // Handle when a dialog is closed in any of the child components
-  const handleDialogClosed = () => {
-    // Clear the selected restriction ID when any dialog is closed
-    setSelectedRestrictionId(null);
   };
 
   // Filter restrictions by category
@@ -102,25 +53,13 @@ export function TimeblockRestrictionsSettings({
     (r) => r.restrictionCategory === "COURSE_AVAILABILITY",
   );
 
-  // These callbacks are no longer needed as the child components
-  // will use TanStack Query mutations that automatically update the cache
-  const handleRestrictionUpdate = () => {
-    // Cache will be automatically invalidated by mutation
-  };
-
-  const handleRestrictionAdd = () => {
-    // Cache will be automatically invalidated by mutation
-  };
-
-  const handleRestrictionDelete = () => {
-    // Cache will be automatically invalidated by mutation
-  };
-
   const handleRestrictionsSearch = (restrictionId: number) => {
-    const foundRestriction = restrictions.find((r) => r.id === restrictionId);
+    const foundRestriction = restrictions.find(
+      (r) => r.id === restrictionId,
+    );
     if (foundRestriction) {
       // Set the tab based on the restriction category
-      const tabMapping = {
+      const tabMapping: Record<string, string> = {
         MEMBER_CLASS: "memberClass",
         GUEST: "guest",
         COURSE_AVAILABILITY: "courseAvailability",
@@ -129,7 +68,6 @@ export function TimeblockRestrictionsSettings({
       const tab =
         tabMapping[foundRestriction.restrictionCategory] || "memberClass";
       setSelectedTab(tab);
-      setSelectedRestrictionId(restrictionId);
       setSearchDialogOpen(false);
     }
   };
@@ -188,14 +126,6 @@ export function TimeblockRestrictionsSettings({
           <TabsContent value="memberClass">
             <MemberClassRestrictions
               restrictions={memberClassRestrictions}
-              memberClasses={memberClasses}
-              onUpdate={handleRestrictionUpdate}
-              onAdd={handleRestrictionAdd}
-              onDelete={handleRestrictionDelete}
-              highlightId={
-                selectedTab === "memberClass" ? selectedRestrictionId : null
-              }
-              onDialogClose={handleDialogClosed}
               allMemberClasses={allMemberClasses}
             />
           </TabsContent>
@@ -203,13 +133,6 @@ export function TimeblockRestrictionsSettings({
           <TabsContent value="guest">
             <GuestRestrictions
               restrictions={guestRestrictions}
-              onUpdate={handleRestrictionUpdate}
-              onAdd={handleRestrictionAdd}
-              onDelete={handleRestrictionDelete}
-              highlightId={
-                selectedTab === "guest" ? selectedRestrictionId : null
-              }
-              onDialogClose={handleDialogClosed}
               memberClasses={allMemberClasses}
             />
           </TabsContent>
@@ -217,15 +140,6 @@ export function TimeblockRestrictionsSettings({
           <TabsContent value="courseAvailability">
             <CourseAvailability
               restrictions={courseAvailabilityRestrictions}
-              onUpdate={handleRestrictionUpdate}
-              onAdd={handleRestrictionAdd}
-              onDelete={handleRestrictionDelete}
-              highlightId={
-                selectedTab === "courseAvailability"
-                  ? selectedRestrictionId
-                  : null
-              }
-              onDialogClose={handleDialogClosed}
               memberClasses={allMemberClasses}
             />
           </TabsContent>

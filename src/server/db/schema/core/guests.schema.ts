@@ -36,5 +36,6 @@ export const guestsUpdateSchema = createUpdateSchema(guests);
 
 // Type exports
 export type Guest = z.infer<typeof guestsSelectSchema>;
+export type GuestSelect = z.infer<typeof guestsSelectSchema>;
 export type GuestInsert = z.infer<typeof guestsInsertSchema>;
 export type GuestUpdate = z.infer<typeof guestsUpdateSchema>;

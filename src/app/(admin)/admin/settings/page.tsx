@@ -44,9 +44,8 @@ async function ConfigurationsTab() {
 }
 
 async function RestrictionsTab() {
-  const [memberClasses, timeblockRestrictionsResult, allMemberClasses] =
+  const [ timeblockRestrictionsResult, allMemberClasses] =
     await Promise.all([
-      getActiveMemberClasses(),
       getTimeblockRestrictions(),
       getAllMemberClasses(),
     ]);
@@ -57,8 +56,7 @@ async function RestrictionsTab() {
 
   return (
     <TimeblockRestrictionsSettings
-      initialRestrictions={timeblockRestrictions}
-      memberClasses={memberClasses.map((mc) => mc.label)}
+      restrictions={timeblockRestrictions}
       allMemberClasses={allMemberClasses}
     />
   );

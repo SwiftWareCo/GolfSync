@@ -2,40 +2,31 @@
 
 import { Ban, Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { useState, useActionState, startTransition } from "react";
 import { RestrictionCard } from "./RestrictionCard";
 import { TimeblockRestrictionDialog } from "./TimeblockRestrictionDialog";
-import { type TimeblockRestriction } from "./TimeblockRestrictionsSettings";
-import type { MemberClass } from "~/server/db/schema";
+import type { MemberClass, TimeblockRestriction } from "~/server/db/schema";
 import toast from "react-hot-toast";
 import { DeleteConfirmationDialog } from "~/components/ui/delete-confirmation-dialog";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { restrictionsMutations } from "~/server/query-options/restrictions-mutation-options";
+import { deleteTimeblockRestriction } from "~/server/timeblock-restrictions/actions";
 
 interface MemberClassRestrictionsProps {
   restrictions: TimeblockRestriction[];
-  memberClasses: string[];
-  onUpdate: (restriction: TimeblockRestriction) => void;
-  onAdd: (restriction: TimeblockRestriction) => void;
-  onDelete: (restrictionId: number) => void;
-  highlightId?: number | null;
-  onDialogClose?: () => void;
   allMemberClasses?: MemberClass[];
 }
 
 export function MemberClassRestrictions({
   restrictions,
-  memberClasses,
-  onUpdate,
-  onAdd,
-  onDelete,
-  highlightId,
-  onDialogClose,
   allMemberClasses = [],
 }: MemberClassRestrictionsProps) {
-  const queryClient = useQueryClient();
-
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
   const [selectedRestriction, setSelectedRestriction] = useState<
     TimeblockRestriction | undefined
   >();
@@ -44,39 +35,36 @@ export function MemberClassRestrictions({
     TimeblockRestriction | undefined
   >();
 
-  // Setup delete mutation with factory pattern
-  const deleteMutation = useMutation({
-    ...restrictionsMutations.delete(queryClient),
-    onSuccess: () => {
+  // Use server action for delete
+  const [deleteState, deleteAction, isDeletePending] = useActionState(
+    async (prevState: any, restrictionId: number) => {
+      const result = await deleteTimeblockRestriction(restrictionId);
+      if (result && "error" in result) {
+        toast.error(result.error || "Failed to delete restriction");
+        return { success: false, error: result.error };
+      }
       toast.success("Member class restriction deleted successfully");
       setIsDeleteDialogOpen(false);
       setRestrictionToDelete(undefined);
+      return { success: true };
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to delete restriction");
-    },
-  });
-
-  useEffect(() => {
-    if (highlightId) {
-      const restriction = restrictions.find((r) => r.id === highlightId);
-      if (restriction) {
-        handleOpenDialog(restriction);
-      }
-    }
-  }, [highlightId, restrictions]);
+    null,
+  );
 
   const handleOpenDialog = (restriction?: TimeblockRestriction) => {
-    setSelectedRestriction(restriction);
+    if (restriction) {
+      setEditorMode("edit");
+      setSelectedRestriction(restriction);
+    } else {
+      setEditorMode("create");
+      setSelectedRestriction(undefined);
+    }
     setIsDialogOpen(true);
   };
 
   const handleCloseDialog = () => {
     setIsDialogOpen(false);
     setSelectedRestriction(undefined);
-    if (onDialogClose) {
-      onDialogClose();
-    }
   };
 
   const handleDeleteClick = (restriction: TimeblockRestriction) => {
@@ -86,15 +74,12 @@ export function MemberClassRestrictions({
 
   const handleDeleteConfirm = () => {
     if (!restrictionToDelete) return;
-    deleteMutation.mutate(restrictionToDelete.id);
+    startTransition(() => {
+      deleteAction(restrictionToDelete.id);
+    });
   };
 
-  const handleSuccess = (restriction: TimeblockRestriction) => {
-    if (selectedRestriction) {
-      onUpdate(restriction);
-    } else {
-      onAdd(restriction);
-    }
+  const handleSuccess = () => {
     setIsDialogOpen(false);
     setSelectedRestriction(undefined);
   };
@@ -123,21 +108,35 @@ export function MemberClassRestrictions({
               restriction={restriction}
               onEdit={() => handleOpenDialog(restriction)}
               onDelete={() => handleDeleteClick(restriction)}
-              isHighlighted={restriction.id === highlightId}
+              memberClasses={allMemberClasses}
             />
           ))}
         </div>
       )}
 
       {/* Add/Edit Dialog */}
-      <TimeblockRestrictionDialog
-        isOpen={isDialogOpen}
-        onClose={handleCloseDialog}
-        existingRestriction={selectedRestriction}
-        memberClasses={allMemberClasses}
-        restrictionCategory="MEMBER_CLASS"
-        onSuccess={handleSuccess}
-      />
+      {isDialogOpen && (
+        <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
+          <DialogContent className="flex max-h-[90vh] min-h-[600px] max-w-4xl flex-col p-0">
+            <DialogHeader className="px-6 pt-6">
+              <DialogTitle>
+                {editorMode === "create"
+                  ? "Create Member Class Restriction"
+                  : "Edit Member Class Restriction"}
+              </DialogTitle>
+            </DialogHeader>
+            <TimeblockRestrictionDialog
+              key={selectedRestriction?.id || "new"}
+              mode={editorMode}
+              existingRestriction={selectedRestriction}
+              memberClasses={allMemberClasses}
+              restrictionCategory="MEMBER_CLASS"
+              onSuccess={handleSuccess}
+              onCancel={handleCloseDialog}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Delete Confirmation */}
       <DeleteConfirmationDialog

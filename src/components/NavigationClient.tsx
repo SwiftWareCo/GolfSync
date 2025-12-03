@@ -7,7 +7,6 @@ import Image from "next/image";
 import { useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import MobileMenuButton from "./MobileMenuButton";
-import { getBCToday } from "~/lib/dates";
 
 interface NavigationClientProps {
   chargesCount: number;

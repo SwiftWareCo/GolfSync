@@ -296,6 +296,11 @@ export function ConfigEditor({
                 Generate
               </Button>
             </div>
+            {errors.blocks && (
+              <span className="text-xs text-red-500">
+                {errors.blocks.message as string}
+              </span>
+            )}
           </div>
 
           {/* Days of Week */}
@@ -313,9 +318,15 @@ export function ConfigEditor({
                       size="sm"
                       onClick={() => {
                         if (isSelected) {
-                          setValue("daysOfWeek", (daysOfWeek || []).filter((d) => d !== index));
+                          setValue(
+                            "daysOfWeek",
+                            (daysOfWeek || []).filter((d) => d !== index),
+                          );
                         } else {
-                          setValue("daysOfWeek", [...(daysOfWeek || []), index]);
+                          setValue("daysOfWeek", [
+                            ...(daysOfWeek || []),
+                            index,
+                          ]);
                         }
                       }}
                     >
@@ -325,6 +336,11 @@ export function ConfigEditor({
                 },
               )}
             </div>
+            {errors.daysOfWeek && (
+              <span className="text-xs text-red-500">
+                {errors.daysOfWeek.message as string}
+              </span>
+            )}
           </div>
 
           {/* Toggles */}

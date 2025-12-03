@@ -5,7 +5,6 @@ import { eq, and, gte, lte, ilike, desc, sql } from "drizzle-orm";
 
 import {
   timeblockRestrictions,
-  members,
   timeblockOverrides,
   timeBlockMembers,
 } from "~/server/db/schema";

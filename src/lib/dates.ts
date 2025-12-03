@@ -169,22 +169,6 @@ export function formatTime12Hour(time: string | Date): string {
   return formatInTimeZone(time, BC_TIMEZONE, "h:mm a");
 }
 
-/**
- * Formats date and time together for display in BC timezone
- */
-export function formatDateTime(date: Date | string, time?: string): string {
-  if (time) {
-    // Handle separate date and time
-    return `${formatDate(date, "MMMM do")} at ${formatTime(time)}, ${formatDate(date, "yyyy")}`;
-  }
-
-  // Handle Date object with time component
-  if (typeof date === "string") {
-    return formatDate(date);
-  }
-
-  return formatInTimeZone(date, BC_TIMEZONE, "MMMM do 'at' h:mm a, yyyy");
-}
 
 /**
  * Formats date as day of week + date (e.g., "Monday, January 15, 2024")
@@ -215,25 +199,11 @@ export function getDateForDB(date: Date | string): string {
   return formatInTimeZone(date, BC_TIMEZONE, "yyyy-MM-dd");
 }
 
-/**
- * Converts a BC local time to UTC for database timestamp storage
- */
-export function getDateTimeForDB(date: Date): Date {
-  return fromZonedTime(date, BC_TIMEZONE);
-}
 
 // ============================================================================
 // BUSINESS LOGIC HELPERS
 // ============================================================================
 
-/**
- * Checks if a date is today in BC timezone
- */
-export function isToday(date: Date | string): boolean {
-  const today = getBCToday();
-  const dateString = typeof date === "string" ? date : getDateForDB(date);
-  return dateString === today;
-}
 
 /**
  * Checks if a date/time is in the past in BC timezone

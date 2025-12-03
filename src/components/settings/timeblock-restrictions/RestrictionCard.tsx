@@ -10,23 +10,17 @@ import {
   Calendar,
   AlertCircle,
 } from "lucide-react";
-import { type TimeblockRestriction } from "./TimeblockRestrictionsSettings";
+import type { TimeblockRestriction } from "~/server/db/schema";
 import { Button } from "~/components/ui/button";
 import { formatCalendarDate, formatDaysOfWeek } from "~/lib/utils";
-
-// Utility function to convert member class value to display label
-const formatMemberClassLabel = (value: string): string => {
-  return value
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-};
+import { formatTime12Hour } from "~/lib/dates";
 
 interface RestrictionCardProps {
   restriction: TimeblockRestriction;
   onEdit: () => void;
   onDelete: () => void;
   isHighlighted?: boolean;
+  memberClasses?: Array<{ id: number; label: string }>;
 }
 
 export function RestrictionCard({
@@ -34,7 +28,9 @@ export function RestrictionCard({
   onEdit,
   onDelete,
   isHighlighted = false,
+  memberClasses = [],
 }: RestrictionCardProps) {
+
   const getEntityIcon = () => {
     switch (restriction.restrictionCategory) {
       case "MEMBER_CLASS":
@@ -67,8 +63,8 @@ export function RestrictionCard({
         return (
           <>
             <p className="text-sm">
-              <strong>Time:</strong> {restriction.startTime} -{" "}
-              {restriction.endTime}
+              <strong>Time:</strong> {formatTime12Hour(restriction.startTime as string)} -{" "}
+              {formatTime12Hour(restriction.endTime as string)}
             </p>
             <p className="text-sm">
               <strong>Days:</strong>{" "}
@@ -106,16 +102,6 @@ export function RestrictionCard({
       case "AVAILABILITY":
         return (
           <>
-            {restriction.weatherStatus && (
-              <p className="text-sm">
-                <strong>Weather:</strong> {restriction.weatherStatus}
-              </p>
-            )}
-            {restriction.rainfall && (
-              <p className="text-sm">
-                <strong>Rainfall:</strong> {restriction.rainfall}
-              </p>
-            )}
             {restriction.startDate && restriction.endDate && (
               <p className="text-sm">
                 <strong>Date Range:</strong>{" "}
@@ -195,20 +181,25 @@ export function RestrictionCard({
 
         {/* Display member classes if applicable */}
         {restriction.restrictionCategory === "MEMBER_CLASS" &&
-          restriction.memberClasses &&
-          restriction.memberClasses.length > 0 && (
+          restriction.memberClassIds &&
+          restriction.memberClassIds.length > 0 && (
             <div className="mb-3">
               <p className="mb-1 text-sm font-medium">Applies to:</p>
               <div className="flex flex-wrap gap-1">
-                {restriction.memberClasses.map((className) => (
-                  <Badge
-                    key={className}
-                    variant="secondary"
-                    className="text-xs"
-                  >
-                    {formatMemberClassLabel(className)}
-                  </Badge>
-                ))}
+                {restriction.memberClassIds?.map((classId: number) => {
+                  const memberClass = memberClasses?.find(
+                    (mc) => mc.id === classId,
+                  );
+                  return memberClass ? (
+                    <Badge
+                      key={classId}
+                      variant="secondary"
+                      className="text-xs"
+                    >
+                      {memberClass.label}
+                    </Badge>
+                  ) : null;
+                })}
               </div>
             </div>
           )}

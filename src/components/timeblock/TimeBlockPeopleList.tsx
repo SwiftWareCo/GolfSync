@@ -115,7 +115,7 @@ interface TimeBlockMemberSearchProps {
   searchQuery: string;
   onSearch: (query: string) => void;
   searchResults: Array<{
-    id: number;
+    id: number | undefined;
     firstName: string;
     lastName: string;
     memberNumber: string;
@@ -177,7 +177,7 @@ export function TimeBlockMemberSearch({
             ) : (
               <Button
                 size="sm"
-                onClick={() => onAddMember(member.id)}
+                onClick={() => onAddMember(member.id || 0)}
                 disabled={isTimeBlockFull}
               >
                 <UserPlus className="mr-2 h-4 w-4" />

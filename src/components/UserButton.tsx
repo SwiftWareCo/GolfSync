@@ -14,7 +14,6 @@ export default function UserButtonComponent() {
     <div className="flex items-center">
       <Suspense fallback={<div className="h-8 w-8 rounded-full bg-gray-200" />}>
         <ClerkUserButton
-          afterSignOutUrl="/"
           appearance={{
             elements: {
               avatarBox: "w-8 h-8",

@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "~/server/db";
-import { eq, and, or, isNull, sql, gte, lte, desc } from "drizzle-orm";
+import { eq, and, or, sql, gte, lte, desc } from "drizzle-orm";
 
 import { revalidatePath } from "next/cache";
 import {
@@ -11,119 +11,16 @@ import {
 } from "~/server/db/schema";
 import { auth } from "@clerk/nextjs/server";
 import {
-  formatDisplayDate,
   formatDateToYYYYMMDD,
   formatTimeString,
-  formatCalendarDate,
   preserveDate,
 } from "~/lib/utils";
 import { format } from "date-fns";
-import {
-  getTimeblockRestrictions,
-  getTimeblockRestrictionsByCategory,
-  getTimeblockRestrictionById,
-} from "./data";
 
-// Query actions for client components
-export async function getTimeblockRestrictionsAction() {
-  try {
-    const result = await getTimeblockRestrictions();
-    // Handle ResultType<any[]> return type
-    if (
-      result &&
-      typeof result === "object" &&
-      "success" in result &&
-      !result.success
-    ) {
-      return {
-        success: false,
-        error: result.error || "Failed to load restrictions",
-        data: [],
-      };
-    }
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Error fetching restrictions:", error);
-    return { success: false, error: "Failed to fetch restrictions", data: [] };
-  }
-}
-
-export async function getTimeblockRestrictionsByCategoryAction(
-  category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY",
+export async function createTimeblockRestriction(
+  previousState: any,
+  data: any,
 ) {
-  try {
-    const result = await getTimeblockRestrictionsByCategory(category);
-    if (
-      result &&
-      typeof result === "object" &&
-      "success" in result &&
-      !result.success
-    ) {
-      return {
-        success: false,
-        error: result.error || "Failed to load restrictions",
-        data: [],
-      };
-    }
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Error fetching restrictions by category:", error);
-    return { success: false, error: "Failed to fetch restrictions", data: [] };
-  }
-}
-
-export async function getTimeblockRestrictionByIdAction(id: number) {
-  try {
-    const result = await getTimeblockRestrictionById(id);
-    if (
-      result &&
-      typeof result === "object" &&
-      "success" in result &&
-      !result.success
-    ) {
-      return {
-        success: false,
-        error: result.error || "Failed to load restriction",
-      };
-    }
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Error fetching restriction:", error);
-    return { success: false, error: "Failed to fetch restriction" };
-  }
-}
-
-export async function getTimeblockOverridesAction(params?: {
-  restrictionId?: number;
-  timeBlockId?: number;
-  memberId?: number;
-  guestId?: number;
-  startDate?: Date;
-  endDate?: Date;
-  searchTerm?: string;
-}) {
-  try {
-    const result = await getTimeblockOverrides(params);
-    if (
-      result &&
-      typeof result === "object" &&
-      "success" in result &&
-      !result.success
-    ) {
-      return {
-        success: false,
-        error: result.error || "Failed to load overrides",
-        data: [],
-      };
-    }
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("Error fetching overrides:", error);
-    return { success: false, error: "Failed to fetch overrides", data: [] };
-  }
-}
-
-export async function createTimeblockRestriction(data: any) {
   try {
     if (!data?.name || !data.restrictionCategory || !data.restrictionType) {
       console.error("Missing required data for creation:", data);
@@ -135,7 +32,7 @@ export async function createTimeblockRestriction(data: any) {
     const lastUpdatedBy = authData.userId || "Unknown";
 
     // Process the form data
-    const processedData = { ...data };
+    const { id, ...processedData } = data;
 
     // Clean up undefined values that can cause database errors
     Object.keys(processedData).forEach((key) => {
@@ -143,6 +40,9 @@ export async function createTimeblockRestriction(data: any) {
         processedData[key] = null;
       }
     });
+
+    // Remove id field as it's auto-generated
+    delete processedData.id;
 
     // Handle date fields properly using preserveDate utility
     if (processedData.startDate) {
@@ -186,12 +86,15 @@ export async function createTimeblockRestriction(data: any) {
   }
 }
 
-export async function updateTimeblockRestriction(data: {
-  id: number;
-  [key: string]: any;
-}) {
+export async function updateTimeblockRestriction(
+  previousState: any,
+  data: {
+    id: number;
+    [key: string]: any;
+  },
+) {
   try {
-    if (!data?.id) {
+    if (!data?.id || data.id <= 0) {
       console.error("Missing required data for update:", data);
       return { error: "Missing required data for update" };
     }
@@ -274,8 +177,6 @@ export async function deleteTimeblockRestriction(id: number) {
 
     // Revalidate the settings page
     revalidatePath("/admin/settings");
-    revalidatePath("/members");
-    revalidatePath("/admin");
     return { success: true };
   } catch (error) {
     console.error("Error deleting timeblock restriction:", error);
@@ -328,10 +229,6 @@ export async function recordTimeblockRestrictionOverride(params: {
   }
 }
 
-/**
- * More efficient version of restriction checking that only queries the necessary restrictions
- * This is optimized for checking one timeblock at a time using local date from client
- */
 /**
  * Get timeblock restriction overrides with optional filtering
  */
@@ -407,273 +304,317 @@ export async function getTimeblockOverrides(params?: {
   }
 }
 
-export async function checkTimeblockRestrictionsAction(params: {
-  memberId?: number;
-  memberClass?: string;
-  guestId?: number;
-  timeBlockId?: number;
-  bookingDateString?: string;
-  bookingTime?: string; // Changed to string HH:MM format
-}) {
-  try {
-    const { memberId, memberClass, guestId, bookingDateString, bookingTime } =
-      params;
+/**
+ * Internal helper: Check course availability restrictions
+ */
+async function checkCourseAvailabilityRestrictions(
+  bookingDateStr: string,
+): Promise<any[]> {
+  const violations: any[] = [];
 
-    // Use the bookingDateString if provided (this comes directly from the client's local date)
-    // otherwise fallback to previous behavior
-    let bookingDateStr = "";
-    let bookingTimeLocal = "";
-    let dayOfWeek = 0;
+  const courseRestrictions = await db.query.timeblockRestrictions.findMany({
+    where: and(
+      eq(timeblockRestrictions.restrictionCategory, "COURSE_AVAILABILITY"),
+      eq(timeblockRestrictions.isActive, true),
+    ),
+  });
 
-    if (bookingDateString) {
-      // bookingDateString should now be in YYYY-MM-DD format directly from client
-      bookingDateStr = bookingDateString; // Can use directly since it's already in YYYY-MM-DD format
+  for (const restriction of courseRestrictions) {
+    if (restriction.startDate && restriction.endDate) {
+      const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
+      const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
 
-      // For time-based restrictions, we need the time component
-      bookingTimeLocal = bookingTime || "00:00";
+      const bookingDate = new Date(bookingDateStr);
+      const restrictionStart = new Date(startDateStr);
+      const restrictionEnd = new Date(endDateStr);
 
-      // Parse date to get day of week - ensure correct UTC handling
-      const dateParts = bookingDateStr.split("-");
-      if (dateParts.length !== 3) {
-        return { success: false, error: "Invalid date format" };
+      if (bookingDate >= restrictionStart && bookingDate <= restrictionEnd) {
+        // Format dates for display
+        const startYear = parseInt(startDateStr.substring(0, 4));
+        const startMonth = parseInt(startDateStr.substring(5, 7)) - 1;
+        const startDay = parseInt(startDateStr.substring(8, 10));
+
+        const endYear = parseInt(endDateStr.substring(0, 4));
+        const endMonth = parseInt(endDateStr.substring(5, 7)) - 1;
+        const endDay = parseInt(endDateStr.substring(8, 10));
+
+        const displayStartDate = new Date(startYear, startMonth, startDay);
+        const displayEndDate = new Date(endYear, endMonth, endDay);
+
+        const startDateFormatted = format(displayStartDate, "MMMM do, yyyy");
+        const endDateFormatted = format(displayEndDate, "MMMM do, yyyy");
+
+        violations.push({
+          restrictionId: restriction.id,
+          restrictionName: restriction.name,
+          restrictionDescription: restriction.description,
+          restrictionCategory: "COURSE_AVAILABILITY",
+          entityId: null,
+          type: "AVAILABILITY",
+          message: `Course is restricted (${restriction.name}) from ${startDateFormatted} to ${endDateFormatted}`,
+          canOverride: restriction.canOverride,
+        });
       }
+    }
+  }
 
-      const year = parseInt(dateParts[0] || "0", 10);
-      const month = parseInt(dateParts[1] || "0", 10) - 1; // JS months are 0-indexed
-      const day = parseInt(dateParts[2] || "0", 10);
+  return violations;
+}
 
-      // Create date with explicit year/month/day to avoid timezone issues
-      const localDate = new Date(year, month, day);
-      dayOfWeek = localDate.getDay(); // 0=Sunday, 1=Monday, etc.
-    } else {
-      return { success: false, error: "No booking date provided" };
+/**
+ * Internal helper: Check member class restrictions
+ */
+async function checkMemberClassRestrictions(
+  memberId: number,
+  memberClassId: number,
+  bookingDateStr: string,
+  bookingTimeLocal: string,
+  dayOfWeek: number,
+): Promise<any[]> {
+  const violations: any[] = [];
+
+  const memberRestrictions = await db.query.timeblockRestrictions.findMany({
+    where: and(
+      eq(timeblockRestrictions.restrictionCategory, "MEMBER_CLASS"),
+      eq(timeblockRestrictions.isActive, true),
+    ),
+    orderBy: [desc(timeblockRestrictions.priority)],
+  });
+
+  for (const restriction of memberRestrictions) {
+    // Check if restriction applies to this member class using integer IDs
+    const memberClassesApplies =
+      !restriction.memberClassIds?.length ||
+      restriction.memberClassIds?.includes(memberClassId);
+
+    if (!memberClassesApplies) {
+      continue;
     }
 
-    const violations: any[] = [];
+    if (restriction.restrictionType === "TIME") {
+      // Check day of week
+      const dayApplies =
+        !restriction.daysOfWeek?.length ||
+        restriction.daysOfWeek?.includes(dayOfWeek);
 
-    // Check course availability restrictions (if any)
-    const courseRestrictions = await db.query.timeblockRestrictions.findMany({
-      where: and(
-        eq(timeblockRestrictions.restrictionCategory, "COURSE_AVAILABILITY"),
-        eq(timeblockRestrictions.isActive, true),
-      ),
-    });
+      if (dayApplies) {
+        if (
+          bookingTimeLocal >= (restriction.startTime || "00:00") &&
+          bookingTimeLocal <= (restriction.endTime || "23:59")
+        ) {
+          // Check date range
+          let dateRangeApplies = true;
+          if (restriction.startDate && restriction.endDate) {
+            const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
+            const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
 
-    // Check course availability (date-based) restrictions
-    for (const restriction of courseRestrictions) {
-      if (restriction.startDate && restriction.endDate) {
-        // Convert restriction dates to YYYY-MM-DD format for consistent comparison
-        const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
-        const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
+            dateRangeApplies =
+              bookingDateStr >= startDateStr && bookingDateStr <= endDateStr;
+          }
 
-        // Compare the date strings (no time component)
-        const bookingDate = new Date(bookingDateStr);
-        const restrictionStart = new Date(startDateStr);
-        const restrictionEnd = new Date(endDateStr);
+          if (dateRangeApplies) {
+            violations.push({
+              restrictionId: restriction.id,
+              restrictionName: restriction.name,
+              restrictionDescription: restriction.description,
+              restrictionCategory: "MEMBER_CLASS",
+              entityId: memberId.toString(),
+              memberClassId,
+              type: "TIME",
+              message: `Booking time (${formatTimeString(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
+              canOverride: restriction.canOverride,
+            });
+          }
+        }
+      }
+    } else if (restriction.restrictionType === "FREQUENCY") {
+      if (restriction.maxCount && restriction.periodDays) {
+        const currentDate = new Date(bookingDateStr);
+        const monthStart = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth(),
+          1,
+        );
+        const monthEnd = new Date(
+          currentDate.getFullYear(),
+          currentDate.getMonth() + 1,
+          0,
+        );
 
-        if (bookingDate >= restrictionStart && bookingDate <= restrictionEnd) {
-          // Format dates directly from the strings to avoid timezone issues
-          const startYear = parseInt(startDateStr.substring(0, 4));
-          const startMonth = parseInt(startDateStr.substring(5, 7)) - 1; // 0-indexed
-          const startDay = parseInt(startDateStr.substring(8, 10));
+        const monthStartStr = formatDateToYYYYMMDD(monthStart);
+        const monthEndStr = formatDateToYYYYMMDD(monthEnd);
 
-          const endYear = parseInt(endDateStr.substring(0, 4));
-          const endMonth = parseInt(endDateStr.substring(5, 7)) - 1; // 0-indexed
-          const endDay = parseInt(endDateStr.substring(8, 10));
+        const existingBookings = await db
+          .select({ count: sql<number>`cast(count(*) as integer)` })
+          .from(timeBlockMembers)
+          .where(
+            and(
+              eq(timeBlockMembers.memberId, memberId),
+              gte(timeBlockMembers.bookingDate, monthStartStr),
+              lte(timeBlockMembers.bookingDate, monthEndStr),
+            ),
+          );
 
-          const displayStartDate = new Date(startYear, startMonth, startDay);
-          const displayEndDate = new Date(endYear, endMonth, endDay);
+        const currentBookingCount = Number(existingBookings[0]?.count || 0);
+        const newTotalCount = currentBookingCount + 1;
 
-          const startDateFormatted = format(displayStartDate, "MMMM do, yyyy");
-          const endDateFormatted = format(displayEndDate, "MMMM do, yyyy");
-
+        if (newTotalCount > restriction.maxCount) {
+          const monthName = format(currentDate, "MMMM yyyy");
           violations.push({
             restrictionId: restriction.id,
             restrictionName: restriction.name,
             restrictionDescription: restriction.description,
-            restrictionCategory: "COURSE_AVAILABILITY",
-            entityId: null,
-            type: "AVAILABILITY",
-            message: `Course is restricted (${restriction.name}) from ${startDateFormatted} to ${endDateFormatted}`,
+            restrictionCategory: "MEMBER_CLASS",
+            entityId: memberId.toString(),
+            memberClassId,
+            type: "FREQUENCY",
+            message: `Member has exceeded frequency limit (${currentBookingCount}/${restriction.maxCount} bookings in ${monthName})`,
             canOverride: restriction.canOverride,
+            frequencyInfo: {
+              currentCount: currentBookingCount,
+              maxCount: restriction.maxCount,
+              monthName,
+              willCreateCharge: restriction.applyCharge,
+              chargeAmount: restriction.chargeAmount,
+            },
           });
         }
       }
     }
+  }
 
-    // Check member class restrictions if relevant
-    if (memberId && memberClass) {
-      const memberRestrictions = await db.query.timeblockRestrictions.findMany({
-        where: and(
-          eq(timeblockRestrictions.restrictionCategory, "MEMBER_CLASS"),
-          eq(timeblockRestrictions.isActive, true),
-        ),
-        orderBy: [desc(timeblockRestrictions.priority)],
-      });
+  return violations;
+}
 
-      for (const restriction of memberRestrictions) {
-        // Check if this restriction applies to the member class
-        // Either memberClasses includes the member's class or the memberClasses array is empty/null (applies to all)
-        const memberClassesApplies =
-          !restriction.memberClasses?.length ||
-          restriction.memberClasses?.includes(memberClass);
+/**
+ * Internal helper: Check guest restrictions
+ */
+async function checkGuestRestrictions(
+  guestId: number,
+  bookingDateStr: string,
+  bookingTimeLocal: string,
+  dayOfWeek: number,
+): Promise<any[]> {
+  const violations: any[] = [];
 
-        if (!memberClassesApplies) {
-          continue; // Skip this restriction if it doesn't apply to this member class
-        }
+  const guestRestrictions = await db.query.timeblockRestrictions.findMany({
+    where: and(
+      eq(timeblockRestrictions.restrictionCategory, "GUEST"),
+      eq(timeblockRestrictions.isActive, true),
+    ),
+  });
 
-        if (restriction.restrictionType === "TIME") {
-          // Check day of week - empty array or null means apply to all days
-          const dayApplies =
-            !restriction.daysOfWeek?.length ||
-            restriction.daysOfWeek?.includes(dayOfWeek);
+  for (const restriction of guestRestrictions) {
+    if (restriction.restrictionType === "TIME") {
+      // Check day of week - empty array or null means apply to all days
+      const dayApplies =
+        !restriction.daysOfWeek?.length ||
+        restriction.daysOfWeek?.includes(dayOfWeek);
 
-          if (dayApplies) {
-            if (
-              bookingTimeLocal >= (restriction.startTime || "00:00") &&
-              bookingTimeLocal <= (restriction.endTime || "23:59")
-            ) {
-              // Check date range if applicable
-              let dateRangeApplies = true;
-              if (restriction.startDate && restriction.endDate) {
-                const startDateStr = formatDateToYYYYMMDD(
-                  restriction.startDate,
-                );
-                const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
+      if (dayApplies) {
+        if (
+          bookingTimeLocal >= (restriction.startTime || "00:00") &&
+          bookingTimeLocal <= (restriction.endTime || "23:59")
+        ) {
+          // Check date range
+          let dateRangeApplies = true;
+          if (restriction.startDate && restriction.endDate) {
+            const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
+            const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
 
-                dateRangeApplies =
-                  bookingDateStr >= startDateStr &&
-                  bookingDateStr <= endDateStr;
-              }
-
-              if (dateRangeApplies) {
-                violations.push({
-                  restrictionId: restriction.id,
-                  restrictionName: restriction.name,
-                  restrictionDescription: restriction.description,
-                  restrictionCategory: "MEMBER_CLASS",
-                  entityId: memberId.toString(),
-                  memberClass,
-                  type: "TIME",
-                  message: `Booking time (${formatTimeString(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
-                  canOverride: restriction.canOverride,
-                });
-              }
-            }
+            dateRangeApplies =
+              bookingDateStr >= startDateStr && bookingDateStr <= endDateStr;
           }
-        } else if (restriction.restrictionType === "FREQUENCY") {
-          // Check frequency restrictions
-          if (restriction.maxCount && restriction.periodDays) {
-            // Calculate the current calendar month range
-            const currentDate = new Date(bookingDateStr);
-            const monthStart = new Date(
-              currentDate.getFullYear(),
-              currentDate.getMonth(),
-              1,
-            );
-            const monthEnd = new Date(
-              currentDate.getFullYear(),
-              currentDate.getMonth() + 1,
-              0,
-            );
 
-            const monthStartStr = formatDateToYYYYMMDD(monthStart);
-            const monthEndStr = formatDateToYYYYMMDD(monthEnd);
-
-            // Count existing bookings for this member in the current month
-            const existingBookings = await db
-              .select({ count: sql<number>`cast(count(*) as integer)` })
-              .from(timeBlockMembers)
-              .where(
-                and(
-                  eq(timeBlockMembers.memberId, memberId),
-                  gte(timeBlockMembers.bookingDate, monthStartStr),
-                  lte(timeBlockMembers.bookingDate, monthEndStr),
-                ),
-              );
-
-            const currentBookingCount = Number(existingBookings[0]?.count || 0);
-            const newTotalCount = currentBookingCount + 1; // Including this new booking
-
-            if (newTotalCount > restriction.maxCount) {
-              const monthName = format(currentDate, "MMMM yyyy");
-              violations.push({
-                restrictionId: restriction.id,
-                restrictionName: restriction.name,
-                restrictionDescription: restriction.description,
-                restrictionCategory: "MEMBER_CLASS",
-                entityId: memberId.toString(),
-                memberClass,
-                type: "FREQUENCY",
-                message: `Member has exceeded frequency limit (${currentBookingCount}/${restriction.maxCount} bookings in ${monthName})`,
-                canOverride: restriction.canOverride,
-                frequencyInfo: {
-                  currentCount: currentBookingCount,
-                  maxCount: restriction.maxCount,
-                  monthName,
-                  willCreateCharge: restriction.applyCharge,
-                  chargeAmount: restriction.chargeAmount,
-                },
-              });
-            }
+          if (dateRangeApplies) {
+            violations.push({
+              restrictionId: restriction.id,
+              restrictionName: restriction.name,
+              restrictionDescription: restriction.description,
+              restrictionCategory: "GUEST",
+              entityId: guestId.toString(),
+              type: "TIME",
+              message: `Guest booking time (${formatTimeString(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
+              canOverride: restriction.canOverride,
+            });
           }
         }
-        // Note: Other restriction types can be added here
       }
     }
+  }
 
-    // Check guest restrictions if relevant
+  return violations;
+}
+
+/**
+ * Check all applicable timeblock restrictions for a booking
+ * This orchestrates the internal helper functions to check different restriction types
+ */
+export async function checkTimeblockRestrictionsAction(params: {
+  memberId?: number;
+  memberClassId?: number; // Changed from memberClass string to memberClassId number
+  guestId?: number;
+  timeBlockId?: number;
+  bookingDateString?: string;
+  bookingTime?: string;
+}) {
+  try {
+    const { memberId, memberClassId, guestId, bookingDateString, bookingTime } =
+      params;
+
+    // Validate booking date
+    if (!bookingDateString) {
+      return { success: false, error: "No booking date provided" };
+    }
+
+    // Parse date to get day of week
+    const dateParts = bookingDateString.split("-");
+    if (dateParts.length !== 3) {
+      return { success: false, error: "Invalid date format" };
+    }
+
+    const year = parseInt(dateParts[0] || "0", 10);
+    const month = parseInt(dateParts[1] || "0", 10) - 1;
+    const day = parseInt(dateParts[2] || "0", 10);
+
+    const localDate = new Date(year, month, day);
+    const dayOfWeek = localDate.getDay();
+    const bookingTimeLocal = bookingTime || "00:00";
+
+    // Collect all violations
+    let violations: any[] = [];
+
+    // Check course availability restrictions
+    const courseViolations =
+      await checkCourseAvailabilityRestrictions(bookingDateString);
+    violations = violations.concat(courseViolations);
+
+    // Check member class restrictions
+    if (memberId && memberClassId) {
+      const memberViolations = await checkMemberClassRestrictions(
+        memberId,
+        memberClassId,
+        bookingDateString,
+        bookingTimeLocal,
+        dayOfWeek,
+      );
+      violations = violations.concat(memberViolations);
+    }
+
+    // Check guest restrictions
     if (guestId) {
-      const guestRestrictions = await db.query.timeblockRestrictions.findMany({
-        where: and(
-          eq(timeblockRestrictions.restrictionCategory, "GUEST"),
-          eq(timeblockRestrictions.isActive, true),
-        ),
-      });
-
-      for (const restriction of guestRestrictions) {
-        if (restriction.restrictionType === "TIME") {
-          if (restriction.daysOfWeek?.includes(dayOfWeek)) {
-            if (
-              bookingTimeLocal >= (restriction.startTime || "00:00") &&
-              bookingTimeLocal <= (restriction.endTime || "23:59")
-            ) {
-              // Check date range if applicable
-              let dateRangeApplies = true;
-              if (restriction.startDate && restriction.endDate) {
-                const startDateStr = formatDateToYYYYMMDD(
-                  restriction.startDate,
-                );
-                const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
-
-                dateRangeApplies =
-                  bookingDateStr >= startDateStr &&
-                  bookingDateStr <= endDateStr;
-              }
-
-              if (dateRangeApplies) {
-                violations.push({
-                  restrictionId: restriction.id,
-                  restrictionName: restriction.name,
-                  restrictionDescription: restriction.description,
-                  restrictionCategory: "GUEST",
-                  entityId: guestId.toString(),
-                  type: "TIME",
-                  message: `Guest booking time (${formatTimeString(bookingTimeLocal)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
-                  canOverride: restriction.canOverride,
-                });
-              }
-            }
-          }
-        }
-        // Note: Frequency restrictions would be checked here
-      }
+      const guestViolations = await checkGuestRestrictions(
+        guestId,
+        bookingDateString,
+        bookingTimeLocal,
+        dayOfWeek,
+      );
+      violations = violations.concat(guestViolations);
     }
 
-    // Determine preferred reason: prioritize AVAILABILITY > TIME > FREQUENCY regardless of priority
+    // Determine preferred reason: prioritize AVAILABILITY > TIME > FREQUENCY
     let preferredReason = "";
     if (violations.length > 0) {
-      // Look for AVAILABILITY violation first (highest priority)
       const availabilityViolation = violations.find(
         (v) => v.type === "AVAILABILITY",
       );
@@ -684,7 +625,6 @@ export async function checkTimeblockRestrictionsAction(params: {
             ? availabilityViolation.restrictionDescription
             : availabilityViolation.message;
       } else {
-        // Look for TIME violation second
         const timeViolation = violations.find((v) => v.type === "TIME");
         if (timeViolation) {
           preferredReason =
@@ -693,7 +633,6 @@ export async function checkTimeblockRestrictionsAction(params: {
               ? timeViolation.restrictionDescription
               : timeViolation.message;
         } else {
-          // Fall back to first violation if no AVAILABILITY or TIME violation
           preferredReason =
             violations[0].restrictionDescription &&
             violations[0].restrictionDescription.trim() !== ""

@@ -15,7 +15,7 @@ import {
   Flag,
   CheckCircle,
 } from "lucide-react";
-import { formatTime12Hour, formatTime, formatDateTime } from "~/lib/dates";
+import { formatTime12Hour } from "~/lib/dates";
 
 interface PaceOfPlayCardProps {
   timeBlock: TimeBlockWithPaceOfPlay;

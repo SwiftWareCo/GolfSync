@@ -1,13 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
+
 import { queryKeys } from "./query-keys";
-import type { QueryOptions, MutationOptions, ActionResult } from "./types";
-import {
-  searchGuestsAction,
-  createGuest,
-  removeGuestFromTimeBlock,
-} from "~/server/guests/actions";
-import type { GuestFormValues } from "~/app/types/GuestTypes";
+
+import { searchGuestsAction } from "~/server/guests/actions";
+
+
 
 // Guest type for search results
 export type Guest = {
@@ -17,6 +14,7 @@ export type Guest = {
   email: string | null;
   phone: string | null;
 };
+
 
 // Query Options
 export const guestQueryOptions = {
@@ -32,7 +30,7 @@ export const guestQueryOptions = {
         const results = await searchGuestsAction(query);
 
         // Map results to match the Guest type with all required properties
-        return results.map((result: any) => ({
+        return results.map((result: Guest) => ({
           id: result.id,
           firstName: result.firstName,
           lastName: result.lastName,
@@ -44,38 +42,4 @@ export const guestQueryOptions = {
       staleTime: 5 * 60 * 1000, // 5 minutes - guest data doesn't change often
       gcTime: 10 * 60 * 1000, // 10 minutes
     }),
-};
-
-// Mutation Options
-export const guestMutationOptions = {
-  // Create new guest
-  createGuest: (queryClient: QueryClient): MutationOptions<
-    ActionResult<Guest>,
-    Error,
-    GuestFormValues
-  > => ({
-    mutationFn: async (values: GuestFormValues) => createGuest(values),
-    onSuccess: (data) => {
-      // Invalidate guest searches to include the new guest in future searches
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.guests.all(),
-      });
-    },
-  }),
-
-  // Remove guest (legacy - kept for backward compatibility)
-  removeGuest: (queryClient: QueryClient): MutationOptions<
-    ActionResult,
-    Error,
-    { timeBlockId: number; guestId: number }
-  > => ({
-    mutationFn: async ({ timeBlockId, guestId }) =>
-      removeGuestFromTimeBlock(timeBlockId, guestId),
-    onSuccess: () => {
-      // Invalidate teesheet queries to reflect the change
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.teesheets.all(),
-      });
-    },
-  }),
 };

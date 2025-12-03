@@ -102,9 +102,58 @@ export const timeblockOverrides = createTable(
 export const timeblockRestrictionsSelectSchema = createSelectSchema(
   timeblockRestrictions,
 );
+
+// Insert schema with validation refinements
 export const timeblockRestrictionsInsertSchema = createInsertSchema(
   timeblockRestrictions,
-);
+)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    name: z.string().min(1, "Name is required"),
+    restrictionCategory: z.enum(["MEMBER_CLASS", "GUEST", "COURSE_AVAILABILITY"], {
+      message: "Restriction category is required",
+    }),
+    restrictionType: z.enum(["TIME", "FREQUENCY", "AVAILABILITY"], {
+      message: "Restriction type is required",
+    }),
+  })
+  .refine(
+    (data) => {
+      if (data.restrictionType === "TIME") {
+        return data.startTime && data.endTime;
+      }
+      return true;
+    },
+    {
+      message: "Start time and end time are required for time restrictions",
+      path: ["startTime"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.restrictionType === "FREQUENCY") {
+        return data.maxCount && data.periodDays;
+      }
+      return true;
+    },
+    {
+      message: "Max count and period days are required for frequency restrictions",
+      path: ["maxCount"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.restrictionType === "AVAILABILITY") {
+        return data.startDate && data.endDate;
+      }
+      return true;
+    },
+    {
+      message: "Start date and end date are required for availability restrictions",
+      path: ["startDate"],
+    },
+  );
+
 export const timeblockRestrictionsUpdateSchema = createUpdateSchema(
   timeblockRestrictions,
 );

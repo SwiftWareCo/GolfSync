@@ -15,7 +15,7 @@ import {
 import { Button } from "~/components/ui/button";
 
 interface Entity {
-  id: number;
+  id: number | undefined;
   firstName: string;
   lastName: string;
   [key: string]: any; // For additional properties

@@ -1,40 +1,37 @@
 "use client";
 
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "~/components/ui/form";
 import { Input } from "~/components/ui/input";
-import { Checkbox } from "~/components/ui/checkbox";
-import { type UseFormReturn } from "react-hook-form";
+import { Label } from "~/components/ui/label";
+import { Button } from "~/components/ui/button";
+import {
+  type Control,
+  type UseFormSetValue,
+  type UseFormRegister,
+  type FieldErrors,
+} from "react-hook-form";
 import { DatePicker } from "~/components/ui/date-picker";
-import { type TimeblockRestrictionFormValues } from "../TimeblockRestrictionDialog";
+import type { TimeblockRestrictionInsert } from "~/server/db/schema";
 import { preserveDate } from "~/lib/utils";
 
 interface TimeRestrictionFieldsProps {
-  form: UseFormReturn<TimeblockRestrictionFormValues>;
+  control: Control<TimeblockRestrictionInsert>;
+  setValue: UseFormSetValue<TimeblockRestrictionInsert>;
+  daysOfWeek?: number[];
   restrictionCategory?: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
+  register: UseFormRegister<TimeblockRestrictionInsert>;
+  errors: FieldErrors<TimeblockRestrictionInsert>;
 }
 
-const daysOfWeek = [
-  { label: "Sunday", value: 0 },
-  { label: "Monday", value: 1 },
-  { label: "Tuesday", value: 2 },
-  { label: "Wednesday", value: 3 },
-  { label: "Thursday", value: 4 },
-  { label: "Friday", value: 5 },
-  { label: "Saturday", value: 6 },
-];
-
 export function TimeRestrictionFields({
-  form,
+  control,
+  setValue,
+  daysOfWeek,
   restrictionCategory,
+  register,
+  errors,
 }: TimeRestrictionFieldsProps) {
-  // Get current values for conditional rendering
-  const daysOfWeekValue = form.watch("daysOfWeek") || [];
+  // Use the daysOfWeek prop passed from parent
+  const daysOfWeekValue = daysOfWeek || [];
 
   return (
     <div className="space-y-4 rounded-md border p-4">
@@ -42,122 +39,120 @@ export function TimeRestrictionFields({
 
       {/* Time Range */}
       <div className="grid grid-cols-2 gap-4">
-        <FormField
-          control={form.control}
-          name="startTime"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Start Time</FormLabel>
-              <FormControl>
-                <Input type="time" {...field} value={field.value || ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <div className="space-y-2">
+          <Label htmlFor="startTime">Start Time</Label>
+          <Input
+            id="startTime"
+            type="time"
+            {...register("startTime")}
+          />
+          {errors.startTime && (
+            <span className="text-xs text-red-500">
+              {errors.startTime.message as string}
+            </span>
           )}
-        />
+        </div>
 
-        <FormField
-          control={form.control}
-          name="endTime"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>End Time</FormLabel>
-              <FormControl>
-                <Input type="time" {...field} value={field.value || ""} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <div className="space-y-2">
+          <Label htmlFor="endTime">End Time</Label>
+          <Input
+            id="endTime"
+            type="time"
+            {...register("endTime")}
+          />
+          {errors.endTime && (
+            <span className="text-xs text-red-500">
+              {errors.endTime.message as string}
+            </span>
           )}
-        />
+        </div>
       </div>
 
       {/* Days of Week */}
-      <div className="space-y-3">
-        <FormLabel>Days of Week</FormLabel>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {daysOfWeek.map((day) => (
-            <FormField
-              key={day.value}
-              control={form.control}
-              name="daysOfWeek"
-              render={({ field }) => (
-                <FormItem className="flex items-center space-y-0 space-x-2">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value?.includes(day.value)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          field.onChange([...daysOfWeekValue, day.value]);
-                        } else {
-                          field.onChange(
-                            daysOfWeekValue.filter(
-                              (value: number) => value !== day.value,
-                            ),
-                          );
-                        }
-                      }}
-                    />
-                  </FormControl>
-                  <FormLabel className="cursor-pointer font-normal">
-                    {day.label}
-                  </FormLabel>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          ))}
+      <div className="space-y-2">
+        <Label>Days of Week</Label>
+        <div className="grid grid-cols-7 gap-1">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+            (day, index) => {
+              const isSelected = daysOfWeekValue?.includes(index) ?? false;
+              return (
+                <Button
+                  key={day}
+                  type="button"
+                  variant={isSelected ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    if (isSelected) {
+                      setValue(
+                        "daysOfWeek",
+                        daysOfWeekValue.filter((d) => d !== index),
+                        { shouldDirty: true, shouldValidate: true },
+                      );
+                    } else {
+                      setValue("daysOfWeek", [...daysOfWeekValue, index], {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }
+                  }}
+                >
+                  {day}
+                </Button>
+              );
+            },
+          )}
         </div>
-        <FormMessage />
+        {errors.daysOfWeek && (
+          <span className="text-xs text-red-500">
+            {errors.daysOfWeek.message as string}
+          </span>
+        )}
       </div>
 
       {/* Date Range - Only show for COURSE_AVAILABILITY */}
       {restrictionCategory === "COURSE_AVAILABILITY" && (
         <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="startDate"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>Start Date</FormLabel>
-                <DatePicker
-                  date={field.value ? preserveDate(field.value) : undefined}
-                  setDate={(date?: Date) => {
-                    if (date) {
-                      // Ensure selected date doesn't get timezone-shifted
-                      field.onChange(preserveDate(date));
-                    } else {
-                      field.onChange(null);
-                    }
-                  }}
-                  placeholder="Select start date"
-                />
-                <FormMessage />
-              </FormItem>
+          <div className="flex flex-col space-y-2">
+            <Label>Start Date</Label>
+            <DatePicker
+              date={undefined}
+              setDate={(date?: Date) => {
+                if (date) {
+                  // Ensure selected date doesn't get timezone-shifted
+                  setValue("startDate", preserveDate(date) as any);
+                } else {
+                  setValue("startDate", null);
+                }
+              }}
+              placeholder="Select start date"
+            />
+            {errors.startDate && (
+              <span className="text-xs text-red-500">
+                {errors.startDate.message as string}
+              </span>
             )}
-          />
+          </div>
 
-          <FormField
-            control={form.control}
-            name="endDate"
-            render={({ field }) => (
-              <FormItem className="flex flex-col">
-                <FormLabel>End Date</FormLabel>
-                <DatePicker
-                  date={field.value ? preserveDate(field.value) : undefined}
-                  setDate={(date?: Date) => {
-                    if (date) {
-                      // Ensure selected date doesn't get timezone-shifted
-                      field.onChange(preserveDate(date));
-                    } else {
-                      field.onChange(null);
-                    }
-                  }}
-                  placeholder="Select end date"
-                />
-                <FormMessage />
-              </FormItem>
+          <div className="flex flex-col space-y-2">
+            <Label>End Date</Label>
+            <DatePicker
+              date={undefined}
+              setDate={(date?: Date) => {
+                if (date) {
+                  // Ensure selected date doesn't get timezone-shifted
+                  setValue("endDate", preserveDate(date) as any);
+                } else {
+                  setValue("endDate", null);
+                }
+              }}
+              placeholder="Select end date"
+            />
+            {errors.endDate && (
+              <span className="text-xs text-red-500">
+                {errors.endDate.message as string}
+              </span>
             )}
-          />
+          </div>
         </div>
       )}
     </div>

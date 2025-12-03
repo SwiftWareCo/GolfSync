@@ -109,9 +109,22 @@ export const configBlockWithIdSchema = configBlockInsertSchema
     id: z.union([z.string(), z.number()]),
   });
 
-export const TeesheetConfigWithBlocksInsertSchema =
-  teesheetConfigInsertSchema.extend({
-    blocks: z.array(configBlockWithIdSchema),
+export const TeesheetConfigWithBlocksInsertSchema = teesheetConfigInsertSchema
+  .extend({
+    blocks: z.array(configBlockWithIdSchema).min(1, {
+      message: "At least one time block is required",
+    }),
+    name: z.string().min(1, {
+      message: "Configuration name is required",
+    }),
+    daysOfWeek: z.array(z.number()).min(1, {
+      message: "At least one day of week must be selected",
+    }),
+  })
+  .required({
+    name: true,
+    blocks: true,
+    daysOfWeek: true,
   });
 
 export type TeesheetConfigWithBlocksInsert = z.infer<
