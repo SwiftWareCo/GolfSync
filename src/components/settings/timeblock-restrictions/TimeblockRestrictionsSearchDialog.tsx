@@ -18,7 +18,7 @@ import {
 } from "~/components/ui/select";
 import { Label } from "~/components/ui/label";
 import { Input } from "~/components/ui/input";
-import { type TimeblockRestriction } from "./TimeblockRestrictionsSettings";
+import { type TimeblockRestriction } from "~/server/db/schema";
 
 interface TimeblockRestrictionsSearchProps {
   restrictions: TimeblockRestriction[];
