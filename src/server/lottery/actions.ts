@@ -13,10 +13,9 @@ import {
 } from "~/server/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import type {
-  LotteryEntryFormData,
-  TimeWindow,
-} from "~/app/types/LotteryTypes";
+import type { TimeWindow } from "~/lib/lottery-utils";
+import type { LotteryFormInput } from "~/server/db/schema/lottery/lottery-entries.schema";
+import type { TimeblockRestriction } from "~/server/db/schema/restrictions/restrictions.schema";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 
 /**
@@ -27,9 +26,8 @@ import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
  */
 export async function submitLotteryEntry(
   userId: number,
-  data: LotteryEntryFormData,
+  data: LotteryFormInput,
 ): Promise<{ success: boolean; error?: string; data?: any }> {
-
   // Get member data
   const member = await db.query.members.findFirst({
     where: eq(members.id, userId),
@@ -99,7 +97,7 @@ export async function submitLotteryEntry(
       data.fills.map((fill) => ({
         relatedType: "lottery_entry" as const,
         relatedId: newEntry.id,
-        fillType: fill.fillType ,
+        fillType: fill.fillType,
         customName: fill.customName || null,
       })),
     );
@@ -248,14 +246,17 @@ export async function cancelLotteryEntry(
   }
 }
 
-
 /**
  * Calculate fairness score for a lottery entry based on fairness, speed, and admin adjustments
  * Uses organizerId (entry creator) consistently for all entries
  */
 async function calculateFairnessScore(
-  entry: any,
-  timeWindows: any[],
+  entry: { organizerId: number; preferredWindow: string },
+  timeWindows: Array<{
+    window: string;
+    startMinutes: number;
+    endMinutes: number;
+  }>,
 ): Promise<number> {
   let fairnessScore = 0;
 
@@ -347,7 +348,12 @@ export async function processLotteryForDate(
     const timeWindows = calculateDynamicTimeWindows(config);
     let processedCount = 0;
     const now = new Date();
-    const memberInserts: any[] = [];
+    const memberInserts: Array<{
+      timeBlockId: number;
+      memberId: number;
+      bookingDate: string;
+      bookingTime: string;
+    }> = [];
 
     // Simple logging for algorithm decisions
     console.log(`🎲 Starting lottery processing for ${date}`);
@@ -412,7 +418,7 @@ export async function processLotteryForDate(
         return group.members.every((member) => {
           const memberAllowedBlocks = filterBlocksByRestrictions(
             [block],
-            { memberId: member.id, memberClass: member.memberClass?.label || "" },
+            { memberId: member.id, memberClassId: member.memberClass?.id ?? 0 },
             date,
             timeRestrictions,
           );
@@ -484,6 +490,8 @@ export async function processLotteryForDate(
 
       // For individual entries, the member is the only one in memberIds
       const individualMemberId = entry.memberIds[0];
+      if (!individualMemberId) continue;
+
       const memberData = await db.query.members.findFirst({
         where: eq(members.id, individualMemberId),
         with: {
@@ -501,7 +509,7 @@ export async function processLotteryForDate(
         config,
         {
           memberId: individualMemberId,
-          memberClass: memberData.memberClass?.label || "",
+          memberClassId: memberData.memberClass?.id ?? 0,
         },
         date,
         timeRestrictions,
@@ -586,16 +594,15 @@ export async function processLotteryForDate(
   }
 }
 
-
 /**
  * Filter timeblocks by member class TIME restrictions
  */
 function filterBlocksByRestrictions(
-  blocks: any[],
-  memberInfo: { memberId: number; memberClass: string },
+  blocks: Array<{ id: number; startTime: string; availableSpots: number }>,
+  memberInfo: { memberId: number; memberClassId: number },
   bookingDate: string,
-  timeRestrictions: any[],
-): any[] {
+  timeRestrictions: TimeblockRestriction[],
+): Array<{ id: number; startTime: string; availableSpots: number }> {
   return blocks.filter((block) => {
     // Check each time restriction
     for (const restriction of timeRestrictions) {
@@ -605,8 +612,8 @@ function filterBlocksByRestrictions(
 
       // Check if restriction applies to this member class
       const appliesToMemberClass =
-        !restriction.memberClasses?.length ||
-        restriction.memberClasses.includes(memberInfo.memberClass);
+        !restriction.memberClassIds?.length ||
+        restriction.memberClassIds.includes(memberInfo.memberClassId);
 
       if (!appliesToMemberClass) continue;
 
@@ -650,11 +657,15 @@ function filterBlocksByRestrictions(
  * Helper to find a block within preferred/alternate windows
  */
 function findBlockInWindow(
-  availableBlocks: any[],
+  availableBlocks: Array<{
+    id: number;
+    startTime: string;
+    availableSpots: number;
+  }>,
   preferredWindow: TimeWindow,
   alternateWindow: TimeWindow | null,
   config: TeesheetConfig,
-): any | null {
+): { id: number; startTime: string; availableSpots: number } | null {
   // Try preferred window
   const preferredMatch = availableBlocks.find(
     (block) =>
@@ -680,14 +691,21 @@ function findBlockInWindow(
  * Helper function to find suitable time block based on preferences
  */
 function findSuitableTimeBlock(
-  availableBlocks: any[],
+  availableBlocks: Array<{
+    id: number;
+    startTime: string;
+    availableSpots: number;
+  }>,
   preferredWindow: TimeWindow,
   alternateWindow: TimeWindow | null,
   config: TeesheetConfig,
-  memberInfo: { memberId: number; memberClass: string },
+  memberInfo: { memberId: number; memberClassId: number },
   bookingDate: string,
-  timeRestrictions: any[],
-): { block: any | null; wasBlockedByRestrictions: boolean } {
+  timeRestrictions: TimeblockRestriction[],
+): {
+  block: { id: number; startTime: string; availableSpots: number } | null;
+  wasBlockedByRestrictions: boolean;
+} {
   // First try with all blocks (no restriction filtering)
   const unrestrictedBlock = findBlockInWindow(
     availableBlocks,
@@ -752,7 +770,7 @@ function findSuitableTimeBlock(
  * Helper function to check if a time block matches time preferences using dynamic windows
  */
 function matchesTimePreference(
-  block: any,
+  block: { startTime: string },
   timeWindow: TimeWindow,
   alternateWindow: TimeWindow | null,
   config: TeesheetConfig,
@@ -802,20 +820,20 @@ export async function createTestLotteryEntries(
   try {
     // Get active members from database - exclude STAFF and MANAGEMENT classes
     const excludedClasses = new Set([
-      'RESIGNED',
-      'SUSPENDED',
-      'DINING',
-      'STAFF',
-      'STAFF PLAY',
-      'MANAGEMENT',
-      'MGMT / PRO',
-      'HONORARY MALE',
-      'HONORARY FEMALE',
-      'PRIVILEGED MALE',
-      'PRIVILEGED FEMALE',
-      'SENIOR RETIRED MALE',
-      'SENIOR RETIRED FEMALE',
-      'LEAVE OF ABSENCE',
+      "RESIGNED",
+      "SUSPENDED",
+      "DINING",
+      "STAFF",
+      "STAFF PLAY",
+      "MANAGEMENT",
+      "MGMT / PRO",
+      "HONORARY MALE",
+      "HONORARY FEMALE",
+      "PRIVILEGED MALE",
+      "PRIVILEGED FEMALE",
+      "SENIOR RETIRED MALE",
+      "SENIOR RETIRED FEMALE",
+      "LEAVE OF ABSENCE",
     ]);
 
     const allMembersRaw = await db.query.members.findMany({
@@ -825,7 +843,7 @@ export async function createTestLotteryEntries(
 
     // Filter out excluded classes in JavaScript
     const allMembers = allMembersRaw.filter(
-      (member) => !excludedClasses.has(member.memberClass?.label || ''),
+      (member) => !excludedClasses.has(member.memberClass?.label || ""),
     );
 
     if (allMembers.length < 20) {
@@ -1229,6 +1247,7 @@ async function updateFairnessScoresAfterProcessing(
       if (entry.status === "ASSIGNED" && entry.assignedTimeBlockId) {
         // For individual entries, memberId is the first (and only) element in memberIds
         const memberId = entry.memberIds[0];
+        if (!memberId) continue;
 
         // Get the assigned time block details
         const assignedTimeBlock = await db.query.timeBlocks.findFirst({
@@ -1251,12 +1270,16 @@ async function updateFairnessScoresAfterProcessing(
 
         const memberInfo = {
           memberId: member.id,
-          memberClass: member.memberClass?.label || "",
+          memberClassId: member.memberClass?.id ?? 0,
         };
 
         // Check what blocks were available without restrictions
         const allBlocks = [
-          { startTime: assignedTimeBlock.startTime, id: assignedTimeBlock.id },
+          {
+            startTime: assignedTimeBlock.startTime,
+            id: assignedTimeBlock.id,
+            availableSpots: 1,
+          },
         ];
         const allowedBlocks = filterBlocksByRestrictions(
           allBlocks,
@@ -1381,7 +1404,11 @@ async function updateFairnessScoresAfterProcessing(
 
         // Check if the group assignment was affected by restrictions from any member
         const allBlocks = [
-          { startTime: assignedTimeBlock.startTime, id: assignedTimeBlock.id },
+          {
+            startTime: assignedTimeBlock.startTime,
+            id: assignedTimeBlock.id,
+            availableSpots: 1,
+          },
         ];
 
         // Get all group members to check restrictions
@@ -1395,7 +1422,7 @@ async function updateFairnessScoresAfterProcessing(
         const wasBlockedByRestrictions = groupMembers.some((member) => {
           const memberAllowedBlocks = filterBlocksByRestrictions(
             allBlocks,
-            { memberId: member.id, memberClass: member.memberClass?.label || "" },
+            { memberId: member.id, memberClassId: member.memberClass?.id ?? 0 },
             date,
             timeRestrictions,
           );
