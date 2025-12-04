@@ -10,7 +10,7 @@ import {
   fills,
 } from "~/server/db/schema";
 import { eq, and, sql, desc, asc, inArray } from "drizzle-orm";
-import type { LotteryEntryData } from "~/app/types/LotteryTypes";
+import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
 
 /**
  * Get lottery entry for the authenticated member and specified date
@@ -54,7 +54,7 @@ export async function getLotteryEntryData(
     );
 
     if (individualEntry) {
-      return { type: "individual", entry: individualEntry as any };
+      return { type: "individual", entry: individualEntry };
     }
 
     // Check for group entry where this member is the organizer
@@ -63,7 +63,7 @@ export async function getLotteryEntryData(
     );
 
     if (groupEntry) {
-      return { type: "group", entry: groupEntry as any };
+      return { type: "group", entry: groupEntry };
     }
 
     // Check if member is part of another group
@@ -75,7 +75,7 @@ export async function getLotteryEntryData(
     );
 
     if (groupMemberEntry) {
-      return { type: "group_member", entry: groupMemberEntry as any };
+      return { type: "group_member", entry: groupMemberEntry };
     }
 
     return null;

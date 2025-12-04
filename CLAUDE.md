@@ -12,3 +12,7 @@ use PNPM for package management and running scripts DO NOT USE npm
 - Do NOT create new types in `@src/app/types/` directory
 - Ensure type definitions match the actual data shape returned from queries
 - Use minimal nesting with optional chaining for related data - avoid flattening unless nesting exceeds 2 levels (one level of nesting like `profile.memberSpeedProfile?.field` is clean and leverages Drizzle's type inference)
+
+## After Copmleting Change
+
+- Run pnpm check to ensure no type errors on changed files
