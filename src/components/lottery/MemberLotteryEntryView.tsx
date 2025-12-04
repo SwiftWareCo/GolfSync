@@ -32,12 +32,14 @@ import {
 } from "lucide-react";
 import { formatDate, formatTime12Hour } from "~/lib/dates";
 import { cancelLotteryEntry } from "~/server/lottery/actions";
-import { type LotteryEntry, type LotteryGroup } from "~/app/types/LotteryTypes";
+import type { LotteryEntry } from "~/server/db/schema/lottery/lottery-entries.schema";
 import type { Member } from "~/app/types/MemberTypes";
+
+// LotteryGroup is stored as LotteryEntry in the database with memberIds array populated
 
 interface LotteryEntryViewProps {
   lotteryDate: string;
-  entry: LotteryEntry | LotteryGroup;
+  entry: LotteryEntry;
   entryType: "individual" | "group" | "group_member";
   member: Member;
   onEdit?: () => void;
@@ -51,37 +53,20 @@ const TIME_WINDOW_LABELS = {
   AFTERNOON: "Afternoon (3:00 PM - 6:00 PM)",
 };
 
-// Helper functions to handle both LotteryEntry and LotteryGroup field differences
-function getPreferredWindow(entry: LotteryEntry | LotteryGroup): string {
-  if ("primaryTimeWindow" in entry) {
-    return entry.primaryTimeWindow;
-  }
+// Helper functions for field access
+function getPreferredWindow(entry: LotteryEntry): string {
   return entry.preferredWindow;
 }
 
-function getAlternateWindow(
-  entry: LotteryEntry | LotteryGroup,
-): string | undefined {
-  if ("backupTimeWindow" in entry) {
-    return entry.backupTimeWindow || undefined;
-  }
-  if ("alternateWindow" in entry) {
-    return entry.alternateWindow || undefined;
-  }
-  return undefined;
+function getAlternateWindow(entry: LotteryEntry): string | undefined {
+  return entry.alternateWindow || undefined;
 }
 
-function getSubmissionTimestamp(entry: LotteryEntry | LotteryGroup): Date {
-  if ("submittedAt" in entry) {
-    return entry.submittedAt;
-  }
+function getSubmissionTimestamp(entry: LotteryEntry): Date {
   return entry.submissionTimestamp;
 }
 
-function getCreatedAt(entry: LotteryEntry | LotteryGroup): Date {
-  if ("submittedAt" in entry) {
-    return entry.submittedAt; // LotteryEntry doesn't have createdAt, use submittedAt
-  }
+function getCreatedAt(entry: LotteryEntry): Date {
   return entry.createdAt;
 }
 

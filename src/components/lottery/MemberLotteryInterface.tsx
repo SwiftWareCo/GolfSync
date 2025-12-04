@@ -5,7 +5,7 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { MemberLotteryEntryForm } from "./MemberLotteryEntryForm";
 import { MemberLotteryEntryView } from "./MemberLotteryEntryView";
-import type { LotteryEntryData } from "~/app/types/LotteryTypes";
+import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
 import type { Member } from "~/app/types/MemberTypes";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 

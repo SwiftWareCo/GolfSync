@@ -21,10 +21,6 @@ import { formatDate } from "~/lib/dates";
 import { submitLotteryEntry } from "~/server/lottery/actions";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
 import { FillForm } from "~/components/timeblock/fills/FillForm";
-import type {
-  TimeWindow,
-  LotteryEntryFormData,
-} from "~/app/types/LotteryTypes";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import type { Teesheet, TeesheetConfigWithBlocks } from "~/server/db/schema";
 import {
@@ -97,7 +93,7 @@ export function AdminLotteryEntryModal({
 
   // Mutation for submitting lottery entry
   const submitMutation = useMutation({
-    mutationFn: async (formData: LotteryEntryFormData) => {
+    mutationFn: async (formData: LotteryFormInput) => {
       return submitLotteryEntry(organizerId, formData);
     },
     onSuccess: (result) => {
@@ -203,12 +199,11 @@ export function AdminLotteryEntryModal({
       return;
     }
 
-    const formData: LotteryEntryFormData = {
+    const formData: LotteryFormInput = {
+      organizerId: organizerId,
       lotteryDate: teesheet.date,
-      preferredWindow: data.preferredWindow as TimeWindow,
-      alternateWindow: data.alternateWindow
-        ? (data.alternateWindow as TimeWindow)
-        : undefined,
+      preferredWindow: data.preferredWindow,
+      alternateWindow: data.alternateWindow || undefined,
       // Additional members (organizer will be added server-side)
       memberIds: data.memberIds,
       // Fills can be added to any entry (individual or group)
@@ -378,8 +373,7 @@ export function AdminLotteryEntryModal({
                     <div className="flex-1">
                       <div className="font-medium">
                         {fill.fillType === "guest" && "Guest Fill"}
-                        {fill.fillType === "reciprocal" &&
-                          "Reciprocal Fill"}
+                        {fill.fillType === "reciprocal" && "Reciprocal Fill"}
                         {fill.fillType === "custom" &&
                           (fill.customName || "Custom Fill")}
                       </div>

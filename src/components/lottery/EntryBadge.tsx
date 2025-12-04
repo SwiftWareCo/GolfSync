@@ -8,7 +8,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 import type { TimeWindow } from "~/lib/lottery-utils";
 
 // Helper types for lottery entry display
@@ -26,7 +26,7 @@ export interface LotteryEntryDisplay {
 
 interface EntryBadgeProps {
   entry: LotteryEntryDisplay;
-  config?: TeesheetConfig;
+  config?: TeesheetConfigWithBlocks;
 }
 
 // Cached member class mapping to prevent recalculation
@@ -53,7 +53,7 @@ const getAssignmentQuality = (
   assignedTime: string,
   preferredWindow: string | null,
   alternateWindow: string | null,
-  config?: TeesheetConfig,
+  config?: TeesheetConfigWithBlocks,
 ): "preferred" | "alternate" | "fallback" => {
   if (!config) return "fallback";
 

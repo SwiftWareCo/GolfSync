@@ -9,7 +9,14 @@ import { ListChecks, Users, Clock, Trash2 } from "lucide-react";
 // Note: This component needs to be refactored to receive data via props instead of direct server calls
 import { cancelLotteryEntry } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
-import { TIME_WINDOWS } from "~/app/types/LotteryTypes";
+
+// TODO: This component should receive timeWindows via props from parent using calculateDynamicTimeWindows
+const TIME_WINDOWS = [
+  { value: "MORNING", label: "Morning" },
+  { value: "MIDDAY", label: "Midday" },
+  { value: "AFTERNOON", label: "Afternoon" },
+  { value: "EVENING", label: "Evening" },
+] as const;
 
 type LotteryStatus = "setup" | "active" | "closed";
 
@@ -69,7 +76,7 @@ export function LotteryEntryManager({
       onConfirm: async () => {
         setConfirmDialog((prev) => ({ ...prev, open: false }));
         try {
-          const result = await cancelLotteryEntry(entryId, isGroup);
+          const result = await cancelLotteryEntry(entryId);
           if (result.success) {
             toast.success("Entry cancelled successfully");
             await loadData();

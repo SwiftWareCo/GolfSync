@@ -8,7 +8,7 @@ import { LotteryIndividualEntriesList } from "./LotteryIndividualEntriesList";
 import { LotteryGroupEntriesList } from "./LotteryGroupEntriesList";
 import { LotteryEditDialog } from "./LotteryEditDialog";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 interface LotteryEntryData {
   individual: any[];
@@ -25,7 +25,7 @@ interface LotteryAllEntriesProps {
     lastName: string;
     class: string;
   }>;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
 }
 
 export function LotteryAllEntries({

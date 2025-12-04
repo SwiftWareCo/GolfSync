@@ -25,19 +25,17 @@ import toast from "react-hot-toast";
 import { isPast, getDateForDB } from "~/lib/dates";
 import { parse } from "date-fns";
 import { type Member } from "~/app/types/MemberTypes";
-import type {
-  TimeBlockMemberView,
-  TimeBlockFill,
-} from "~/app/types/TeeSheetTypes";
-import type { LotteryEntryData } from "~/app/types/LotteryTypes";
+
+import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
+import type { Fill, TimeBlockMember } from "~/server/db/schema";
 
 // Define proper types that match TimeBlockItem requirements
 type ClientTimeBlock = {
   id: number;
   startTime: string;
   endTime: string;
-  members: TimeBlockMemberView[];
-  fills: TimeBlockFill[];
+  members: TimeBlockMember[];
+  fills: Fill[];
   maxMembers: number;
   restriction?: {
     isRestricted: boolean;

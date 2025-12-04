@@ -9,8 +9,11 @@ import { LotteryAllEntries } from "./LotteryAllEntries";
 import { TeesheetPreviewAndArrange } from "./TeesheetPreviewAndArrange";
 import { cancelLotteryEntry } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
+import type {
+  TeesheetConfig,
+  TimeBlockWithRelations,
+
+} from "~/server/db/schema";
 
 interface LotteryResultsViewProps {
   date: string;
@@ -26,7 +29,7 @@ interface LotteryResultsViewProps {
   teesheetData: {
     teesheet: any;
     config: any;
-    timeBlocks: TimeBlockWithMembers[];
+    timeBlocks: TimeBlockWithRelations[];
     availableConfigs: any[];
     paceOfPlayData: any[];
     lotterySettings?: any;
@@ -57,7 +60,7 @@ export function LotteryResultsView({
 
   const handleCancelEntry = async (entryId: number, isGroup: boolean) => {
     try {
-      const result = await cancelLotteryEntry(entryId, isGroup);
+      const result = await cancelLotteryEntry(entryId);
       if (result.success) {
         toast.success("Entry cancelled successfully");
         onComplete(); // Refresh the data

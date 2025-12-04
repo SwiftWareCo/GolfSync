@@ -8,10 +8,22 @@ import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Save, RotateCcw, Info } from "lucide-react";
 import { toast } from "react-hot-toast";
-import {
-  DEFAULT_SPEED_BONUSES,
-  type TimeWindowSpeedBonus,
-} from "~/app/types/LotteryTypes";
+
+// TODO: Move DEFAULT_SPEED_BONUSES to ~/lib/lottery-utils or create a constants file
+// For now, define locally until proper migration
+const DEFAULT_SPEED_BONUSES: TimeWindowSpeedBonus[] = [
+  { window: "MORNING", fastBonus: 5, averageBonus: 2, slowBonus: 0 },
+  { window: "MIDDAY", fastBonus: 2, averageBonus: 1, slowBonus: 0 },
+  { window: "AFTERNOON", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
+  { window: "EVENING", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
+];
+
+type TimeWindowSpeedBonus = {
+  window: string;
+  fastBonus: number;
+  averageBonus: number;
+  slowBonus: number;
+};
 
 export function SpeedBonusConfiguration() {
   const [bonuses, setBonuses] = useState<TimeWindowSpeedBonus[]>(
@@ -95,7 +107,7 @@ export function SpeedBonusConfiguration() {
   };
 
   return (
-    <div className="space-y-6 mt-6">
+    <div className="mt-6 space-y-6">
       {/* Information Box */}
       <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
         <div className="flex items-start gap-3">

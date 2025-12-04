@@ -19,9 +19,8 @@ import {
 } from "~/components/ui/select";
 import { LoadingSpinner } from "~/components/ui/loading-spinner";
 import { Badge } from "~/components/ui/badge";
-import { type TimeWindow } from "~/app/types/LotteryTypes";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 import {
   updateLotteryEntryAdmin,
   updateLotteryGroupAdmin,
@@ -77,7 +76,7 @@ interface LotteryEditDialogProps {
   entry: IndividualEntry | GroupEntry | null;
   isGroup: boolean;
   members: Member[];
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
 }
 
 export function LotteryEditDialog({
@@ -94,15 +93,15 @@ export function LotteryEditDialog({
   const timeWindows = calculateDynamicTimeWindows(config);
 
   // Form state
-  const [preferredWindow, setPreferredWindow] = useState<TimeWindow>("MORNING");
-  const [alternateWindow, setAlternateWindow] = useState<TimeWindow | "">("");
+  const [preferredWindow, setPreferredWindow] = useState<string>("MORNING");
+  const [alternateWindow, setAlternateWindow] = useState<string | "">("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
 
   // Initialize form when entry changes
   useEffect(() => {
     if (entry) {
-      setPreferredWindow(entry.preferredWindow as TimeWindow);
-      setAlternateWindow((entry.alternateWindow as TimeWindow) || "");
+      setPreferredWindow(entry.preferredWindow);
+      setAlternateWindow(entry.alternateWindow || "");
 
       if (isGroup && "memberIds" in entry) {
         setSelectedMemberIds(entry.memberIds);
@@ -193,9 +192,7 @@ export function LotteryEditDialog({
               <Label htmlFor="preferredWindow">Preferred Time Window</Label>
               <Select
                 value={preferredWindow}
-                onValueChange={(value) =>
-                  setPreferredWindow(value as TimeWindow)
-                }
+                onValueChange={(value) => setPreferredWindow(value)}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -218,9 +215,7 @@ export function LotteryEditDialog({
               <Select
                 value={alternateWindow || "NONE"}
                 onValueChange={(value) =>
-                  setAlternateWindow(
-                    value === "NONE" ? "" : (value as TimeWindow),
-                  )
+                  setAlternateWindow(value === "NONE" ? "" : value)
                 }
               >
                 <SelectTrigger>

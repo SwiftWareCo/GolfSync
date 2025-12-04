@@ -9,7 +9,7 @@ import { LotteryProcessor } from "./LotteryProcessor";
 import { LotteryResultsView } from "./LotteryResultsView";
 import { LoadingSpinner } from "~/components/ui/loading-spinner";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 import {
   createTestLotteryEntries,
@@ -38,7 +38,7 @@ interface LotteryDashboardProps {
   };
   initialLotteryEntries: any;
   initialTimeBlocks: any;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
   restrictions: any[];
   teesheetData: {
     teesheet: any;

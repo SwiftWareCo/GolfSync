@@ -2,16 +2,21 @@
 
 import React from "react";
 import { Button } from "~/components/ui/button";
-import {
-  Users,
-  Ban,
-  AlertCircle,
-  CheckCircle,
-  ClockIcon,
-} from "lucide-react";
+import { Users, Ban, AlertCircle, CheckCircle, ClockIcon } from "lucide-react";
 import { formatTime12Hour } from "~/lib/dates";
-import { type TimeBlockMemberView, type TimeBlockFill } from "~/app/types/TeeSheetTypes";
+import type { Fill } from "~/server/db/schema";
 import { type Member } from "~/app/types/MemberTypes";
+
+// View types for UI state
+type TimeBlockMemberView = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  class?: string;
+  checkedIn: boolean;
+};
+
+type TimeBlockFill = Fill;
 
 // Define ClientTimeBlock for client-side usage to avoid type conflicts
 type ClientTimeBlock = {
@@ -169,7 +174,7 @@ export function TimeBlockItem({
   // Handle click on the main area to show details
   const handleShowDetails = (e: React.MouseEvent) => {
     // Don't open details if clicking on a button
-    if ((e.target as HTMLElement).closest('button')) {
+    if ((e.target as HTMLElement).closest("button")) {
       return;
     }
     if (onShowDetails) {
@@ -187,7 +192,7 @@ export function TimeBlockItem({
       <div className="flex items-center gap-2 px-3 py-2.5">
         {/* Time Display */}
         <div className="flex min-w-[70px] items-center">
-          <span className="whitespace-nowrap text-sm font-bold text-gray-900">
+          <span className="text-sm font-bold whitespace-nowrap text-gray-900">
             {startTimeDisplay}
           </span>
         </div>
@@ -203,18 +208,12 @@ export function TimeBlockItem({
         {isMemberCheckedIn && (
           <CheckCircle className="h-4 w-4 text-green-500" />
         )}
-        {isAvailabilityRestricted && (
-          <Ban className="h-4 w-4 text-red-600" />
-        )}
-        {isTimeRestricted && (
-          <Ban className="h-4 w-4 text-red-500" />
-        )}
+        {isAvailabilityRestricted && <Ban className="h-4 w-4 text-red-600" />}
+        {isTimeRestricted && <Ban className="h-4 w-4 text-red-500" />}
         {isFrequencyRestricted && (
           <AlertCircle className="h-4 w-4 text-yellow-500" />
         )}
-        {isPast && (
-          <ClockIcon className="h-4 w-4 text-gray-400" />
-        )}
+        {isPast && <ClockIcon className="h-4 w-4 text-gray-400" />}
       </div>
 
       {/* Right Section: Capacity and Actions */}
@@ -236,7 +235,10 @@ export function TimeBlockItem({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="flex items-center gap-1.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           {isBooked ? (
             <Button
               variant="destructive"

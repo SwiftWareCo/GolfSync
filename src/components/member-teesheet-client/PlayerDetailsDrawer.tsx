@@ -4,11 +4,21 @@ import React, { useEffect } from "react";
 import { X, UserIcon, Users, CheckCircle } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  type TimeBlockMemberView,
-  type TimeBlockFill,
-} from "~/app/types/TeeSheetTypes";
+import type { Fill } from "~/server/db/schema";
 import { formatTimeString } from "~/lib/utils";
+
+// View types for UI state with nested member data
+type TimeBlockMemberView = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  class?: string;
+  memberNumber?: string;
+  checkedIn: boolean;
+  checkedInAt?: Date | null;
+};
+
+type TimeBlockFill = Fill; // Alias for Fill from schema
 
 type ClientTimeBlock = {
   id: number;

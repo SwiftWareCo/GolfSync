@@ -29,16 +29,13 @@ import { Clock, Dice1, CheckCircle, Users, Plus, X, Eye } from "lucide-react";
 import { formatDate } from "~/lib/dates";
 import { submitLotteryEntry } from "~/server/lottery/actions";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
-import type {
-  LotteryEntry,
-  TimeWindow,
-  LotteryEntryFormData,
-} from "~/app/types/LotteryTypes";
 import type { Member } from "~/app/types/MemberTypes";
+import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import {
-  calculateDynamicTimeWindows,
-} from "~/lib/lottery-utils";
-import { TeesheetConfigWithBlocks } from "~/server/db/schema";
+  TeesheetConfigWithBlocks,
+  type LotteryEntry,
+} from "~/server/db/schema";
+import { type LotteryFormInput } from "~/server/db/schema/lottery";
 
 // For the member search results
 interface SearchMember {
@@ -83,8 +80,8 @@ export function MemberLotteryEntryForm({
   const form = useForm<FormData>({
     resolver: zodResolver(lotteryEntrySchema),
     defaultValues: {
-      preferredWindow: existingEntry?.primaryTimeWindow || "",
-      alternateWindow: existingEntry?.backupTimeWindow || "",
+      preferredWindow: existingEntry?.preferredWindow || "",
+      alternateWindow: existingEntry?.alternateWindow || "",
       memberIds: [],
     },
   });
@@ -130,11 +127,12 @@ export function MemberLotteryEntryForm({
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
     try {
-      const formData: LotteryEntryFormData = {
+      const formData: LotteryFormInput = {
+        organizerId: member.id,
         lotteryDate,
-        preferredWindow: data.preferredWindow as TimeWindow,
-        alternateWindow: data.alternateWindow as TimeWindow | undefined,
-        memberIds: data.memberIds,
+        preferredWindow: data.preferredWindow,
+        alternateWindow: data.alternateWindow || undefined,
+        memberIds: data.memberIds || [],
       };
 
       const result = await submitLotteryEntry(member.id, formData);

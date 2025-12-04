@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { getDateForDB } from "~/lib/dates";
-import type { LotteryEntryData } from "~/app/types/LotteryTypes";
+import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
 import type { Member } from "~/app/types/MemberTypes";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 

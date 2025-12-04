@@ -5,10 +5,18 @@ import { AlertCircle, CalendarIcon, ClockIcon } from "lucide-react";
 import { formatDateWithDay } from "~/lib/dates";
 import { TimeBlockItem, type TimeBlockItemProps } from "./TimeBlockItem";
 import type { Member } from "~/app/types/MemberTypes";
-import type {
-  TimeBlockMemberView,
-  TimeBlockFill,
-} from "~/app/types/TeeSheetTypes";
+import type { Fill } from "~/server/db/schema";
+
+// View types matching TimeBlockItem expectations
+type TimeBlockMemberView = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  class?: string;
+  checkedIn: boolean;
+};
+
+type TimeBlockFill = Fill;
 
 // Define proper types that match TimeBlockItem requirements
 type ClientTimeBlock = {
@@ -64,7 +72,7 @@ export function TeesheetGrid({
   // Deduplicate time blocks by ID to prevent duplicate rendering
   const uniqueTimeBlocks = useMemo(() => {
     const uniqueBlocks = new Map<number, ClientTimeBlock>();
-    timeBlocks.forEach(block => {
+    timeBlocks.forEach((block) => {
       if (!uniqueBlocks.has(block.id)) {
         uniqueBlocks.set(block.id, block);
       }
@@ -158,7 +166,9 @@ export function TeesheetGrid({
       <div className="bg-org-primary/5 border-b border-gray-100 p-3 sm:p-4">
         <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900 sm:text-base md:text-lg">
           <ClockIcon className="text-org-primary h-5 w-5 flex-shrink-0 sm:h-6 sm:w-6" />
-          <span className="min-w-0 flex-1 truncate">Tee Sheet - {formatDateWithDay(date)}</span>
+          <span className="min-w-0 flex-1 truncate">
+            Tee Sheet - {formatDateWithDay(date)}
+          </span>
         </h3>
         {config?.disallowMemberBooking && (
           <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">

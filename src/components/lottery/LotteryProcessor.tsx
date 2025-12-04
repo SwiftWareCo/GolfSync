@@ -8,7 +8,7 @@ import { Play, CheckCircle, AlertCircle, Users } from "lucide-react";
 import { processLotteryForDate } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
-import type { TeesheetConfig } from "~/app/types/TeeSheetTypes";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 interface LotteryStats {
   totalEntries: number;
@@ -23,7 +23,7 @@ interface LotteryProcessorProps {
   date: string;
   stats: LotteryStats;
   onProcessComplete: () => void;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
 }
 
 export function LotteryProcessor({
