@@ -16,6 +16,7 @@ export async function getMemberProfilesWithFairness() {
       memberSpeedProfile: true,
       memberFairnessScores: {
         where: eq(memberFairnessScores.currentMonth, currentMonth),
+        orderBy: [desc(memberFairnessScores.lastUpdated)], // Get the most recent
         limit: 1,
       },
     },
