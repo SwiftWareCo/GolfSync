@@ -87,3 +87,11 @@ export type LotteryEntry = z.infer<typeof lotteryEntrySelectSchema>;
 export type LotteryEntryInsert = z.infer<typeof lotteryEntriesInsertSchema>;
 export type LotteryEntryUpdate = z.infer<typeof lotteryEntryUpdateSchema>;
 export type LotteryFormInput = z.infer<typeof lotteryEntryWithFillsSchema>;
+
+// Lottery entry data return type for member view (discriminated union)
+// Used by getLotteryEntryData() to distinguish individual/group/group_member entries
+export type LotteryEntryData =
+  | { type: "individual"; entry: LotteryEntry }
+  | { type: "group"; entry: LotteryEntry }
+  | { type: "group_member"; entry: LotteryEntry }
+  | null;

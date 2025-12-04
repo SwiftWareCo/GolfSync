@@ -48,6 +48,11 @@ export const membersRelations = relations(members, ({ many, one }) => ({
     fields: [members.classId],
     references: [memberClasses.id],
   }),
+  memberSpeedProfile: one(memberSpeedProfiles, {
+    fields: [members.id],
+    references: [memberSpeedProfiles.memberId],
+  }),
+  memberFairnessScores: many(memberFairnessScores),
   timeBlockMembers: many(timeBlockMembers),
   eventRegistrations: many(eventRegistrations),
   powerCartCharges: many(powerCartCharges, {

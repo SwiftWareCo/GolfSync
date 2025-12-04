@@ -4,6 +4,7 @@ import {
   timestamp,
   varchar,
   boolean,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import {
@@ -19,6 +20,9 @@ import { createTable } from "../../helpers";
 // The reference uses a function to avoid circular imports
 import { members } from "../core/members.schema";
 
+// Define speed tier enum
+export const speedTierEnum = pgEnum("speed_tier", ["FAST", "AVERAGE", "SLOW"]);
+
 export const memberSpeedProfiles = createTable(
   "member_speed_profiles",
   {
@@ -26,9 +30,11 @@ export const memberSpeedProfiles = createTable(
       .references(() => members.id, { onDelete: "cascade" })
       .primaryKey(),
     averageMinutes: integer("average_minutes"), // Auto-calculated from pace data (last 3 months)
-    speedTier: varchar("speed_tier", { length: 10 }).default("AVERAGE"), // 'FAST', 'AVERAGE', 'SLOW'
-    adminPriorityAdjustment: integer("admin_priority_adjustment").default(0), // -10 to +10 points
-    manualOverride: boolean("manual_override").default(false), // True if admin manually set
+    speedTier: speedTierEnum("speed_tier").default("AVERAGE").notNull(),
+    adminPriorityAdjustment: integer("admin_priority_adjustment")
+      .default(0)
+      .notNull(), // -10 to +10 points
+    manualOverride: boolean("manual_override").default(false).notNull(), // True if admin manually set
     lastCalculated: timestamp("last_calculated", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),

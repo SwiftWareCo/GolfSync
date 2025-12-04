@@ -2,56 +2,82 @@
 
 import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useDebouncedCallback } from "use-debounce";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
-import {
-  Edit,
-  Clock,
-  TrendingUp,
-  Timer,
-  AlertTriangle,
-  Target,
-  Trophy,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Edit, ChevronLeft, ChevronRight, Timer } from "lucide-react";
 import { SpeedProfileEditDialog } from "~/components/lottery/SpeedProfileEditDialog";
-import type { MemberProfile } from "~/server/lottery/member-profiles-data";
+import {
+  formatPaceTime,
+  getSpeedTierBadge,
+  getAdminAdjustmentBadge,
+  getPriorityBadge,
+} from "~/lib/lottery-display-utils";
 
 interface MemberProfilesTableProps {
-  profiles: MemberProfile[];
+  profiles: Awaited<
+    ReturnType<
+      typeof import("~/server/lottery/member-profiles-data").getMemberProfilesWithFairness
+    >
+  >["profiles"];
 }
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 
 export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [editingProfile, setEditingProfile] = useState<MemberProfile | null>(
-    null,
-  );
+  const [editingProfile, setEditingProfile] = useState<
+    MemberProfilesTableProps["profiles"][number] | null
+  >(null);
 
   const currentPage = parseInt(searchParams.get("page") || "1");
   const currentSearch = searchParams.get("search") || "";
   const currentSpeedTier = searchParams.get("speedTier") || "ALL";
   const currentPriority = searchParams.get("priority") || "ALL";
 
+  // Internal state for immediate input value
+  const [searchInput, setSearchInput] = useState(currentSearch);
+
+  // Debounced URL update (300ms delay)
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set("search", value);
+    } else {
+      params.delete("search");
+    }
+    params.delete("page"); // Reset to page 1 on search
+    router.push(`?${params.toString()}`);
+  }, 300);
+
+  // Handle search input change
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchInput(value);
+    debouncedSearch(value);
+  };
+
   // Filter profiles based on search and filter criteria
   const filteredProfiles = useMemo(() => {
     return profiles.filter((profile) => {
       const matchesSearch =
-        profile.memberName.toLowerCase().includes(currentSearch.toLowerCase()) ||
+        profile.memberName
+          .toLowerCase()
+          .includes(currentSearch.toLowerCase()) ||
         profile.memberNumber
           .toLowerCase()
           .includes(currentSearch.toLowerCase());
 
       const matchesSpeedFilter =
-        currentSpeedTier === "ALL" || profile.speedTier === currentSpeedTier;
+        currentSpeedTier === "ALL" ||
+        (profile.memberSpeedProfile?.speedTier ?? "AVERAGE") ===
+          currentSpeedTier;
 
       const matchesPriorityFilter = () => {
         if (currentPriority === "ALL") return true;
-        const fairnessScore = profile.fairnessScore ?? 0;
+        const fairnessScore = profile.fairnessScore?.fairnessScore ?? 0;
         if (currentPriority === "HIGH") return fairnessScore > 20;
         if (currentPriority === "MEDIUM")
           return fairnessScore >= 10 && fairnessScore <= 20;
@@ -61,12 +87,7 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
 
       return matchesSearch && matchesSpeedFilter && matchesPriorityFilter();
     });
-  }, [
-    profiles,
-    currentSearch,
-    currentSpeedTier,
-    currentPriority,
-  ]);
+  }, [profiles, currentSearch, currentSpeedTier, currentPriority]);
 
   // Pagination
   const totalPages = Math.ceil(filteredProfiles.length / PAGE_SIZE);
@@ -87,91 +108,82 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
     router.push(`?${params.toString()}`);
   };
 
-  const formatPaceTime = (minutes: number | null) => {
-    if (!minutes) return "N/A";
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}:${mins.toString().padStart(2, "0")}`;
-  };
-
-  const getSpeedTierBadge = (tier: "FAST" | "AVERAGE" | "SLOW") => {
-    switch (tier) {
-      case "FAST":
-        return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            <TrendingUp className="mr-1 h-3 w-3" />
-            Fast
-          </Badge>
-        );
-      case "AVERAGE":
-        return (
-          <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
-            <Timer className="mr-1 h-3 w-3" />
-            Average
-          </Badge>
-        );
-      case "SLOW":
-        return (
-          <Badge className="bg-gray-100 text-gray-800 hover:bg-gray-100">
-            <Clock className="mr-1 h-3 w-3" />
-            Slow
-          </Badge>
-        );
-    }
-  };
-
-  const getAdminAdjustmentBadge = (adjustment: number) => {
-    if (adjustment === 0) {
-      return <span className="text-gray-500">0</span>;
-    }
-
-    const isPositive = adjustment > 0;
-    return (
-      <Badge
-        variant={isPositive ? "default" : "destructive"}
-        className={isPositive ? "bg-blue-100 text-blue-800" : ""}
-      >
-        <AlertTriangle className="mr-1 h-3 w-3" />
-        {isPositive ? "+" : ""}
-        {adjustment}
-      </Badge>
-    );
-  };
-
-  const getPriorityBadge = (score: number) => {
-    if (score > 20) {
-      return (
-        <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
-          <Target className="mr-1 h-3 w-3" />
-          High ({score.toFixed(1)})
-        </Badge>
-      );
-    } else if (score >= 10) {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
-          <Calendar className="mr-1 h-3 w-3" />
-          Medium ({score.toFixed(1)})
-        </Badge>
-      );
+  const handleSpeedTierChange = (tier: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (tier === "ALL") {
+      params.delete("speedTier");
     } else {
-      return (
-        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-          <Trophy className="mr-1 h-3 w-3" />
-          Low ({score.toFixed(1)})
-        </Badge>
-      );
+      params.set("speedTier", tier);
     }
+    params.delete("page"); // Reset to page 1
+    router.push(`?${params.toString()}`);
   };
 
-  if (filteredProfiles.length === 0) {
+  const handlePriorityChange = (priority: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (priority === "ALL") {
+      params.delete("priority");
+    } else {
+      params.set("priority", priority);
+    }
+    params.delete("page"); // Reset to page 1
+    router.push(`?${params.toString()}`);
+  };
+
+  if (filteredProfiles.length === 0 && currentSearch) {
     return (
-      <div className="rounded-lg border border-gray-200 p-8 text-center">
-        <div className="text-gray-500">
-          <Timer className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p className="text-lg font-medium">No member profiles found</p>
-          <p className="text-sm">
-            Try adjusting your filters or search terms.
-          </p>
+      <div className="space-y-4">
+        {/* Search and Filters - always visible */}
+        <div className="flex flex-col gap-4">
+          <div className="relative max-w-sm flex-1">
+            <Timer className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Search by name or member number..."
+              value={searchInput}
+              onChange={handleSearchChange}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Speed:</span>
+              {(["ALL", "FAST", "AVERAGE", "SLOW"] as const).map((tier) => (
+                <Badge
+                  key={tier}
+                  variant={currentSpeedTier === tier ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => handleSpeedTierChange(tier)}
+                >
+                  {tier}
+                </Badge>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Priority:</span>
+              {(["ALL", "HIGH", "MEDIUM", "LOW"] as const).map((priority) => (
+                <Badge
+                  key={priority}
+                  variant={currentPriority === priority ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => handlePriorityChange(priority)}
+                >
+                  {priority}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 p-8 text-center">
+          <div className="text-gray-500">
+            <Timer className="mx-auto mb-4 h-12 w-12 opacity-50" />
+            <p className="text-lg font-medium">No member profiles found</p>
+            <p className="text-sm">
+              Try adjusting your filters or search terms.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -180,15 +192,59 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
   return (
     <>
       <div className="space-y-4">
+        {/* Search and Filters */}
+        <div className="flex flex-col gap-4">
+          <div className="relative max-w-sm flex-1">
+            <Timer className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Search by name or member number..."
+              value={searchInput}
+              onChange={handleSearchChange}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Speed:</span>
+              {(["ALL", "FAST", "AVERAGE", "SLOW"] as const).map((tier) => (
+                <Badge
+                  key={tier}
+                  variant={currentSpeedTier === tier ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => handleSpeedTierChange(tier)}
+                >
+                  {tier}
+                </Badge>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">Priority:</span>
+              {(["ALL", "HIGH", "MEDIUM", "LOW"] as const).map((priority) => (
+                <Badge
+                  key={priority}
+                  variant={currentPriority === priority ? "default" : "outline"}
+                  className="cursor-pointer"
+                  onClick={() => handlePriorityChange(priority)}
+                >
+                  {priority}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Results summary */}
         <div className="text-sm text-gray-600">
-          Showing {paginatedProfiles.length} of {filteredProfiles.length} members
+          Showing {paginatedProfiles.length} of {filteredProfiles.length}{" "}
+          members
           {filteredProfiles.length !== profiles.length &&
             ` (filtered from ${profiles.length} total)`}
         </div>
 
         {/* Table */}
-        <div className="rounded-lg border">
+        <div className="rounded-lg border border-org-primary p-2">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b bg-gray-50">
@@ -229,7 +285,7 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
                           {profile.memberName}
                         </div>
                         <div className="text-sm text-gray-500">
-                          #{profile.memberNumber} • {profile.memberClass}
+                          #{profile.memberNumber} • {profile.memberClassName}
                         </div>
                       </div>
                     </td>
@@ -237,24 +293,34 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
                     {/* Average Pace */}
                     <td className="px-4 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {formatPaceTime(profile.averageMinutes)}
+                        {formatPaceTime(
+                          profile.memberSpeedProfile?.averageMinutes ?? null,
+                        )}
                       </div>
-                      {profile.averageMinutes && (
+                      {profile.memberSpeedProfile?.averageMinutes && (
                         <div className="text-xs text-gray-500">
-                          {profile.averageMinutes.toFixed(0)} minutes
+                          {profile.memberSpeedProfile.averageMinutes.toFixed(0)}{" "}
+                          minutes
                         </div>
                       )}
                     </td>
 
                     {/* Speed Tier */}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {getSpeedTierBadge(profile.speedTier)}
+                      {getSpeedTierBadge(
+                        (profile.memberSpeedProfile?.speedTier ?? "AVERAGE") as
+                          | "FAST"
+                          | "AVERAGE"
+                          | "SLOW",
+                      )}
                     </td>
 
                     {/* Fairness Score */}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {profile.fairnessCurrentMonth ? (
-                        getPriorityBadge(profile.fairnessScore)
+                      {profile.fairnessScore?.currentMonth ? (
+                        getPriorityBadge(
+                          profile.fairnessScore.fairnessScore ?? 0,
+                        )
                       ) : (
                         <Badge variant="outline" className="text-gray-500">
                           No Data
@@ -264,18 +330,19 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
 
                     {/* Fulfillment Rate */}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {profile.fairnessCurrentMonth ? (
+                      {profile.fairnessScore?.currentMonth ? (
                         <div>
                           <div className="text-sm font-medium text-gray-900">
                             {(
-                              (profile.fairnessPreferenceFulfillmentRate || 0) *
-                              100
+                              (profile.fairnessScore
+                                .preferenceFulfillmentRate || 0) * 100
                             ).toFixed(0)}
                             %
                           </div>
                           <div className="text-xs text-gray-500">
-                            {profile.fairnessPreferencesGrantedMonth}/
-                            {profile.fairnessTotalEntriesMonth} granted
+                            {profile.fairnessScore.preferencesGrantedMonth ?? 0}
+                            /{profile.fairnessScore.totalEntriesMonth ?? 0}{" "}
+                            granted
                           </div>
                         </div>
                       ) : (
@@ -285,12 +352,15 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
 
                     {/* Admin Priority Adjustment */}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {getAdminAdjustmentBadge(profile.adminPriorityAdjustment)}
+                      {getAdminAdjustmentBadge(
+                        profile.memberSpeedProfile?.adminPriorityAdjustment ??
+                          0,
+                      )}
                     </td>
 
                     {/* Manual Override */}
                     <td className="px-4 py-4 whitespace-nowrap">
-                      {profile.manualOverride ? (
+                      {profile.memberSpeedProfile?.manualOverride ? (
                         <Badge
                           variant="outline"
                           className="border-orange-200 text-orange-700"
@@ -333,34 +403,48 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
                 <span>
                   Fast:{" "}
                   {
-                    filteredProfiles.filter((p) => p.speedTier === "FAST")
-                      .length
+                    filteredProfiles.filter(
+                      (p) =>
+                        (p.memberSpeedProfile?.speedTier ?? "AVERAGE") ===
+                        "FAST",
+                    ).length
                   }
                 </span>
                 <span>
                   Average:{" "}
                   {
-                    filteredProfiles.filter((p) => p.speedTier === "AVERAGE")
-                      .length
+                    filteredProfiles.filter(
+                      (p) =>
+                        (p.memberSpeedProfile?.speedTier ?? "AVERAGE") ===
+                        "AVERAGE",
+                    ).length
                   }
                 </span>
                 <span>
                   Slow:{" "}
                   {
-                    filteredProfiles.filter((p) => p.speedTier === "SLOW")
-                      .length
+                    filteredProfiles.filter(
+                      (p) =>
+                        (p.memberSpeedProfile?.speedTier ?? "AVERAGE") ===
+                        "SLOW",
+                    ).length
                   }
                 </span>
                 <span>
                   High Priority:{" "}
                   {
-                    filteredProfiles.filter((p) => p.fairnessScore > 20)
-                      .length
+                    filteredProfiles.filter(
+                      (p) => (p.fairnessScore?.fairnessScore ?? 0) > 20,
+                    ).length
                   }
                 </span>
                 <span>
                   Manual Overrides:{" "}
-                  {filteredProfiles.filter((p) => p.manualOverride).length}
+                  {
+                    filteredProfiles.filter(
+                      (p) => p.memberSpeedProfile?.manualOverride ?? false,
+                    ).length
+                  }
                 </span>
               </div>
 
@@ -394,7 +478,7 @@ export function MemberProfilesTable({ profiles }: MemberProfilesTableProps) {
       {/* Edit Dialog */}
       {editingProfile && (
         <SpeedProfileEditDialog
-          profile={editingProfile as any}
+          profile={editingProfile}
           isOpen={!!editingProfile}
           onClose={() => setEditingProfile(null)}
           onSave={() => {

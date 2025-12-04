@@ -36,6 +36,7 @@ export {
 
 // Member Speed Profiles
 export {
+  speedTierEnum,
   memberSpeedProfiles,
   memberSpeedProfilesSelectSchema,
   memberSpeedProfilesInsertSchema,

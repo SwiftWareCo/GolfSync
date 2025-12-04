@@ -273,48 +273,6 @@ async function recalculateSpeedProfiles(): Promise<MaintenanceResult> {
   }
 }
 
-/**
- * Get maintenance history
- */
-export async function getMaintenanceHistory(): Promise<{
-  success: boolean;
-  data?: Array<{
-    id: number;
-    maintenanceType: string;
-    month: string;
-    completedAt: Date;
-    recordsAffected: number;
-    notes: string;
-  }>;
-  error?: string;
-}> {
-  try {
-    const history = await db.query.systemMaintenance.findMany({
-      orderBy: (systemMaintenance, { desc }) => [
-        desc(systemMaintenance.completedAt),
-      ],
-      limit: 12, // Last 12 maintenance runs
-    });
-
-    return {
-      success: true,
-      data: history.map((record) => ({
-        id: record.id,
-        maintenanceType: record.maintenanceType,
-        month: record.month,
-        completedAt: record.completedAt,
-        recordsAffected: record.recordsAffected || 0,
-        notes: record.notes || "",
-      })),
-    };
-  } catch (error) {
-    console.error("Error fetching maintenance history:", error);
-    return {
-      success: false,
-      error: "Failed to fetch maintenance history",
-    };
-  }
-}
 
 /**
  * Manual trigger for monthly maintenance (admin only)

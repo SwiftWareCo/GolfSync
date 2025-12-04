@@ -32,7 +32,7 @@ interface BlocksListProps {
   blocks: BlockWithId[];
   onBlocksChange: (blocks: BlockWithId[]) => void;
   onDeleteBlock: (blockId: string | number) => void;
-  scrollableRef: RefObject<HTMLDivElement>;
+  scrollableRef: RefObject<HTMLDivElement | null>;
   onInsertBlock?: (insertIndex: number) => void;
 }
 
@@ -100,7 +100,7 @@ export function BlocksList({
   }, [blocks, onBlocksChange]);
 
   useEffect(() => {
-    const scrollableElement = scrollableRef.current;
+    const scrollableElement = scrollableRef?.current;
     if (!scrollableElement) {
       return;
     }

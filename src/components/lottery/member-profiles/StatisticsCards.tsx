@@ -5,10 +5,22 @@ import {
   Target,
   Award,
 } from "lucide-react";
-import { getMemberProfileStats } from "~/server/lottery/member-profiles-data";
 
-export async function StatisticsCards() {
-  const stats = await getMemberProfileStats();
+interface StatisticsCardsProps {
+  stats: {
+    totalMembers: number;
+    speedTiers: { fast: number; average: number; slow: number };
+    fairnessScores: {
+      highPriority: number;
+      mediumPriority: number;
+      lowPriority: number;
+      averageFulfillmentRate: number;
+    };
+    adminAdjustments: { positive: number; negative: number; neutral: number };
+  };
+}
+
+export function StatisticsCards({ stats }: StatisticsCardsProps) {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

@@ -1,18 +1,15 @@
-import { Suspense } from "react";
 import { PageHeader } from "~/components/ui/page-header";
 import { StatisticsCards } from "~/components/lottery/member-profiles/StatisticsCards";
 import { ControlPanel } from "~/components/lottery/member-profiles/ControlPanel";
-import { SearchAndFilters } from "~/components/lottery/member-profiles/SearchAndFilters";
 import { MemberProfilesTable } from "~/components/lottery/member-profiles/MemberProfilesTable";
-import { StatisticsSkeleton } from "~/components/lottery/member-profiles/skeletons";
 import { getMemberProfilesWithFairness } from "~/server/lottery/member-profiles-data";
 import { Card, CardContent } from "~/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
 export default async function MemberProfilesPage() {
-  // Fetch member profiles
-  const profiles = await getMemberProfilesWithFairness();
+  // Fetch member profiles with stats (combined for efficiency)
+  const { profiles, stats } = await getMemberProfilesWithFairness();
 
   return (
     <div className="container mx-auto max-w-7xl p-6">
@@ -24,28 +21,21 @@ export default async function MemberProfilesPage() {
         />
       </div>
 
-      {/* Statistics Cards with Suspense */}
-      <Suspense fallback={<StatisticsSkeleton />}>
-        <StatisticsCards />
-      </Suspense>
+      {/* Statistics Cards */}
+      <StatisticsCards stats={stats} />
 
       {/* Control Panel */}
       <div className="mt-6">
         <ControlPanel />
       </div>
 
-      {/* Search and Filters */}
+      {/* Member Profiles Table with integrated search and filters */}
       <div className="mt-6">
         <Card>
           <CardContent className="pt-6">
-            <SearchAndFilters />
+            <MemberProfilesTable profiles={profiles} />
           </CardContent>
         </Card>
-      </div>
-
-      {/* Member Profiles Table */}
-      <div className="mt-6">
-        <MemberProfilesTable profiles={profiles} />
       </div>
     </div>
   );
