@@ -8,15 +8,17 @@ import { formatTime12Hour } from "~/lib/dates";
 interface IndividualEntry {
   id: number;
   status: string;
-  member: {
+  organizer: {
     firstName: string;
     lastName: string;
-    class: string;
+    memberClass?: {
+      label: string;
+    } | null;
   };
   preferredWindow: string;
   assignedTimeBlock?: {
     startTime: string;
-  };
+  } | null;
 }
 
 interface LotteryIndividualEntriesListProps {
@@ -58,10 +60,10 @@ export function LotteryIndividualEntriesList({
               <Clock className="h-4 w-4 text-green-500" />
               <div>
                 <span className="font-medium">
-                  {entry.member.firstName} {entry.member.lastName}
+                  {entry.organizer.firstName} {entry.organizer.lastName}
                 </span>
                 <div className="text-sm text-gray-500">
-                  {entry.member.class} •{" "}
+                  {entry.organizer.memberClass?.label || "No Class"} •{" "}
                   {getTimeWindowLabel(entry.preferredWindow)}
                 </div>
               </div>

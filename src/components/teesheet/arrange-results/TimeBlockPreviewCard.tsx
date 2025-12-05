@@ -7,9 +7,9 @@ import { ChevronUp, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { formatTime12Hour } from "~/lib/dates";
 import { EntryBadge, type LotteryEntryDisplay } from "../../lottery/EntryBadge";
 import type {
-  TimeBlockWithMembers,
-  TeesheetConfig,
-} from "~/app/types/TeeSheetTypes";
+  TimeBlockWithRelations,
+  TeesheetConfigWithBlocks,
+} from "~/server/db/schema";
 
 // Client-side assignment interface matching TeesheetPreviewAndArrange
 interface ClientSideAssignment {
@@ -31,7 +31,7 @@ interface ClientSideAssignment {
 }
 
 interface TimeBlockPreviewCardProps {
-  block: TimeBlockWithMembers;
+  block: TimeBlockWithRelations;
   assignedEntries?: ClientSideAssignment[];
   onMoveUp: () => void;
   onMoveDown: () => void;
@@ -41,14 +41,14 @@ interface TimeBlockPreviewCardProps {
   onEntryClick?: (entryId: string) => void;
   selectedEntryId?: string;
   disabled: boolean;
-  config?: TeesheetConfig;
+  config?: TeesheetConfigWithBlocks;
 }
 
 // Memoized component to render individual member entries within groups
 const MemoizedMemberEntry = React.memo<{
   entry: ClientSideAssignment;
   memberIndex: number;
-  config?: TeesheetConfig;
+  config?: TeesheetConfigWithBlocks;
 }>(({ entry, memberIndex, config }) => {
   const member = entry.memberClasses?.[memberIndex];
   if (!member) return null;
@@ -81,7 +81,7 @@ const MemoizedGroupEntry = React.memo<{
   entry: ClientSideAssignment;
   onEntryClick: (entryId: string) => void;
   selectedEntryId?: string;
-  config?: TeesheetConfig;
+  config?: TeesheetConfigWithBlocks;
   isUnassigned?: boolean;
 }>(({ entry, onEntryClick, selectedEntryId, config, isUnassigned = false }) => {
   const handleClick = useCallback(
@@ -129,7 +129,7 @@ const MemoizedIndividualEntry = React.memo<{
   entry: ClientSideAssignment;
   onEntryClick: (entryId: string) => void;
   selectedEntryId?: string;
-  config?: TeesheetConfig;
+  config?: TeesheetConfigWithBlocks;
   isUnassigned?: boolean;
 }>(({ entry, onEntryClick, selectedEntryId, config, isUnassigned = false }) => {
   const handleClick = useCallback(

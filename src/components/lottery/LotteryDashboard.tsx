@@ -20,11 +20,8 @@ import {
 } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
 
-type LotteryStatus = "setup" | "active" | "closed";
-
 interface LotteryDashboardProps {
   date: string;
-  status: LotteryStatus;
   members: Array<{
     id: number;
     firstName: string;
@@ -40,13 +37,10 @@ interface LotteryDashboardProps {
     processingStatus: "pending" | "processing" | "completed";
   };
   initialLotteryEntries: any;
-  initialTimeBlocks: any;
-  config: TeesheetConfigWithBlocks | null;
-  restrictions: any[];
   algorithmConfig: LotteryAlgorithmConfigFormData;
   teesheetData: {
     teesheet: any;
-    config: any;
+    config: TeesheetConfigWithBlocks | null;
     timeBlocks: any[];
     availableConfigs: any[];
     paceOfPlayData: any[];
@@ -74,16 +68,14 @@ interface ConfirmDialogState {
 
 export function LotteryDashboard({
   date,
-  status,
   members,
   initialStats,
   initialLotteryEntries,
-  initialTimeBlocks,
-  config,
-  restrictions,
   algorithmConfig,
   teesheetData,
 }: LotteryDashboardProps) {
+  // Use the config assigned to the teesheet
+  const config = teesheetData?.config ?? null;
   const [stats, setStats] = useState<LotteryStats>(initialStats);
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingTest, setIsCreatingTest] = useState(false);

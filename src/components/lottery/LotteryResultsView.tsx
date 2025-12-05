@@ -10,9 +10,8 @@ import { TeesheetPreviewAndArrange } from "./TeesheetPreviewAndArrange";
 import { cancelLotteryEntry } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
 import type {
-  TeesheetConfig,
+  TeesheetConfigWithBlocks,
   TimeBlockWithRelations,
-
 } from "~/server/db/schema";
 
 interface LotteryResultsViewProps {
@@ -25,7 +24,7 @@ interface LotteryResultsViewProps {
     class: string;
   }>;
   initialLotteryEntries: any;
-  config: TeesheetConfig;
+  config: TeesheetConfigWithBlocks;
   teesheetData: {
     teesheet: any;
     config: any;

@@ -1,4 +1,3 @@
-import { Member } from "./MemberTypes";
 
 export type BaseGuest = {
   id: number;

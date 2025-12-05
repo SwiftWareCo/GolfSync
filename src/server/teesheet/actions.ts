@@ -45,7 +45,6 @@ export async function replaceTimeBlocks(
       .innerJoin(timeBlocks, eq(timeBlockMembers.timeBlockId, timeBlocks.id))
       .where(eq(timeBlocks.teesheetId, teesheetId));
 
-
     if (
       membersInTimeblocks[0]?.count &&
       parseInt(String(membersInTimeblocks[0].count)) > 0
@@ -139,6 +138,7 @@ export async function replaceTimeBlocks(
     }
 
     revalidatePath("/admin");
+    revalidatePath("/admin/lottery");
     return { success: true };
   } catch (error) {
     console.error("Error replacing time blocks:", error);
@@ -444,19 +444,19 @@ export async function populateTimeBlocksWithRandomMembers(
   try {
     // Get all members in the organization (exclude RESIGNED, SUSPENDED, DINING)
     const excludedClasses = new Set([
-      'RESIGNED',
-      'SUSPENDED',
-      'DINING',
-      'STAFF PLAY',
-      'MANAGEMENT',
-      'MGMT / PRO',
-      'HONORARY MALE',
-      'HONORARY FEMALE',
-      'PRIVILEGED MALE',
-      'PRIVILEGED FEMALE',
-      'SENIOR RETIRED MALE',
-      'SENIOR RETIRED FEMALE',
-      'LEAVE OF ABSENCE',
+      "RESIGNED",
+      "SUSPENDED",
+      "DINING",
+      "STAFF PLAY",
+      "MANAGEMENT",
+      "MGMT / PRO",
+      "HONORARY MALE",
+      "HONORARY FEMALE",
+      "PRIVILEGED MALE",
+      "PRIVILEGED FEMALE",
+      "SENIOR RETIRED MALE",
+      "SENIOR RETIRED FEMALE",
+      "LEAVE OF ABSENCE",
     ]);
 
     const allMembersRaw = await db.query.members.findMany({
@@ -465,7 +465,7 @@ export async function populateTimeBlocksWithRandomMembers(
 
     // Filter out excluded classes in JavaScript
     const allMembers = allMembersRaw.filter(
-      (member) => !excludedClasses.has(member.memberClass?.label || ''),
+      (member) => !excludedClasses.has(member.memberClass?.label || ""),
     );
 
     if (allMembers.length === 0) {
@@ -921,6 +921,13 @@ export async function deleteTimeBlock(
         error: "Time block does not belong to this teesheet",
       };
     }
+
+    // Clear lottery entry references before deleting
+    // This prevents orphaned lottery entries pointing to deleted time blocks
+    await db
+      .update(lotteryEntries)
+      .set({ assignedTimeBlockId: null, status: "PENDING" })
+      .where(eq(lotteryEntries.assignedTimeBlockId, timeBlockId));
 
     // Delete the timeblock - cascade will handle related records
     // (timeBlockMembers, timeBlockGuests, paceOfPlay, etc.)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -9,6 +9,7 @@ import { processLotteryForDate } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
+import { startOfDay, isBefore } from "date-fns";
 
 interface LotteryStats {
   totalEntries: number;
@@ -35,13 +36,25 @@ export function LotteryProcessor({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
+  // Check if this is a past date
+  const isPastDate = useMemo(() => {
+    const lotteryDate = new Date(date);
+    const today = startOfDay(new Date());
+    return isBefore(lotteryDate, today);
+  }, [date]);
+
   const handleProcessLottery = async () => {
     setIsProcessing(true);
     try {
       const result = await processLotteryForDate(date, config);
-      if (result.success) {
+      if (result.success && result.data) {
+        const data = result.data as {
+          processedCount: number;
+          totalEntries: number;
+          bookingsCreated: number;
+        };
         toast.success(
-          `Lottery processed successfully! ${result.data.processedCount} out of ${result.data.totalEntries} entries processed and ${result.data.bookingsCreated} bookings created.`,
+          `Lottery processed successfully! ${data.processedCount} out of ${data.totalEntries} entries processed and ${data.bookingsCreated} bookings created.`,
         );
         onProcessComplete();
       } else {
@@ -55,8 +68,10 @@ export function LotteryProcessor({
   };
 
   const canProcess =
-    stats.processingStatus === "pending" && stats.totalEntries > 0;
+    stats.processingStatus === "pending" && stats.totalEntries > 0 && !isPastDate;
   const hasProcessed = stats.processingStatus === "completed";
+
+  
 
   return (
     <div className="space-y-6">
@@ -111,49 +126,30 @@ export function LotteryProcessor({
 
           {/* Algorithm Information */}
           <div className="rounded-lg border p-4">
-            <h3 className="mb-3 font-medium">
-              How the Enhanced Algorithm Works
-            </h3>
+            <h3 className="mb-3 font-medium">Algorithm Overview</h3>
             <div className="space-y-2 text-sm text-gray-600">
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
                 <span>
-                  Calculates fairness scores based on fairness, member profiles,
-                  and admin adjustments
+                  Calculates priority scores based on fairness history, speed profiles, and admin adjustments
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
                 <span>
-                  Gives speed bonuses: FAST players get +5 for morning, +2 for
-                  midday slots
+                  Applies configurable speed bonuses by time window (adjust via Algorithm Settings)
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
                 <span>
-                  Tracks monthly fairness scores (members who haven't gotten
-                  preferences get higher priority)
+                  Processes groups first, then individuals, in priority order
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
                 <span>
-                  Uses dynamic time windows calculated from teesheet
-                  configuration
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
-                <span>
-                  Processes entries in priority order (highest priority first)
-                </span>
-              </div>
-              <div className="flex items-start gap-2">
-                <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
-                <span>
-                  Updates fairness scores after processing for future lottery
-                  fairness
+                  Updates fairness scores after processing
                 </span>
               </div>
             </div>
@@ -214,7 +210,21 @@ export function LotteryProcessor({
               </div>
             )}
 
-            {!canProcess && stats.totalEntries > 0 && !hasProcessed && (
+            {isPastDate && stats.totalEntries > 0 && !hasProcessed && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-center gap-2 text-gray-500">
+                  <AlertCircle className="h-5 w-5" />
+                  <span className="font-medium">
+                    Past date - processing disabled
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Lottery processing is only available for current and future dates
+                </p>
+              </div>
+            )}
+
+            {!canProcess && stats.totalEntries > 0 && !hasProcessed && !isPastDate && (
               <div className="space-y-4">
                 <div className="flex items-center justify-center gap-2 text-yellow-700">
                   <AlertCircle className="h-5 w-5" />

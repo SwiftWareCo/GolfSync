@@ -7,15 +7,20 @@ import { Users, Edit, Trash2 } from "lucide-react";
 interface GroupMember {
   firstName: string;
   lastName: string;
+  memberClass?: {
+    label: string;
+  } | null;
 }
 
 interface GroupEntry {
   id: number;
   status: string;
-  leader: {
+  organizer: {
     firstName: string;
     lastName: string;
-    class: string;
+    memberClass?: {
+      label: string;
+    } | null;
   };
   memberIds: number[];
   preferredWindow: string;
@@ -59,10 +64,10 @@ export function LotteryGroupEntriesList({
               <Users className="h-4 w-4 text-blue-500" />
               <div>
                 <span className="font-medium">
-                  {group.leader.firstName} {group.leader.lastName} (Group)
+                  {group.organizer.firstName} {group.organizer.lastName} (Group)
                 </span>
                 <div className="text-sm text-gray-500">
-                  {group.leader.class} • {group.memberIds.length} members •{" "}
+                  {group.organizer.memberClass?.label || "No Class"} • {group.memberIds.length} members •{" "}
                   {getTimeWindowLabel(group.preferredWindow)}
                 </div>
                 {group.members && (

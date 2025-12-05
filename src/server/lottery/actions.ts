@@ -448,7 +448,7 @@ export async function processLotteryForDate(
         return group.members.every((member) => {
           const memberAllowedBlocks = filterBlocksByRestrictions(
             [block],
-            { memberId: member.id, memberClassId: member.memberClass?.id ?? 0 },
+            { memberId: member?.id as number, memberClassId: member?.memberClass?.id ?? 0 },
             date,
             timeRestrictions,
           );

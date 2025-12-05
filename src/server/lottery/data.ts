@@ -86,18 +86,23 @@ export async function getLotteryEntryData(
 }
 
 /**
- * Get lottery statistics for a specific date
- * Queries consolidated lotteryEntries table and separates by type
+ * Consolidated function to get all lottery data for a date
+ * Returns both stats and entries with full member details
  * @param date YYYY-MM-DD date string
  */
-export async function getLotteryStatsForDate(date: string) {
+export async function getLotteryDataForDate(date: string) {
   try {
-    // Query consolidated lotteryEntries table
+    // Query consolidated lotteryEntries table with organizer + memberClass
     const allEntries = await db.query.lotteryEntries.findMany({
       where: eq(lotteryEntries.lotteryDate, date),
       with: {
+        organizer: {
+          with: { memberClass: true },
+        },
+        assignedTimeBlock: true,
         fills: true,
       },
+      orderBy: [asc(lotteryEntries.submissionTimestamp)],
     });
 
     // Separate entries by type
@@ -108,6 +113,31 @@ export async function getLotteryStatsForDate(date: string) {
     const groupEntries = allEntries.filter(
       (entry) => entry.memberIds.length > 1,
     );
+
+    // Collect all unique member IDs from all groups for batch fetch
+    const allGroupMemberIds = [
+      ...new Set(groupEntries.flatMap((group) => group.memberIds)),
+    ];
+
+    // Fetch all members in one query
+    const allGroupMembers =
+      allGroupMemberIds.length > 0
+        ? await db.query.members.findMany({
+            where: inArray(members.id, allGroupMemberIds),
+            with: {
+              memberClass: true,
+            },
+          })
+        : [];
+
+    // Create a map for O(1) lookup
+    const memberMap = new Map(allGroupMembers.map((m) => [m.id, m]));
+
+    // Map members to groups
+    const groupEntriesWithMembers = groupEntries.map((group) => ({
+      ...group,
+      members: group.memberIds.map((id) => memberMap.get(id)).filter(Boolean),
+    }));
 
     // Calculate total players in groups
     const totalGroupPlayers = groupEntries.reduce(
@@ -128,10 +158,6 @@ export async function getLotteryStatsForDate(date: string) {
       0;
 
     // Determine processing status
-    const hasProcessedEntries = allEntries.some(
-      (entry) => entry.status === "ASSIGNED",
-    );
-
     const hasAssignedEntries = allEntries.some(
       (entry) => entry.assignedTimeBlockId,
     );
@@ -139,29 +165,30 @@ export async function getLotteryStatsForDate(date: string) {
     let processingStatus: "pending" | "processing" | "completed";
     if (hasAssignedEntries) {
       processingStatus = "completed";
-    } else if (hasProcessedEntries) {
-      processingStatus = "processing";
     } else {
       processingStatus = "pending";
     }
 
     return {
-      totalEntries: allEntries.length,
-      individualEntries: individualEntries.length,
-      groupEntries: groupEntries.length,
-      totalPlayers: individualEntries.length + totalGroupPlayers,
-      availableSlots,
-      processingStatus,
+      stats: {
+        totalEntries: allEntries.length,
+        individualEntries: individualEntries.length,
+        groupEntries: groupEntries.length,
+        totalPlayers: individualEntries.length + totalGroupPlayers,
+        availableSlots,
+        processingStatus,
+      },
       entries: {
         individual: individualEntries,
-        groups: groupEntries,
+        groups: groupEntriesWithMembers,
       },
     };
   } catch (error) {
-    console.error("Error getting lottery stats:", error);
+    console.error("Error getting lottery data:", error);
     throw error;
   }
 }
+
 
 /**
  * Get all lottery entries for a date with member details
@@ -170,11 +197,13 @@ export async function getLotteryStatsForDate(date: string) {
  */
 export async function getLotteryEntriesForDate(date: string) {
   try {
-    // Query consolidated lotteryEntries table
+    // Query consolidated lotteryEntries table with organizer + memberClass
     const allEntries = await db.query.lotteryEntries.findMany({
       where: eq(lotteryEntries.lotteryDate, date),
       with: {
-        organizer: true,
+        organizer: {
+          with: { memberClass: true },
+        },
         assignedTimeBlock: true,
         fills: true,
       },
@@ -212,7 +241,7 @@ export async function getLotteryEntriesForDate(date: string) {
     // Map members to groups
     const groupEntriesWithMembers = groupEntries.map((group) => ({
       ...group,
-      members: group.memberIds.map((id) => memberMap.get(id)!).filter(Boolean),
+      members: group.memberIds.map((id) => memberMap.get(id)).filter(Boolean),
     }));
 
     return {

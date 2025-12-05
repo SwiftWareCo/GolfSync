@@ -24,9 +24,9 @@ import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import type {
-  TimeBlockWithMembers,
-  TeesheetConfig,
-} from "~/app/types/TeeSheetTypes";
+  TimeBlockWithRelations,
+  TeesheetConfigWithBlocks,
+} from "~/server/db/schema";
 
 // Client-side assignment tracking (from LotteryConfirmationAndEdit)
 interface ClientSideAssignment {
@@ -74,19 +74,19 @@ interface ConfirmDialogState {
 }
 
 // Time block with assigned lottery entries
-interface TimeBlockWithEntries extends TimeBlockWithMembers {
+interface TimeBlockWithEntries extends TimeBlockWithRelations {
   assignedEntries: ClientSideAssignment[];
 }
 
 interface TeesheetPreviewAndArrangeProps {
   date: string;
-  timeBlocks: TimeBlockWithMembers[];
+  timeBlocks: TimeBlockWithRelations[];
   teesheetId: number;
-  onTimeBlocksChange: (timeBlocks: TimeBlockWithMembers[]) => void;
+  onTimeBlocksChange: (timeBlocks: TimeBlockWithRelations[]) => void;
   teesheetData?: {
     teesheet: any;
-    config: TeesheetConfig;
-    timeBlocks: TimeBlockWithMembers[];
+    config: TeesheetConfigWithBlocks;
+    timeBlocks: TimeBlockWithRelations[];
     availableConfigs: any[];
     paceOfPlayData: any[];
     lotterySettings?: any;
@@ -419,7 +419,7 @@ export function TeesheetPreviewAndArrange({
       (sum, assignment) => sum + assignment.size,
       0,
     );
-    const availableSpots = Math.max(0, timeBlock.maxMembers - currentOccupancy);
+    const availableSpots = Math.max(0, (timeBlock.maxMembers ?? 4) - currentOccupancy);
 
     if (availableSpots >= entry.size) {
       moveEntryClientSide(selectedItem.entryId, timeBlockId);
@@ -474,8 +474,8 @@ export function TeesheetPreviewAndArrange({
           block2CurrentOccupancy - entry2.size + entry1.size;
 
         if (
-          block1AfterSwap > block1.maxMembers ||
-          block2AfterSwap > block2.maxMembers
+          block1AfterSwap > (block1.maxMembers ?? 4) ||
+          block2AfterSwap > (block2.maxMembers ?? 4)
         ) {
           toast.error("Swap would exceed time block capacity");
           return;
@@ -607,8 +607,8 @@ export function TeesheetPreviewAndArrange({
     );
 
     if (
-      sourceTotalSize > targetBlock.maxMembers ||
-      targetTotalSize > sourceBlock.maxMembers
+      sourceTotalSize > (targetBlock.maxMembers ?? 4) ||
+      targetTotalSize > (sourceBlock.maxMembers ?? 4)
     ) {
       toast.error("Cannot swap - would exceed time block capacity");
       return;
@@ -620,12 +620,12 @@ export function TeesheetPreviewAndArrange({
 
     // Move all source entries to target block
     sourceEntries.forEach((entry) => {
-      moveEntryClientSide(entry.id, targetBlock.id, false);
+      moveEntryClientSide(entry.id, targetBlock.id ?? null, false);
     });
 
     // Move all target entries to source block
     targetEntries.forEach((entry) => {
-      moveEntryClientSide(entry.id, sourceBlock.id, false);
+      moveEntryClientSide(entry.id, sourceBlock.id ?? null, false);
     });
 
     toast.success(`Swapped players between time blocks`);
@@ -952,22 +952,22 @@ export function TeesheetPreviewAndArrange({
             )}
 
             <div className="space-y-2">
-              {clientTimeBlocks.map((block) => (
+              {clientTimeBlocks.map((block) => block.id ? (
                 <TimeBlockPreviewCard
                   key={block.id}
                   block={block}
                   assignedEntries={block.assignedEntries}
-                  onMoveUp={() => swapTimeBlockContents(block.id, "up")}
-                  onMoveDown={() => swapTimeBlockContents(block.id, "down")}
-                  onInsert={() => handleOpenInsertDialog(block.id)}
-                  onDelete={() => handleDeleteTimeBlock(block.id)}
-                  onTimeBlockClick={() => handleTimeBlockClick(block.id)}
+                  onMoveUp={() => swapTimeBlockContents(block.id!, "up")}
+                  onMoveDown={() => swapTimeBlockContents(block.id!, "down")}
+                  onInsert={() => handleOpenInsertDialog(block.id!)}
+                  onDelete={() => handleDeleteTimeBlock(block.id!)}
+                  onTimeBlockClick={() => handleTimeBlockClick(block.id!)}
                   onEntryClick={handleEntryClick}
                   selectedEntryId={selectedItem?.entryId}
                   disabled={isLoading || isSavingChanges}
                   config={teesheetData?.config}
                 />
-              ))}
+              ) : null)}
             </div>
           </CardContent>
         </Card>

@@ -25,7 +25,7 @@ import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Clock, Plus, ArrowDown } from "lucide-react";
 import { formatTime12Hour } from "~/lib/dates";
-import type { TimeBlockWithMembers } from "~/app/types/TeeSheetTypes";
+import type { TimeBlockWithRelations } from "~/server/db/schema";
 
 const insertTimeBlockSchema = z.object({
   startTime: z.string().min(1, "Start time is required"),
@@ -33,13 +33,17 @@ const insertTimeBlockSchema = z.object({
   maxMembers: z.coerce.number().min(1).max(8),
 });
 
-type FormData = z.infer<typeof insertTimeBlockSchema>;
+type FormData = {
+  startTime: string;
+  displayName?: string;
+  maxMembers: number;
+};
 
 interface InsertTimeBlockDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onInsert: (data: FormData & { endTime: string }) => void;
-  afterTimeBlock?: TimeBlockWithMembers;
+  afterTimeBlock?: TimeBlockWithRelations;
 }
 
 export function InsertTimeBlockDialog({
@@ -51,7 +55,7 @@ export function InsertTimeBlockDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormData>({
-    resolver: zodResolver(insertTimeBlockSchema),
+    resolver: zodResolver(insertTimeBlockSchema) as any,
     defaultValues: {
       startTime: "",
       displayName: "",

@@ -59,31 +59,31 @@ export function LotteryAllEntries({
 
   // Filter and sort entries based on search term
   const filteredAndSortedEntries = useMemo(() => {
-    // Filter and sort individual entries
+    // Filter and sort individual entries (organizer IS the member)
     const filteredIndividual = entries.individual
       .filter((entry) => {
         if (!searchTerm) return true;
         const fullName =
-          `${entry.member.firstName} ${entry.member.lastName}`.toLowerCase();
+          `${entry.organizer.firstName} ${entry.organizer.lastName}`.toLowerCase();
         return fullName.includes(searchTerm.toLowerCase());
       })
       .sort((a, b) => {
         const nameA =
-          `${a.member.firstName} ${a.member.lastName}`.toLowerCase();
+          `${a.organizer.firstName} ${a.organizer.lastName}`.toLowerCase();
         const nameB =
-          `${b.member.firstName} ${b.member.lastName}`.toLowerCase();
+          `${b.organizer.firstName} ${b.organizer.lastName}`.toLowerCase();
         return nameA.localeCompare(nameB);
       });
 
-    // Filter and sort group entries
+    // Filter and sort group entries (organizer IS the leader)
     const filteredGroups = entries.groups
       .filter((entry) => {
         if (!searchTerm) return true;
         const searchLower = searchTerm.toLowerCase();
 
-        // Search in leader name
+        // Search in leader/organizer name
         const leaderName =
-          `${entry.leader.firstName} ${entry.leader.lastName}`.toLowerCase();
+          `${entry.organizer.firstName} ${entry.organizer.lastName}`.toLowerCase();
         if (leaderName.includes(searchLower)) return true;
 
         // Search in group members if they exist
@@ -99,9 +99,9 @@ export function LotteryAllEntries({
       })
       .sort((a, b) => {
         const nameA =
-          `${a.leader.firstName} ${a.leader.lastName}`.toLowerCase();
+          `${a.organizer.firstName} ${a.organizer.lastName}`.toLowerCase();
         const nameB =
-          `${b.leader.firstName} ${b.leader.lastName}`.toLowerCase();
+          `${b.organizer.firstName} ${b.organizer.lastName}`.toLowerCase();
         return nameA.localeCompare(nameB);
       });
 
@@ -133,12 +133,12 @@ export function LotteryAllEntries({
     if (isGroup) {
       const groupEntry = entries.groups.find((g) => g.id === entryId);
       if (groupEntry) {
-        entryName = `${groupEntry.leader.firstName} ${groupEntry.leader.lastName} (Group)`;
+        entryName = `${groupEntry.organizer.firstName} ${groupEntry.organizer.lastName} (Group)`;
       }
     } else {
       const individualEntry = entries.individual.find((i) => i.id === entryId);
       if (individualEntry) {
-        entryName = `${individualEntry.member.firstName} ${individualEntry.member.lastName}`;
+        entryName = `${individualEntry.organizer.firstName} ${individualEntry.organizer.lastName}`;
       }
     }
 

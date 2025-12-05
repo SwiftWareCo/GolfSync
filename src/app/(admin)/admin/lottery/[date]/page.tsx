@@ -1,4 +1,3 @@
-import { isAfter, isBefore, startOfDay } from "date-fns";
 import { PageHeader } from "~/components/ui/page-header";
 import { Button } from "~/components/ui/button";
 import { Timer } from "lucide-react";
@@ -6,13 +5,7 @@ import Link from "next/link";
 import { formatDate } from "~/lib/dates";
 import { LotteryDashboard } from "~/components/lottery/LotteryDashboard";
 import { getMembers } from "~/server/members/data";
-import { getConfigForDate } from "~/server/settings/data";
-import {
-  getLotteryStatsForDate,
-  getLotteryEntriesForDate,
-  getAvailableTimeBlocksForDate,
-  getActiveTimeRestrictionsForDate,
-} from "~/server/lottery/data";
+import { getLotteryDataForDate } from "~/server/lottery/data";
 import { checkAndRunMonthlyMaintenance } from "~/server/lottery/maintenance-actions";
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
@@ -26,32 +19,22 @@ interface PageProps {
 export default async function LotteryManagementPage({ params }: PageProps) {
   const { date } = await params;
 
-  const lotteryDate = new Date(date);
-  const today = startOfDay(new Date());
-
   // Check and run monthly maintenance if needed
   await checkAndRunMonthlyMaintenance();
 
   // Fetch all data at server level
-  const [
-    allMembers,
-    initialStats,
-    lotteryEntries,
-    timeBlocks,
-    config,
-    restrictions,
-    teesheetData,
-    algorithmConfig,
-  ] = await Promise.all([
-    getMembers(),
-    getLotteryStatsForDate(date),
-    getLotteryEntriesForDate(date),
-    getAvailableTimeBlocksForDate(date),
-    getConfigForDate(date),
-    getActiveTimeRestrictionsForDate(date),
-    getTeesheetWithTimeBlocks(date),
-    getAlgorithmConfig(),
-  ]);
+  // Note: getTeesheetWithTimeBlocks returns teesheet with its assigned config and timeblocks
+  const [allMembers, lotteryData, teesheetData, algorithmConfig] =
+    await Promise.all([
+      getMembers(),
+      getLotteryDataForDate(date),
+      getTeesheetWithTimeBlocks(date),
+      getAlgorithmConfig(),
+    ]);
+
+  // Extract stats and entries from consolidated data
+  const initialStats = lotteryData.stats;
+  const lotteryEntries = lotteryData.entries;
 
   // Transform members to include class property for component compatibility
   const members = allMembers.map((member) => ({
@@ -60,19 +43,6 @@ export default async function LotteryManagementPage({ params }: PageProps) {
     lastName: member.lastName,
     class: member.memberClass?.label || "",
   }));
-
-  // Determine lottery status
-  const isPastDate = isBefore(lotteryDate, today);
-  const isToday = lotteryDate.getTime() === today.getTime();
-
-  let status: "setup" | "active" | "closed";
-  if (isPastDate) {
-    status = "closed";
-  } else if (isToday) {
-    status = "active";
-  } else {
-    status = "setup";
-  }
 
   return (
     <div className="container mx-auto max-w-7xl p-6">
@@ -97,13 +67,9 @@ export default async function LotteryManagementPage({ params }: PageProps) {
       {/* Main Lottery Dashboard */}
       <LotteryDashboard
         date={date}
-        status={status}
         members={members}
         initialStats={initialStats}
         initialLotteryEntries={lotteryEntries}
-        initialTimeBlocks={timeBlocks}
-        config={config}
-        restrictions={restrictions}
         algorithmConfig={algorithmConfig}
         teesheetData={{
           teesheet: teesheetData?.teesheet,

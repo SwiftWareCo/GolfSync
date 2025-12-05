@@ -13,7 +13,8 @@ export function mapMembersToNames(members: Member[]): string[] {
 function convertToMember(row: any): Member {
   return {
     id: row.id,
-    class: row.memberClass?.label ?? row.class ?? '',
+    classId: row.classId,
+    memberClass: row.memberClass || null,
     memberNumber: row.memberNumber,
     firstName: row.firstName,
     lastName: row.lastName,
@@ -33,7 +34,10 @@ export async function getMembers(): Promise<Member[]> {
     with: {
       memberClass: true,
     },
-    orderBy: (members, { asc }) => [asc(members.lastName), asc(members.firstName)],
+    orderBy: (members, { asc }) => [
+      asc(members.lastName),
+      asc(members.firstName),
+    ],
   });
 
   return rows.map(convertToMember);
@@ -61,17 +65,16 @@ export async function searchMembersList(query: string): Promise<Member[]> {
     with: {
       memberClass: true,
     },
-    orderBy: (members, { asc }) => [asc(members.lastName), asc(members.firstName)],
+    orderBy: (members, { asc }) => [
+      asc(members.lastName),
+      asc(members.firstName),
+    ],
   });
 
   return rows.map(convertToMember);
 }
 
-export async function searchMembers(
-  query = "",
-  page = 1,
-  pageSize = 20,
-) {
+export async function searchMembers(query = "", page = 1, pageSize = 20) {
   const offset = (page - 1) * pageSize;
 
   const results = await db.query.members.findMany({

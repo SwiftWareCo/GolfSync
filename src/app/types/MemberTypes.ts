@@ -26,10 +26,3 @@ export interface Member {
   createdAt: Date;
   updatedAt: Date | null;
 }
-
-export interface TimeBlockMember {
-  id: number;
-  timeBlockId: number;
-  memberId: number;
-  createdAt: Date;
-}
