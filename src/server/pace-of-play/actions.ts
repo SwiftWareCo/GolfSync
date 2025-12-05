@@ -270,14 +270,20 @@ async function updateMemberSpeedProfiles(
       const newAverageMinutes = Math.round(newTotalMinutes / newRoundCount);
 
       // Determine speed tier based on config thresholds
-      let speedTier: "FAST" | "AVERAGE" | "SLOW" = "AVERAGE";
+      let calculatedSpeedTier: "FAST" | "AVERAGE" | "SLOW" = "AVERAGE";
       if (newAverageMinutes <= config.fastThresholdMinutes) {
-        speedTier = "FAST";
+        calculatedSpeedTier = "FAST";
       } else if (newAverageMinutes <= config.averageThresholdMinutes) {
-        speedTier = "AVERAGE";
+        calculatedSpeedTier = "AVERAGE";
       } else {
-        speedTier = "SLOW";
+        calculatedSpeedTier = "SLOW";
       }
+
+      // Respect manualOverride - only update tier if not manually overridden
+      const shouldUpdateTier = !existingProfile?.manualOverride;
+      const finalSpeedTier = shouldUpdateTier
+        ? calculatedSpeedTier
+        : (existingProfile?.speedTier ?? calculatedSpeedTier);
 
       // Upsert member speed profile
       await db
@@ -288,7 +294,7 @@ async function updateMemberSpeedProfiles(
           totalMinutes: newTotalMinutes,
           roundCount: newRoundCount,
           hasData: true,
-          speedTier,
+          speedTier: finalSpeedTier,
           lastCalculated: new Date(),
         })
         .onConflictDoUpdate({
@@ -298,7 +304,8 @@ async function updateMemberSpeedProfiles(
             totalMinutes: newTotalMinutes,
             roundCount: newRoundCount,
             hasData: true,
-            speedTier,
+            // Only update tier if not manually overridden
+            ...(shouldUpdateTier ? { speedTier: calculatedSpeedTier } : {}),
             lastCalculated: new Date(),
           },
         });

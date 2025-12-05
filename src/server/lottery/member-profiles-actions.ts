@@ -4,10 +4,30 @@ import { revalidatePath } from "next/cache";
 import { db } from "~/server/db";
 import { memberSpeedProfiles } from "~/server/db/schema";
 import { eq, sql } from "drizzle-orm";
+import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
+
+/**
+ * Calculate what speed tier WOULD be based on current average minutes
+ */
+async function calculateExpectedSpeedTier(
+  averageMinutes: number | null,
+): Promise<"FAST" | "AVERAGE" | "SLOW" | null> {
+  if (!averageMinutes) return null;
+
+  const config = await getAlgorithmConfig();
+  if (averageMinutes <= config.fastThresholdMinutes) {
+    return "FAST";
+  } else if (averageMinutes <= config.averageThresholdMinutes) {
+    return "AVERAGE";
+  }
+  return "SLOW";
+}
 
 /**
  * Update a member's speed profile settings
  * Updated for useActionState pattern
+ *
+ * Auto-enables manualOverride if admin sets a tier different from calculated value
  */
 export async function updateMemberSpeedProfileAction(
   prevState: null,
@@ -27,17 +47,33 @@ export async function updateMemberSpeedProfileAction(
     notes,
   } = params;
 
-  // Validate admin priority adjustment range
-  if (adminPriorityAdjustment < -10 || adminPriorityAdjustment > 10) {
-    throw new Error("Admin priority adjustment must be between -10 and +10");
+  // Validate admin priority adjustment range (expanded to ±20)
+  if (adminPriorityAdjustment < -20 || adminPriorityAdjustment > 20) {
+    throw new Error("Admin priority adjustment must be between -20 and +20");
   }
+
+  // Get existing profile to check if tier is being manually changed
+  const existingProfile = await db.query.memberSpeedProfiles.findFirst({
+    where: eq(memberSpeedProfiles.memberId, memberId),
+  });
+
+  // Calculate what the tier SHOULD be based on pace data
+  const calculatedTier = await calculateExpectedSpeedTier(
+    existingProfile?.averageMinutes ?? null,
+  );
+
+  // Auto-enable manual override if:
+  // 1. The user explicitly enabled it, OR
+  // 2. The new tier differs from the calculated tier (admin is overriding)
+  const shouldEnableOverride =
+    manualOverride || (calculatedTier !== null && speedTier !== calculatedTier);
 
   await db
     .update(memberSpeedProfiles)
     .set({
       speedTier,
       adminPriorityAdjustment,
-      manualOverride,
+      manualOverride: shouldEnableOverride,
       notes,
       updatedAt: new Date(),
     })

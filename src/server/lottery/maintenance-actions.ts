@@ -83,7 +83,30 @@ export async function checkAndRunMonthlyMaintenance(): Promise<MaintenanceResult
 }
 
 /**
+ * Helper to get previous month in YYYY-MM format
+ */
+function getPreviousMonth(currentMonth: string): string {
+  const [year, month] = currentMonth.split("-").map(Number);
+  if (!year || !month) return currentMonth;
+
+  if (month === 1) {
+    return `${year - 1}-12`;
+  }
+  return `${year}-${String(month - 1).padStart(2, "0")}`;
+}
+
+/**
+ * Calculate initial fairness score based on carried-over daysWithoutGoodTime
+ */
+function calculateInitialFairnessScore(daysWithoutGoodTime: number): number {
+  // +2 per day without good time, max 30 (same formula as in actions.ts)
+  return Math.min(daysWithoutGoodTime * 2, 30);
+}
+
+/**
  * Reset fairness scores for the new month
+ * IMPORTANT: Preserves daysWithoutGoodTime from previous month so players
+ * with recent bad streaks don't lose their priority boost at month boundary
  */
 async function resetMonthlyFairnessScores(): Promise<MaintenanceResult> {
   try {
@@ -105,18 +128,33 @@ async function resetMonthlyFairnessScores(): Promise<MaintenanceResult> {
       };
     }
 
+    // Fetch previous month's scores to preserve daysWithoutGoodTime
+    const previousMonth = getPreviousMonth(currentMonth);
+    const previousScores = await db.query.memberFairnessScores.findMany({
+      where: eq(memberFairnessScores.currentMonth, previousMonth),
+    });
+    const previousScoresMap = new Map(
+      previousScores.map((s) => [s.memberId, s]),
+    );
+
     // Get all members and create new fairness score records
     const allMembers = await db.query.members.findMany();
 
-    const newScores = allMembers.map((member) => ({
-      memberId: member.id,
-      currentMonth,
-      totalEntriesMonth: 0,
-      preferencesGrantedMonth: 0,
-      preferenceFulfillmentRate: 0,
-      daysWithoutGoodTime: 0,
-      fairnessScore: 0,
-    }));
+    const newScores = allMembers.map((member) => {
+      // Carry over daysWithoutGoodTime from previous month
+      const previousDays =
+        previousScoresMap.get(member.id)?.daysWithoutGoodTime ?? 0;
+
+      return {
+        memberId: member.id,
+        currentMonth,
+        totalEntriesMonth: 0,
+        preferencesGrantedMonth: 0,
+        preferenceFulfillmentRate: 0,
+        daysWithoutGoodTime: previousDays, // Preserve streak!
+        fairnessScore: calculateInitialFairnessScore(previousDays),
+      };
+    });
 
     if (newScores.length > 0) {
       await db
@@ -125,11 +163,15 @@ async function resetMonthlyFairnessScores(): Promise<MaintenanceResult> {
         .onConflictDoNothing();
     }
 
+    const carriedOverCount = newScores.filter(
+      (s) => s.daysWithoutGoodTime > 0,
+    ).length;
+
     return {
       success: true,
       data: {
         recordsAffected: newScores.length,
-        notes: `Created fairness scores for ${newScores.length} members`,
+        notes: `Created fairness scores for ${newScores.length} members (${carriedOverCount} with carried-over streak)`,
       },
     };
   } catch (error) {

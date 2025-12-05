@@ -252,13 +252,19 @@ export async function cancelLotteryEntry(
 /**
  * Calculate fairness score for a lottery entry based on fairness, speed, and admin adjustments
  * Uses organizerId (entry creator) consistently for all entries
- * NOTE: Now accepts pre-fetched Maps to eliminate N+1 queries
+ * NOTE: Now accepts pre-fetched Maps and configured speedBonuses to eliminate N+1 queries
  */
 function calculateFairnessScore(
   entry: { organizerId: number; preferredWindow: string },
   timeWindows: DynamicTimeWindowInfo[],
   fairnessMap: Map<number, typeof memberFairnessScores.$inferSelect>,
   speedMap: Map<number, typeof memberSpeedProfiles.$inferSelect>,
+  speedBonuses: Array<{
+    window: string;
+    fastBonus: number;
+    averageBonus: number;
+    slowBonus: number;
+  }>,
 ): number {
   let fairnessScore = 0;
 
@@ -272,18 +278,10 @@ function calculateFairnessScore(
     fairnessScore += fairnessData.fairnessScore || 0;
   }
 
-  // 2. Speed bonus for morning slots (FAST: +5, AVERAGE: +2, SLOW: +0)
+  // 2. Speed bonus based on preferred window (uses configured values)
   const speedData = speedMap.get(memberId);
 
   if (speedData && entry.preferredWindow) {
-    // Define speed bonuses directly to avoid import issues
-    const speedBonuses = [
-      { window: "MORNING", fastBonus: 5, averageBonus: 2, slowBonus: 0 },
-      { window: "MIDDAY", fastBonus: 2, averageBonus: 1, slowBonus: 0 },
-      { window: "AFTERNOON", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
-      { window: "EVENING", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
-    ];
-
     const speedBonus = speedBonuses.find(
       (bonus) => bonus.window === entry.preferredWindow,
     );
@@ -303,7 +301,7 @@ function calculateFairnessScore(
     }
   }
 
-  // 3. Admin priority adjustment (-10 to +10)
+  // 3. Admin priority adjustment (-20 to +20)
   if (speedData?.adminPriorityAdjustment) {
     fairnessScore += speedData.adminPriorityAdjustment;
   }
@@ -385,6 +383,12 @@ export async function processLotteryForDate(
     const fairnessMap = new Map(allFairnessScores.map((f) => [f.memberId, f]));
     const speedMap = new Map(allSpeedProfiles.map((s) => [s.memberId, s]));
 
+    // Fetch algorithm config for speed bonuses (using configured values, not hardcoded)
+    const { getAlgorithmConfig } = await import(
+      "~/server/lottery/algorithm-config-data"
+    );
+    const algorithmConfig = await getAlgorithmConfig();
+
     // Calculate fairness scores for all entries (now synchronous with Maps)
     const individualEntriesWithPriority = entries.individual.map((entry) => {
       const priority = calculateFairnessScore(
@@ -392,6 +396,7 @@ export async function processLotteryForDate(
         timeWindows,
         fairnessMap,
         speedMap,
+        algorithmConfig.speedBonuses,
       );
       return { ...entry, fairnessScore: priority };
     });
@@ -402,6 +407,7 @@ export async function processLotteryForDate(
         timeWindows,
         fairnessMap,
         speedMap,
+        algorithmConfig.speedBonuses,
       );
       return { ...group, fairnessScore: priority };
     });
@@ -713,6 +719,7 @@ function findBlockInWindow(
 
 /**
  * Helper function to find suitable time block based on preferences
+ * IMPORTANT: Does NOT violate restrictions - will return null rather than assign to restricted slot
  */
 function findSuitableTimeBlock(
   availableBlocks: Array<{
@@ -730,7 +737,7 @@ function findSuitableTimeBlock(
   block: { id: number; startTime: string; availableSpots: number } | null;
   wasBlockedByRestrictions: boolean;
 } {
-  // First try with all blocks (no restriction filtering)
+  // First try with all blocks (no restriction filtering) to detect if restrictions affect choice
   const unrestrictedBlock = findBlockInWindow(
     availableBlocks,
     preferredWindow,
@@ -738,7 +745,7 @@ function findSuitableTimeBlock(
     config,
   );
 
-  // Then try with restriction filtering
+  // Then filter by restrictions - this is what we'll actually use
   const allowedBlocks = filterBlocksByRestrictions(
     availableBlocks,
     memberInfo,
@@ -766,7 +773,7 @@ function findSuitableTimeBlock(
     return { block: restrictedBlock, wasBlockedByRestrictions: true };
   }
 
-  // Last resort: try to find any available block in allowed blocks
+  // Last resort: try to find any available block in ALLOWED blocks only
   const anyAllowedBlock = allowedBlocks.find(
     (block) => block.availableSpots > 0,
   );
@@ -774,20 +781,17 @@ function findSuitableTimeBlock(
     return { block: anyAllowedBlock, wasBlockedByRestrictions: true };
   }
 
-  // Final fallback: assign to ANY available block (even if it violates restrictions)
-  // This ensures no entry is left unassigned if ANY slot exists
-  const anyAvailableBlock = availableBlocks.find(
-    (block) => block.availableSpots > 0,
-  );
-  if (anyAvailableBlock) {
+  // NO FALLBACK TO RESTRICTED SLOTS
+  // If no allowed block exists, member cannot be assigned
+  // This prevents junior members being placed in restricted morning slots
+  if (unrestrictedBlock) {
     console.log(
-      `⚠️ Fallback assignment: Member ${memberInfo.memberId} assigned to ${anyAvailableBlock.startTime} (may violate restrictions)`,
+      `⚠️ Member ${memberInfo.memberId} blocked by restrictions - cannot be assigned to ${unrestrictedBlock.startTime}`,
     );
-    return { block: anyAvailableBlock, wasBlockedByRestrictions: true };
   }
 
-  // No suitable block found
-  return { block: null, wasBlockedByRestrictions: false };
+  // No suitable block found within allowed restrictions
+  return { block: null, wasBlockedByRestrictions: true };
 }
 
 /**
@@ -1399,32 +1403,15 @@ async function updateFairnessScoresAfterProcessing(
       }
     }
 
-    // Update scores for group entries (using group organizer)
+    // Update scores for ALL group members (not just organizer)
     for (const group of entries.groups) {
       if (group.status === "ASSIGNED" && group.assignedTimeBlockId) {
-        const memberId = group.organizerId;
-
         // Get the assigned time block details
         const assignedTimeBlock = await db.query.timeBlocks.findFirst({
           where: eq(timeBlocks.id, group.assignedTimeBlockId),
         });
 
         if (!assignedTimeBlock) continue;
-
-        // Check if they got their preferred window, considering restrictions
-        // For groups, check if ANY member was blocked by restrictions
-        // Get member details for restriction checking
-        const groupOrganizer = await db.query.members.findFirst({
-          where: eq(members.id, group.organizerId),
-          with: {
-            memberClass: true,
-          },
-        });
-
-        const groupMemberInfo = {
-          memberId: group.organizerId,
-          memberClass: groupOrganizer?.memberClass?.label || "",
-        };
 
         // Check if the group assignment was affected by restrictions from any member
         const allBlocks = [
@@ -1461,60 +1448,63 @@ async function updateFairnessScoresAfterProcessing(
           wasBlockedByRestrictions,
         );
 
-        // Update fairness score for group leader (similar logic as individual)
-        const existingScore = await db.query.memberFairnessScores.findFirst({
-          where: and(
-            eq(memberFairnessScores.memberId, memberId),
-            eq(memberFairnessScores.currentMonth, currentMonth),
-          ),
-        });
-
-        if (existingScore) {
-          const newTotalEntries = existingScore.totalEntriesMonth + 1;
-          const newPreferencesGranted =
-            existingScore.preferencesGrantedMonth + (preferenceGranted ? 1 : 0);
-          const newFulfillmentRate = newPreferencesGranted / newTotalEntries;
-          const newDaysWithoutGood = preferenceGranted
-            ? 0
-            : existingScore.daysWithoutGoodTime + 1;
-
-          let newFairnessScore = 0;
-          if (newFulfillmentRate < 0.5) {
-            newFairnessScore += 20;
-          } else if (newFulfillmentRate < 0.7) {
-            newFairnessScore += 10;
-          }
-          newFairnessScore += Math.min(newDaysWithoutGood * 2, 30);
-
-          await db
-            .update(memberFairnessScores)
-            .set({
-              totalEntriesMonth: newTotalEntries,
-              preferencesGrantedMonth: newPreferencesGranted,
-              preferenceFulfillmentRate: newFulfillmentRate,
-              daysWithoutGoodTime: newDaysWithoutGood,
-              fairnessScore: newFairnessScore,
-              lastUpdated: new Date(),
-            })
-            .where(eq(memberFairnessScores.memberId, memberId));
-        } else {
-          const fulfillmentRate = preferenceGranted ? 1 : 0;
-          const daysWithoutGood = preferenceGranted ? 0 : 1;
-          let fairnessScore = 0;
-          if (!preferenceGranted) {
-            fairnessScore = 10;
-          }
-
-          await db.insert(memberFairnessScores).values({
-            memberId,
-            currentMonth,
-            totalEntriesMonth: 1,
-            preferencesGrantedMonth: preferenceGranted ? 1 : 0,
-            preferenceFulfillmentRate: fulfillmentRate,
-            daysWithoutGoodTime: daysWithoutGood,
-            fairnessScore,
-            lastUpdated: new Date(),
+        // Update fairness score for ALL group members (not just organizer)
+        for (const memberId of group.memberIds) {
+          const existingScore = await db.query.memberFairnessScores.findFirst({
+            where: and(
+              eq(memberFairnessScores.memberId, memberId),
+              eq(memberFairnessScores.currentMonth, currentMonth),
+            ),
           });
+
+          if (existingScore) {
+            const newTotalEntries = existingScore.totalEntriesMonth + 1;
+            const newPreferencesGranted =
+              existingScore.preferencesGrantedMonth +
+              (preferenceGranted ? 1 : 0);
+            const newFulfillmentRate = newPreferencesGranted / newTotalEntries;
+            const newDaysWithoutGood = preferenceGranted
+              ? 0
+              : existingScore.daysWithoutGoodTime + 1;
+
+            let newFairnessScore = 0;
+            if (newFulfillmentRate < 0.5) {
+              newFairnessScore += 20;
+            } else if (newFulfillmentRate < 0.7) {
+              newFairnessScore += 10;
+            }
+            newFairnessScore += Math.min(newDaysWithoutGood * 2, 30);
+
+            await db
+              .update(memberFairnessScores)
+              .set({
+                totalEntriesMonth: newTotalEntries,
+                preferencesGrantedMonth: newPreferencesGranted,
+                preferenceFulfillmentRate: newFulfillmentRate,
+                daysWithoutGoodTime: newDaysWithoutGood,
+                fairnessScore: newFairnessScore,
+                lastUpdated: new Date(),
+              })
+              .where(eq(memberFairnessScores.memberId, memberId));
+          } else {
+            const fulfillmentRate = preferenceGranted ? 1 : 0;
+            const daysWithoutGood = preferenceGranted ? 0 : 1;
+            let fairnessScore = 0;
+            if (!preferenceGranted) {
+              fairnessScore = 10;
+            }
+
+            await db.insert(memberFairnessScores).values({
+              memberId,
+              currentMonth,
+              totalEntriesMonth: 1,
+              preferencesGrantedMonth: preferenceGranted ? 1 : 0,
+              preferenceFulfillmentRate: fulfillmentRate,
+              daysWithoutGoodTime: daysWithoutGood,
+              fairnessScore,
+              lastUpdated: new Date(),
+            });
+          }
         }
       }
     }

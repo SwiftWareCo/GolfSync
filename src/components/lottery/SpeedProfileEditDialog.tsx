@@ -23,7 +23,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import { Timer, TrendingUp, Clock, Save, AlertTriangle } from "lucide-react";
+import {
+  Timer,
+  TrendingUp,
+  Clock,
+  Save,
+  AlertTriangle,
+  Lock,
+} from "lucide-react";
 import { toast } from "react-hot-toast";
 import { updateMemberSpeedProfileAction } from "~/server/lottery/member-profiles-actions";
 import { formatDistanceToNow } from "date-fns";
@@ -124,201 +131,220 @@ export function SpeedProfileEditDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Timer className="h-5 w-5" />
             Edit Speed Profile: {profile.memberName}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="space-y-6">
-          {/* Member Information */}
-          <div className="rounded-lg border bg-gray-50 p-4">
-            <h3 className="mb-3 font-medium">Member Information</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-gray-600">Name:</span>
-                <div className="font-medium">{profile.memberName}</div>
-              </div>
-              <div>
-                <span className="text-gray-600">Member #:</span>
-                <div className="font-medium">#{profile.memberNumber}</div>
-              </div>
-              <div>
-                <span className="text-gray-600">Average Pace:</span>
-                <div className="font-medium">
-                  {formatPaceTime(
-                    profile.memberSpeedProfile?.averageMinutes ?? null,
-                  )}
-                  {profile.memberSpeedProfile?.averageMinutes && (
-                    <span className="ml-1 text-gray-500">
-                      ({profile.memberSpeedProfile.averageMinutes} min)
-                    </span>
-                  )}
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          {/* Scrollable Content */}
+          <div className="flex-1 space-y-6 overflow-y-auto px-1 py-2">
+            {/* Member Information */}
+            <div className="rounded-lg border bg-gray-50 p-4">
+              <h3 className="mb-3 font-medium">Member Information</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-600">Name:</span>
+                  <div className="font-medium">{profile.memberName}</div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Member #:</span>
+                  <div className="font-medium">#{profile.memberNumber}</div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Average Pace:</span>
+                  <div className="font-medium">
+                    {formatPaceTime(
+                      profile.memberSpeedProfile?.averageMinutes ?? null,
+                    )}
+                    {profile.memberSpeedProfile?.averageMinutes && (
+                      <span className="ml-1 text-gray-500">
+                        ({profile.memberSpeedProfile.averageMinutes} min)
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="text-gray-600">Last Calculated:</span>
+                  <div className="font-medium">
+                    {profile.memberSpeedProfile?.lastCalculated
+                      ? formatDistanceToNow(
+                          profile.memberSpeedProfile.lastCalculated,
+                          {
+                            addSuffix: true,
+                          },
+                        )
+                      : "Never"}
+                  </div>
                 </div>
               </div>
-              <div>
-                <span className="text-gray-600">Last Calculated:</span>
-                <div className="font-medium">
-                  {profile.memberSpeedProfile?.lastCalculated
-                    ? formatDistanceToNow(
-                        profile.memberSpeedProfile.lastCalculated,
-                        {
-                          addSuffix: true,
-                        },
-                      )
-                    : "Never"}
+              {profile.memberSpeedProfile?.averageMinutes && (
+                <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-2">
+                  <div className="text-xs text-blue-700">
+                    <strong>Automatic Classification:</strong>{" "}
+                    {getAutomaticSpeedTier()}
+                    {!watchedManualOverride && " (Currently Applied)"}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-            {profile.memberSpeedProfile?.averageMinutes && (
-              <div className="mt-3 rounded border border-blue-200 bg-blue-50 p-2">
-                <div className="text-xs text-blue-700">
-                  <strong>Automatic Classification:</strong>{" "}
-                  {getAutomaticSpeedTier()}
-                  {!watchedManualOverride && " (Currently Applied)"}
-                </div>
+
+            {/* Manual Override Switch - FIRST, before tier selection */}
+            <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <label className="flex items-center gap-2 text-base font-medium">
+                  <Lock className="h-4 w-4" />
+                  Manual Override
+                </label>
+                <p className="text-sm text-gray-500">
+                  Enable to manually set speed classification and prevent
+                  automatic updates from pace data
+                </p>
               </div>
-            )}
-          </div>
-
-          {/* Speed Classification */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Speed Classification</label>
-            <Select
-              value={watchedSpeedTier}
-              onValueChange={(value) =>
-                setValue("speedTier", value as "FAST" | "AVERAGE" | "SLOW")
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select speed tier" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="FAST">
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-green-600" />
-                    <span>Fast (≤ 3:55)</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="AVERAGE">
-                  <div className="flex items-center gap-2">
-                    <Timer className="h-4 w-4 text-yellow-600" />
-                    <span>Average (3:56 - 4:05)</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="SLOW">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-gray-600" />
-                    <span>Slow (4:06+)</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            {/* Speed Tier Information */}
-            <div
-              className={`rounded-lg border p-3 ${currentTierInfo.bgColor} ${currentTierInfo.borderColor}`}
-            >
-              <div
-                className={`flex items-center gap-2 ${currentTierInfo.color} font-medium`}
-              >
-                {currentTierInfo.icon}
-                {watchedSpeedTier} Player
-              </div>
-              <div className="mt-1 text-sm text-gray-600">
-                {currentTierInfo.description}
-              </div>
-            </div>
-            {errors.speedTier && (
-              <p className="text-sm text-red-600">{errors.speedTier.message}</p>
-            )}
-          </div>
-
-          {/* Manual Override Switch */}
-          <div className="flex flex-row items-center justify-between rounded-lg border p-4">
-            <div className="space-y-0.5">
-              <label className="text-base font-medium">Manual Override</label>
-              <p className="text-sm text-gray-500">
-                Lock this classification and prevent automatic updates during
-                monthly recalculation
-              </p>
-            </div>
-            <Switch
-              checked={watchedManualOverride}
-              onCheckedChange={(checked) => setValue("manualOverride", checked)}
-            />
-          </div>
-
-          {/* Admin Priority Adjustment */}
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm font-medium">
-              <AlertTriangle className="h-4 w-4" />
-              Admin Priority Adjustment
-            </label>
-            <p className="text-sm text-gray-500">
-              Manually adjust lottery priority (-10 to +10 points). Positive
-              values increase priority.
-            </p>
-            <div className="space-y-3">
-              <Slider
-                min={-10}
-                max={10}
-                step={1}
-                value={[watchedAdminAdjustment]}
-                onValueChange={(value) =>
-                  setValue("adminPriorityAdjustment", value[0]!)
+              <Switch
+                checked={watchedManualOverride}
+                onCheckedChange={(checked) =>
+                  setValue("manualOverride", checked)
                 }
-                className="w-full"
               />
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-red-600">-10 (Lower Priority)</span>
-                <Badge
-                  variant={
-                    watchedAdminAdjustment === 0
-                      ? "outline"
-                      : watchedAdminAdjustment > 0
-                        ? "default"
-                        : "destructive"
+            </div>
+
+            {/* Speed Classification - Only shown when manual override is ON */}
+            {watchedManualOverride && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">
+                  Speed Classification
+                </label>
+                <Select
+                  value={watchedSpeedTier}
+                  onValueChange={(value) =>
+                    setValue("speedTier", value as "FAST" | "AVERAGE" | "SLOW")
                   }
                 >
-                  {watchedAdminAdjustment > 0 ? "+" : ""}
-                  {watchedAdminAdjustment} points
-                </Badge>
-                <span className="text-green-600">+10 (Higher Priority)</span>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select speed tier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FAST">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4 text-green-600" />
+                        <span>Fast (≤ 3:55)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="AVERAGE">
+                      <div className="flex items-center gap-2">
+                        <Timer className="h-4 w-4 text-yellow-600" />
+                        <span>Average (3:56 - 4:05)</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="SLOW">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-gray-600" />
+                        <span>Slow (4:06+)</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Speed Tier Information */}
+                <div
+                  className={`rounded-lg border p-3 ${currentTierInfo.bgColor} ${currentTierInfo.borderColor}`}
+                >
+                  <div
+                    className={`flex items-center gap-2 ${currentTierInfo.color} font-medium`}
+                  >
+                    {currentTierInfo.icon}
+                    {watchedSpeedTier} Player
+                  </div>
+                  <div className="mt-1 text-sm text-gray-600">
+                    {currentTierInfo.description}
+                  </div>
+                </div>
+                {errors.speedTier && (
+                  <p className="text-sm text-red-600">
+                    {errors.speedTier.message}
+                  </p>
+                )}
               </div>
-            </div>
-            {errors.adminPriorityAdjustment && (
-              <p className="text-sm text-red-600">
-                {errors.adminPriorityAdjustment.message}
+            )}
+
+            {/* Admin Priority Adjustment */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <AlertTriangle className="h-4 w-4" />
+                Admin Priority Adjustment
+              </label>
+              <p className="text-sm text-gray-500">
+                Manually adjust lottery priority (-20 to +20 points). Positive
+                values increase priority.
               </p>
-            )}
+              <div className="space-y-3">
+                <Slider
+                  min={-20}
+                  max={20}
+                  step={1}
+                  value={[watchedAdminAdjustment]}
+                  onValueChange={(value) =>
+                    setValue("adminPriorityAdjustment", value[0]!)
+                  }
+                  className="w-full"
+                />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-red-600">-20 (Lower Priority)</span>
+                  <Badge
+                    variant={
+                      watchedAdminAdjustment === 0
+                        ? "outline"
+                        : watchedAdminAdjustment > 0
+                          ? "default"
+                          : "destructive"
+                    }
+                  >
+                    {watchedAdminAdjustment > 0 ? "+" : ""}
+                    {watchedAdminAdjustment} points
+                  </Badge>
+                  <span className="text-green-600">+20 (Higher Priority)</span>
+                </div>
+              </div>
+              {errors.adminPriorityAdjustment && (
+                <p className="text-sm text-red-600">
+                  {errors.adminPriorityAdjustment.message}
+                </p>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Notes (Optional)</label>
+              <p className="text-sm text-gray-500">
+                Record reason for manual adjustments or other relevant
+                information
+              </p>
+              <Textarea
+                placeholder="e.g., Birthday week bonus, hosting important guests, etc."
+                {...register("notes")}
+                rows={3}
+              />
+              {errors.notes && (
+                <p className="text-sm text-red-600">{errors.notes.message}</p>
+              )}
+            </div>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Notes (Optional)</label>
-            <p className="text-sm text-gray-500">
-              Record reason for manual adjustments or other relevant information
-            </p>
-            <Textarea
-              placeholder="e.g., Birthday week bonus, hosting important guests, etc."
-              {...register("notes")}
-              rows={3}
-            />
-            {errors.notes && (
-              <p className="text-sm text-red-600">{errors.notes.message}</p>
-            )}
-          </div>
-
-          <DialogFooter className="flex gap-3 pt-6">
+          {/* Sticky Footer */}
+          <DialogFooter className="flex-shrink-0 justify-between border-t pt-4">
             <Button
-              type="submit"
+              variant="outline"
+              onClick={onClose}
               disabled={isPending}
-              className="flex-1"
-              size="lg"
+              type="button"
             >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
               {isPending ? (
                 <>
                   <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -330,15 +356,6 @@ export function SpeedProfileEditDialog({
                   Save Changes
                 </>
               )}
-            </Button>
-
-            <Button
-              variant="outline"
-              onClick={onClose}
-              disabled={isPending}
-              size="lg"
-            >
-              Cancel
             </Button>
           </DialogFooter>
         </form>
