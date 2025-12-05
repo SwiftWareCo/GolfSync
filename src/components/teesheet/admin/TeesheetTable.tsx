@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
@@ -45,8 +45,13 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     number | null
   >(null);
 
-  // Use the fresh data from the query if available
-  const timeBlocks = queryResult?.timeBlocks ?? [];
+  // Use the fresh data from the query if available, sorted by startTime
+  const timeBlocks = useMemo(() => {
+    const blocks = queryResult?.timeBlocks ?? [];
+    return [...blocks].sort((a: any, b: any) =>
+      a.startTime.localeCompare(b.startTime),
+    );
+  }, [queryResult?.timeBlocks]);
 
   // Mutation for removing members with cache optimism
   const removeMemberMutation = useMutation({

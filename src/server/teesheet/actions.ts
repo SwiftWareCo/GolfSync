@@ -818,64 +818,7 @@ export async function insertTimeBlock(
   await requireAdmin();
 
   try {
-    // Get the timeblock we're inserting after
-    const afterBlock = await db.query.timeBlocks.findFirst({
-      where: eq(timeBlocks.id, afterTimeBlockId),
-    });
-
-    if (!afterBlock) {
-      return { success: false, error: "Reference timeblock not found" };
-    }
-
-    // Get all timeblocks for this teesheet ordered by sortOrder
-    const allBlocks = await db.query.timeBlocks.findMany({
-      where: eq(timeBlocks.teesheetId, teesheetId),
-      orderBy: [asc(timeBlocks.sortOrder)],
-    });
-
-    const afterIndex = allBlocks.findIndex(
-      (block) => block.id === afterTimeBlockId,
-    );
-    if (afterIndex === -1) {
-      return {
-        success: false,
-        error: "Reference timeblock not found in teesheet",
-      };
-    }
-
-    // Calculate the new sort order (between current and next) as integer
-    const currentSortOrder = allBlocks[afterIndex]?.sortOrder || 0;
-    const nextSortOrder =
-      afterIndex + 1 < allBlocks.length
-        ? allBlocks[afterIndex + 1]?.sortOrder || currentSortOrder + 100
-        : currentSortOrder + 100;
-
-    // Ensure we have at least 1 unit of space for integer sortOrder
-    let newSortOrder: number;
-    if (nextSortOrder - currentSortOrder <= 1) {
-      // No space between, so renumber all subsequent blocks
-      newSortOrder = currentSortOrder + 50;
-
-      // Update all blocks after this position to make room
-      for (let i = afterIndex + 1; i < allBlocks.length; i++) {
-        await db
-          .update(timeBlocks)
-          .set({ sortOrder: allBlocks[i]!.sortOrder! + 100 })
-          .where(eq(timeBlocks.id, allBlocks[i]!.id));
-      }
-    } else {
-      // Calculate midpoint as integer
-      newSortOrder = Math.floor(
-        currentSortOrder + (nextSortOrder - currentSortOrder) / 2,
-      );
-
-      // Ensure it's different from currentSortOrder
-      if (newSortOrder === currentSortOrder) {
-        newSortOrder = currentSortOrder + 1;
-      }
-    }
-
-    // Insert the new timeblock
+    // Step 1: Insert the new timeblock with temporary sortOrder
     const [newBlock] = await db
       .insert(timeBlocks)
       .values({
@@ -884,11 +827,26 @@ export async function insertTimeBlock(
         endTime: newTimeBlockData.endTime,
         displayName: newTimeBlockData.displayName,
         maxMembers: newTimeBlockData.maxMembers || 4,
-        sortOrder: newSortOrder,
+        sortOrder: 0, // Temporary, will be fixed below
       })
       .returning();
 
+    // Step 2: Fetch ALL blocks ordered by startTime and renumber them
+    const allBlocks = await db.query.timeBlocks.findMany({
+      where: eq(timeBlocks.teesheetId, teesheetId),
+      orderBy: [asc(timeBlocks.startTime)],
+    });
+
+    // Step 3: Update sortOrder for all blocks based on time order
+    for (let i = 0; i < allBlocks.length; i++) {
+      await db
+        .update(timeBlocks)
+        .set({ sortOrder: i })
+        .where(eq(timeBlocks.id, allBlocks[i]!.id));
+    }
+
     revalidatePath("/admin");
+    revalidatePath("/admin/lottery");
     return { success: true, data: newBlock };
   } catch (error) {
     console.error("Error inserting timeblock:", error);

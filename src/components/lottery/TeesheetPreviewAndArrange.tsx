@@ -151,7 +151,7 @@ export function TeesheetPreviewAndArrange({
     members.forEach((member) => {
       map.set(member.id, {
         name: `${member.firstName} ${member.lastName}`,
-        class: member.memberClass?.label ?? '',
+        class: member.memberClass?.label ?? "",
       });
     });
     return map;
@@ -238,11 +238,11 @@ export function TeesheetPreviewAndArrange({
       .forEach((entry: any) => {
         unassigned.push({
           id: `individual-${entry.id}`,
-          name: `${entry.member?.firstName || ""} ${entry.member?.lastName || ""}`,
+          name: `${entry.organizer?.firstName || ""} ${entry.organizer?.lastName || ""}`,
           entryId: entry.id,
           isGroup: false,
           size: 1,
-          memberClass: entry.member?.class,
+          memberClass: entry.organizer?.memberClass?.label,
           preferredWindow: entry.preferredWindow,
           alternateWindow: entry.alternateWindow,
           originalTimeBlockId: null,
@@ -260,20 +260,20 @@ export function TeesheetPreviewAndArrange({
         const memberClasses =
           group.members?.map((m: any) => ({
             name: `${m.firstName} ${m.lastName}`,
-            class: m.class,
+            class: m.memberClass?.label || "",
             id: m.id,
           })) || [];
 
         unassigned.push({
           id: `group-${group.id}`,
-          name: `${group.leader?.firstName || ""} ${group.leader?.lastName || ""} (Group)`,
+          name: `${group.organizer?.firstName || ""} ${group.organizer?.lastName || ""} (Group)`,
           entryId: group.id,
           isGroup: true,
           members: memberNames,
           memberIds: group.memberIds || [],
           memberClasses: memberClasses,
           size: (group.memberIds || []).length,
-          memberClass: group.leader?.class,
+          memberClass: group.organizer?.memberClass?.label,
           preferredWindow: group.preferredWindow,
           alternateWindow: group.alternateWindow,
           originalTimeBlockId: null,
@@ -292,10 +292,10 @@ export function TeesheetPreviewAndArrange({
         .forEach((entry: any) => {
           assignedEntries.push({
             id: `individual-${entry.id}`,
-            name: `${entry.member?.firstName || ""} ${entry.member?.lastName || ""}`,
+            name: `${entry.organizer?.firstName || ""} ${entry.organizer?.lastName || ""}`,
             entryId: entry.id,
             isGroup: false,
-            memberClass: entry.member?.class,
+            memberClass: entry.organizer?.memberClass?.label,
             preferredWindow: entry.preferredWindow,
             alternateWindow: entry.alternateWindow,
             assignmentQuality: getAssignmentQuality(
@@ -320,19 +320,19 @@ export function TeesheetPreviewAndArrange({
           const memberClasses =
             group.members?.map((m: any) => ({
               name: `${m.firstName} ${m.lastName}`,
-              class: m.class,
+              class: m.memberClass?.label || "",
               id: m.id,
             })) || [];
 
           assignedEntries.push({
             id: `group-${group.id}`,
-            name: `${group.leader?.firstName || ""} ${group.leader?.lastName || ""} (Group)`,
+            name: `${group.organizer?.firstName || ""} ${group.organizer?.lastName || ""} (Group)`,
             entryId: group.id,
             isGroup: true,
             members: memberNames,
             memberIds: group.memberIds || [],
             memberClasses: memberClasses,
-            memberClass: group.leader?.class,
+            memberClass: group.organizer?.memberClass?.label,
             preferredWindow: group.preferredWindow,
             alternateWindow: group.alternateWindow,
             assignmentQuality: getAssignmentQuality(
@@ -351,6 +351,13 @@ export function TeesheetPreviewAndArrange({
         ...block,
         assignedEntries,
       });
+    });
+
+    // Sort blocks by startTime to ensure chronological order
+    blocksWithEntries.sort((a, b) => {
+      const timeA = a.startTime.replace(":", "");
+      const timeB = b.startTime.replace(":", "");
+      return parseInt(timeA) - parseInt(timeB);
     });
 
     setUnassignedEntries(unassigned);
@@ -419,7 +426,10 @@ export function TeesheetPreviewAndArrange({
       (sum, assignment) => sum + assignment.size,
       0,
     );
-    const availableSpots = Math.max(0, (timeBlock.maxMembers ?? 4) - currentOccupancy);
+    const availableSpots = Math.max(
+      0,
+      (timeBlock.maxMembers ?? 4) - currentOccupancy,
+    );
 
     if (availableSpots >= entry.size) {
       moveEntryClientSide(selectedItem.entryId, timeBlockId);
@@ -952,22 +962,24 @@ export function TeesheetPreviewAndArrange({
             )}
 
             <div className="space-y-2">
-              {clientTimeBlocks.map((block) => block.id ? (
-                <TimeBlockPreviewCard
-                  key={block.id}
-                  block={block}
-                  assignedEntries={block.assignedEntries}
-                  onMoveUp={() => swapTimeBlockContents(block.id!, "up")}
-                  onMoveDown={() => swapTimeBlockContents(block.id!, "down")}
-                  onInsert={() => handleOpenInsertDialog(block.id!)}
-                  onDelete={() => handleDeleteTimeBlock(block.id!)}
-                  onTimeBlockClick={() => handleTimeBlockClick(block.id!)}
-                  onEntryClick={handleEntryClick}
-                  selectedEntryId={selectedItem?.entryId}
-                  disabled={isLoading || isSavingChanges}
-                  config={teesheetData?.config}
-                />
-              ) : null)}
+              {clientTimeBlocks.map((block) =>
+                block.id ? (
+                  <TimeBlockPreviewCard
+                    key={block.id}
+                    block={block}
+                    assignedEntries={block.assignedEntries}
+                    onMoveUp={() => swapTimeBlockContents(block.id!, "up")}
+                    onMoveDown={() => swapTimeBlockContents(block.id!, "down")}
+                    onInsert={() => handleOpenInsertDialog(block.id!)}
+                    onDelete={() => handleDeleteTimeBlock(block.id!)}
+                    onTimeBlockClick={() => handleTimeBlockClick(block.id!)}
+                    onEntryClick={handleEntryClick}
+                    selectedEntryId={selectedItem?.entryId}
+                    disabled={isLoading || isSavingChanges}
+                    config={teesheetData?.config}
+                  />
+                ) : null,
+              )}
             </div>
           </CardContent>
         </Card>
