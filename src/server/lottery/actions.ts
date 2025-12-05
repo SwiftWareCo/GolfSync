@@ -9,14 +9,17 @@ import {
   memberFairnessScores,
   timeBlocks,
   memberSpeedProfiles,
-  TeesheetConfig,
+  TeesheetConfigWithBlocks,
 } from "~/server/db/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import type { TimeWindow } from "~/lib/lottery-utils";
+import type { TimeWindow, DynamicTimeWindowInfo } from "~/lib/lottery-utils";
 import type { LotteryFormInput } from "~/server/db/schema/lottery/lottery-entries.schema";
 import type { TimeblockRestriction } from "~/server/db/schema/restrictions/restrictions.schema";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
+
+// Action result type for consistent return types
+type ActionResult = { success: boolean; error?: string; data?: unknown };
 
 /**
  * Submit a lottery entry (individual or group based on memberIds)
@@ -249,33 +252,28 @@ export async function cancelLotteryEntry(
 /**
  * Calculate fairness score for a lottery entry based on fairness, speed, and admin adjustments
  * Uses organizerId (entry creator) consistently for all entries
+ * NOTE: Now accepts pre-fetched Maps to eliminate N+1 queries
  */
-async function calculateFairnessScore(
+function calculateFairnessScore(
   entry: { organizerId: number; preferredWindow: string },
-  timeWindows: Array<{
-    window: string;
-    startMinutes: number;
-    endMinutes: number;
-  }>,
-): Promise<number> {
+  timeWindows: DynamicTimeWindowInfo[],
+  fairnessMap: Map<number, typeof memberFairnessScores.$inferSelect>,
+  speedMap: Map<number, typeof memberSpeedProfiles.$inferSelect>,
+): number {
   let fairnessScore = 0;
 
   // Get the member ID: always use organizerId (the entry creator)
   const memberId = entry.organizerId;
 
   // 1. Base fairness score (0-100, higher = more priority)
-  const fairnessData = await db.query.memberFairnessScores.findFirst({
-    where: eq(memberFairnessScores.memberId, memberId),
-  });
+  const fairnessData = fairnessMap.get(memberId);
 
   if (fairnessData) {
     fairnessScore += fairnessData.fairnessScore || 0;
   }
 
   // 2. Speed bonus for morning slots (FAST: +5, AVERAGE: +2, SLOW: +0)
-  const speedData = await db.query.memberSpeedProfiles.findFirst({
-    where: eq(memberSpeedProfiles.memberId, memberId),
-  });
+  const speedData = speedMap.get(memberId);
 
   if (speedData && entry.preferredWindow) {
     // Define speed bonuses directly to avoid import issues
@@ -320,7 +318,7 @@ async function calculateFairnessScore(
  */
 export async function processLotteryForDate(
   date: string,
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks,
 ): Promise<ActionResult> {
   try {
     const {
@@ -367,20 +365,46 @@ export async function processLotteryForDate(
       `⏰ Processing groups first, then individuals for better fairness`,
     );
 
-    // Calculate fairness scores for all entries
-    const individualEntriesWithPriority = await Promise.all(
-      entries.individual.map(async (entry) => {
-        const priority = await calculateFairnessScore(entry, timeWindows);
-        return { ...entry, fairnessScore: priority };
-      }),
-    );
+    // Batch fetch all member IDs from entries to eliminate N+1 queries
+    const allMemberIds = [
+      ...entries.individual.map((e) => e.organizerId),
+      ...entries.groups.map((g) => g.organizerId),
+    ];
 
-    const groupEntriesWithPriority = await Promise.all(
-      entries.groups.map(async (group) => {
-        const priority = await calculateFairnessScore(group, timeWindows);
-        return { ...group, fairnessScore: priority };
-      }),
-    );
+    // Batch fetch all fairness scores in one query
+    const allFairnessScores = await db.query.memberFairnessScores.findMany({
+      where: inArray(memberFairnessScores.memberId, allMemberIds),
+    });
+
+    // Batch fetch all speed profiles in one query
+    const allSpeedProfiles = await db.query.memberSpeedProfiles.findMany({
+      where: inArray(memberSpeedProfiles.memberId, allMemberIds),
+    });
+
+    // Create maps for O(1) lookup
+    const fairnessMap = new Map(allFairnessScores.map((f) => [f.memberId, f]));
+    const speedMap = new Map(allSpeedProfiles.map((s) => [s.memberId, s]));
+
+    // Calculate fairness scores for all entries (now synchronous with Maps)
+    const individualEntriesWithPriority = entries.individual.map((entry) => {
+      const priority = calculateFairnessScore(
+        entry,
+        timeWindows,
+        fairnessMap,
+        speedMap,
+      );
+      return { ...entry, fairnessScore: priority };
+    });
+
+    const groupEntriesWithPriority = entries.groups.map((group) => {
+      const priority = calculateFairnessScore(
+        group,
+        timeWindows,
+        fairnessMap,
+        speedMap,
+      );
+      return { ...group, fairnessScore: priority };
+    });
 
     // Sort by fairness score (highest first), then by submission time as tiebreaker
     individualEntriesWithPriority.sort((a, b) => {
@@ -664,7 +688,7 @@ function findBlockInWindow(
   }>,
   preferredWindow: TimeWindow,
   alternateWindow: TimeWindow | null,
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks,
 ): { id: number; startTime: string; availableSpots: number } | null {
   // Try preferred window
   const preferredMatch = availableBlocks.find(
@@ -698,7 +722,7 @@ function findSuitableTimeBlock(
   }>,
   preferredWindow: TimeWindow,
   alternateWindow: TimeWindow | null,
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks,
   memberInfo: { memberId: number; memberClassId: number },
   bookingDate: string,
   timeRestrictions: TimeblockRestriction[],
@@ -773,7 +797,7 @@ function matchesTimePreference(
   block: { startTime: string },
   timeWindow: TimeWindow,
   alternateWindow: TimeWindow | null,
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks,
 ): boolean {
   // Get dynamic time windows from config
   const dynamicWindows = calculateDynamicTimeWindows(config);
@@ -1232,7 +1256,7 @@ export async function batchUpdateLotteryAssignments(
  */
 async function updateFairnessScoresAfterProcessing(
   date: string,
-  config: TeesheetConfig,
+  config: TeesheetConfigWithBlocks,
 ): Promise<void> {
   try {
     const { getLotteryEntriesForDate, getActiveTimeRestrictionsForDate } =

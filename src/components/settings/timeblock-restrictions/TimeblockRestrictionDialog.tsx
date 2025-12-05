@@ -371,7 +371,7 @@ export function TimeblockRestrictionDialog({
         </div>
       </div>
 
-      <div className="flex gap-3 border-t px-6 pt-4 pb-6">
+      <div className="flex gap-3 justify-between border-t px-6 pt-4 pb-6">
         <Button
           type="button"
           variant="outline"

@@ -190,21 +190,30 @@ export async function getLotteryEntriesForDate(date: string) {
       (entry) => entry.memberIds.length > 1,
     );
 
-    // For group entries, get member details for all members in the group
-    const groupEntriesWithMembers = await Promise.all(
-      groupEntries.map(async (group) => {
-        const groupMembers = await db.query.members.findMany({
-          where: inArray(members.id, group.memberIds),
-          with: {
-            memberClass: true,
-          },
-        });
-        return {
-          ...group,
-          members: groupMembers,
-        };
-      }),
-    );
+    // Collect all unique member IDs from all groups
+    const allGroupMemberIds = [
+      ...new Set(groupEntries.flatMap((group) => group.memberIds)),
+    ];
+
+    // Fetch all members in one query
+    const allGroupMembers =
+      allGroupMemberIds.length > 0
+        ? await db.query.members.findMany({
+            where: inArray(members.id, allGroupMemberIds),
+            with: {
+              memberClass: true,
+            },
+          })
+        : [];
+
+    // Create a map for O(1) lookup
+    const memberMap = new Map(allGroupMembers.map((m) => [m.id, m]));
+
+    // Map members to groups
+    const groupEntriesWithMembers = groupEntries.map((group) => ({
+      ...group,
+      members: group.memberIds.map((id) => memberMap.get(id)!).filter(Boolean),
+    }));
 
     return {
       individual: individualEntries,

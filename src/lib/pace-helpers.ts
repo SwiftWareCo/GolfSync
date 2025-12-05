@@ -182,7 +182,8 @@ export function calculateExpectedHole(
 
   // Otherwise, use standard 4-hour pace from expected start time
   const expectedStart = new Date(paceOfPlay.expectedStartTime);
-  const elapsedMinutes = (now.getTime() - expectedStart.getTime()) / (1000 * 60);
+  const elapsedMinutes =
+    (now.getTime() - expectedStart.getTime()) / (1000 * 60);
 
   // 4-hour pace = 240 minutes for 18 holes
   const minutesPerHole = 240 / 18;
@@ -304,7 +305,8 @@ export function calculateExpectedHoleTime(
     // For holes 1-9, use front-nine pace
     if (holeNumber <= 9) {
       timeAtActualPace = new Date(
-        expectedStart.getTime() + holeNumber * minutesPerHoleFrontNine * 60 * 1000,
+        expectedStart.getTime() +
+          holeNumber * minutesPerHoleFrontNine * 60 * 1000,
       ).toISOString();
     } else if (paceOfPlay.finishTime) {
       // For holes 10-18, use back-nine pace if finish time exists
@@ -320,7 +322,8 @@ export function calculateExpectedHoleTime(
     } else {
       // If no finish time yet, extend front-nine pace to back 9
       timeAtActualPace = new Date(
-        expectedStart.getTime() + holeNumber * minutesPerHoleFrontNine * 60 * 1000,
+        expectedStart.getTime() +
+          holeNumber * minutesPerHoleFrontNine * 60 * 1000,
       ).toISOString();
     }
   }
@@ -329,4 +332,41 @@ export function calculateExpectedHoleTime(
     timeAt4HourPace,
     timeAtActualPace,
   };
+}
+
+/**
+ * Map client-side pace status to database status enum
+ */
+export function mapPaceStatusToDbStatus(
+  status: "not-started" | "early" | "on-time" | "late",
+  isFinish = false,
+):
+  | "pending"
+  | "on_time"
+  | "behind"
+  | "ahead"
+  | "completed_on_time"
+  | "completed_early"
+  | "completed_late" {
+  if (status === "not-started") return "pending";
+
+  if (isFinish) {
+    switch (status) {
+      case "early":
+        return "completed_early";
+      case "on-time":
+        return "completed_on_time";
+      case "late":
+        return "completed_late";
+    }
+  }
+
+  switch (status) {
+    case "early":
+      return "ahead";
+    case "on-time":
+      return "on_time";
+    case "late":
+      return "behind";
+  }
 }

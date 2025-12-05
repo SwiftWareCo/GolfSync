@@ -1,7 +1,7 @@
 import { isAfter, isBefore, startOfDay } from "date-fns";
 import { PageHeader } from "~/components/ui/page-header";
 import { Button } from "~/components/ui/button";
-import {  Timer } from "lucide-react";
+import { Timer } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "~/lib/dates";
 import { LotteryDashboard } from "~/components/lottery/LotteryDashboard";
@@ -15,6 +15,7 @@ import {
 } from "~/server/lottery/data";
 import { checkAndRunMonthlyMaintenance } from "~/server/lottery/maintenance-actions";
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
+import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
 
 interface PageProps {
   params: {
@@ -25,13 +26,8 @@ interface PageProps {
 export default async function LotteryManagementPage({ params }: PageProps) {
   const { date } = await params;
 
-
-
-
   const lotteryDate = new Date(date);
   const today = startOfDay(new Date());
-
-
 
   // Check and run monthly maintenance if needed
   await checkAndRunMonthlyMaintenance();
@@ -45,6 +41,7 @@ export default async function LotteryManagementPage({ params }: PageProps) {
     config,
     restrictions,
     teesheetData,
+    algorithmConfig,
   ] = await Promise.all([
     getMembers(),
     getLotteryStatsForDate(date),
@@ -53,6 +50,7 @@ export default async function LotteryManagementPage({ params }: PageProps) {
     getConfigForDate(date),
     getActiveTimeRestrictionsForDate(date),
     getTeesheetWithTimeBlocks(date),
+    getAlgorithmConfig(),
   ]);
 
   // Transform members to include class property for component compatibility
@@ -66,7 +64,6 @@ export default async function LotteryManagementPage({ params }: PageProps) {
   // Determine lottery status
   const isPastDate = isBefore(lotteryDate, today);
   const isToday = lotteryDate.getTime() === today.getTime();
-  const isFutureDate = isAfter(lotteryDate, today);
 
   let status: "setup" | "active" | "closed";
   if (isPastDate) {
@@ -107,6 +104,7 @@ export default async function LotteryManagementPage({ params }: PageProps) {
         initialTimeBlocks={timeBlocks}
         config={config}
         restrictions={restrictions}
+        algorithmConfig={algorithmConfig}
         teesheetData={{
           teesheet: teesheetData?.teesheet,
           config: teesheetData?.config,

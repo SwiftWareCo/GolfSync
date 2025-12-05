@@ -4,12 +4,15 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Settings } from "lucide-react";
+import { Settings, Sliders } from "lucide-react";
 import { LotteryProcessor } from "./LotteryProcessor";
 import { LotteryResultsView } from "./LotteryResultsView";
-import { LoadingSpinner } from "~/components/ui/loading-spinner";
+import { LotteryAlgorithmSettingsDialog } from "./LotteryAlgorithmSettingsDialog";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
-import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
+import type {
+  TeesheetConfigWithBlocks,
+  LotteryAlgorithmConfigFormData,
+} from "~/server/db/schema";
 
 import {
   createTestLotteryEntries,
@@ -38,8 +41,9 @@ interface LotteryDashboardProps {
   };
   initialLotteryEntries: any;
   initialTimeBlocks: any;
-  config: TeesheetConfigWithBlocks;
+  config: TeesheetConfigWithBlocks | null;
   restrictions: any[];
+  algorithmConfig: LotteryAlgorithmConfigFormData;
   teesheetData: {
     teesheet: any;
     config: any;
@@ -77,6 +81,7 @@ export function LotteryDashboard({
   initialTimeBlocks,
   config,
   restrictions,
+  algorithmConfig,
   teesheetData,
 }: LotteryDashboardProps) {
   const [stats, setStats] = useState<LotteryStats>(initialStats);
@@ -84,6 +89,7 @@ export function LotteryDashboard({
   const [isCreatingTest, setIsCreatingTest] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [processingExpanded, setProcessingExpanded] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
     title: "",
@@ -96,9 +102,14 @@ export function LotteryDashboard({
     setIsCreatingTest(true);
     try {
       const result = await createTestLotteryEntries(date);
-      if (result.success) {
+      if (result.success && result.data) {
+        const data = result.data as {
+          createdEntries: number;
+          createdGroups: number;
+          totalPlayers: number;
+        };
         toast.success(
-          `Created ${result.data.createdEntries} individual entries and ${result.data.createdGroups} group entries (${result.data.totalPlayers} total players)`,
+          `Created ${data.createdEntries} individual entries and ${data.createdGroups} group entries (${data.totalPlayers} total players)`,
         );
         // Stats will update via prop changes from server
       } else {
@@ -123,10 +134,9 @@ export function LotteryDashboard({
         setIsClearing(true);
         try {
           const result = await clearLotteryEntriesForDate(date);
-          if (result.success) {
-            toast.success(
-              `Cleared ${result.data.deletedEntries} individual entries and ${result.data.deletedGroups} group entries`,
-            );
+          if (result.success && result.data) {
+            const data = result.data as { deletedEntries: number };
+            toast.success(`Cleared ${data.deletedEntries} entries`);
             // Stats will update via prop changes from server
           } else {
             toast.error(result.error || "Failed to clear entries");
@@ -209,16 +219,26 @@ export function LotteryDashboard({
                 </Badge>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setProcessingExpanded(!processingExpanded)}
-            >
-              {processingExpanded ? "Collapse" : "Expand"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSettingsDialogOpen(true)}
+              >
+                <Sliders className="mr-2 h-4 w-4" />
+                Algorithm Settings
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setProcessingExpanded(!processingExpanded)}
+              >
+                {processingExpanded ? "Collapse" : "Expand"}
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        {processingExpanded && (
+        {processingExpanded && config && (
           <CardContent>
             <LotteryProcessor
               date={date}
@@ -231,14 +251,16 @@ export function LotteryDashboard({
       </Card>
 
       {/* Lottery Results - always show for preview and arrangement */}
-      <LotteryResultsView
-        date={date}
-        onComplete={handleConfirmationComplete}
-        members={members}
-        initialLotteryEntries={initialLotteryEntries}
-        config={config}
-        teesheetData={teesheetData}
-      />
+      {config && (
+        <LotteryResultsView
+          date={date}
+          onComplete={handleConfirmationComplete}
+          members={members}
+          initialLotteryEntries={initialLotteryEntries}
+          config={config}
+          teesheetData={teesheetData}
+        />
+      )}
 
       <ConfirmationDialog
         open={confirmDialog.open}
@@ -247,6 +269,13 @@ export function LotteryDashboard({
         title={confirmDialog.title}
         description={confirmDialog.description}
         variant={confirmDialog.variant}
+      />
+
+      {/* Algorithm Settings Dialog */}
+      <LotteryAlgorithmSettingsDialog
+        isOpen={settingsDialogOpen}
+        onClose={() => setSettingsDialogOpen(false)}
+        initialData={algorithmConfig}
       />
     </div>
   );

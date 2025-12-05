@@ -2,21 +2,15 @@
 
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
-import {
-  Settings,
-  RefreshCw,
-  AlertTriangle,
-} from "lucide-react";
+import { RefreshCw, AlertTriangle } from "lucide-react";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import { resetAllAdminPriorityAdjustmentsAction } from "~/server/lottery/member-profiles-actions";
 import { triggerManualMaintenance } from "~/server/lottery/maintenance-actions";
 import { toast } from "react-hot-toast";
-import { SpeedBonusConfiguration } from "~/components/lottery/SpeedBonusConfiguration";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Card, CardHeader, CardTitle } from "~/components/ui/card";
 import { BarChart3 } from "lucide-react";
 
 export function ControlPanel() {
-  const [showBonusConfig, setShowBonusConfig] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isRunningMaintenance, setIsRunningMaintenance] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -70,13 +64,6 @@ export function ControlPanel() {
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                onClick={() => setShowBonusConfig(!showBonusConfig)}
-              >
-                <Settings className="mr-2 h-4 w-4" />
-                Speed Bonuses
-              </Button>
-              <Button
-                variant="outline"
                 onClick={() => setMaintenanceConfirmOpen(true)}
                 disabled={isRunningMaintenance}
               >
@@ -98,12 +85,6 @@ export function ControlPanel() {
             </div>
           </div>
         </CardHeader>
-
-        {showBonusConfig && (
-          <CardContent className="border-t bg-gray-50">
-            <SpeedBonusConfiguration />
-          </CardContent>
-        )}
       </Card>
 
       <ConfirmationDialog
@@ -122,7 +103,7 @@ export function ControlPanel() {
         onOpenChange={() => setMaintenanceConfirmOpen(false)}
         onConfirm={handleRunMaintenance}
         title="Run Manual Maintenance"
-        description="This will reset fairness scores for the current month and recalculate speed profiles from pace data. This may take a few moments."
+        description="This will reset fairness scores for the current month. Speed profiles are updated automatically when rounds are completed."
         confirmText="Run Maintenance"
         variant="default"
         loading={isRunningMaintenance}

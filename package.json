@@ -26,15 +26,9 @@
     "analyze-duplicates": "tsx scripts/analyze-duplicates.ts",
     "fix-member-numbers": "tsx scripts/fix-member-numbers.ts",
     "export-members-for-clerk": "tsx scripts/export-members-for-clerk.ts",
-    "import-pace-data": "tsx scripts/import-pace-data-simple.ts",
+    "import-pace-data": "tsx src/scripts/import-pace-data.ts",
     "check-name-mapping": "tsx scripts/check-name-mapping.ts",
-    "migrate-member-classes": "tsx scripts/run-migration.ts",
-    "backup:all": "tsx scripts/backup-database.ts all",
-    "backup:members": "tsx scripts/backup-database.ts members",
-    "backup:teesheets": "tsx scripts/backup-database.ts teesheets",
-    "backup:lottery": "tsx scripts/backup-database.ts lottery",
-    "backup:charges": "tsx scripts/backup-database.ts charges",
-    "backup:audit": "tsx scripts/backup-database.ts audit"
+    "migrate-member-classes": "tsx scripts/run-migration.ts"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
@@ -67,6 +61,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "csv-parser": "^3.2.0",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.7",

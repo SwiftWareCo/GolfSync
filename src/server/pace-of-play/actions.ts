@@ -18,6 +18,15 @@ import {
   paceOfPlay,
   memberSpeedProfiles,
 } from "../db/schema";
+import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
+import {
+  calculatePaceStatus,
+  mapPaceStatusToDbStatus,
+} from "~/lib/pace-helpers";
+
+// Constants for round validation
+const MIN_ROUND_MINUTES = 180; // 3 hours
+const MAX_ROUND_MINUTES = 360; // 6 hours
 
 // Constants for expected pace durations in minutes
 const EXPECTED_TURN_DURATION = 120; // 2 hours to reach the turn
@@ -54,31 +63,9 @@ type PaceStatus =
   | "completed_late";
 
 // Helper to determine pace of play status
-function determinePaceStatus(
-  actualTime: Date | null,
-  expectedTime: Date,
-  isFinish = false,
-): PaceStatus {
-  if (!actualTime) return "pending";
-
-  const diffMinutes = Math.floor(
-    (actualTime.getTime() - expectedTime.getTime()) / (1000 * 60),
-  );
-
-  // For finish status, provide more detailed completion status
-  if (isFinish) {
-    if (Math.abs(diffMinutes) <= 5) return "completed_on_time";
-    if (diffMinutes < 0) return "completed_early";
-    return "completed_late";
-  }
-
-  // On time: within 5 minutes of expected time (either early or late)
-  // Ahead: more than 5 minutes early
-  // Behind: more than 5 minutes late
-  if (Math.abs(diffMinutes) <= 5) return "on_time"; // Within 5 minutes of expected time
-  if (diffMinutes < 0) return "ahead"; // More than 5 minutes early
-  return "behind"; // More than 5 minutes late
-}
+// DEPRECATED: Use calculatePaceStatus and mapPaceStatusToDbStatus instead
+// Keeping for reference if needed during refactor, but should be removed
+// function determinePaceStatus(...)
 
 // Initialize pace of play when a group starts
 export async function initializePaceOfPlay(
@@ -163,7 +150,10 @@ export async function updateTurnTime(
     ? new Date(currentPace.expectedTurn9Time)
     : new Date(); // fallback shouldn't happen
 
-  const status = determinePaceStatus(turn9Time, expectedTurn9Time);
+  // Calculate status using unified logic
+  const tempPace = { ...currentPace, turn9Time };
+  const clientStatus = calculatePaceStatus(tempPace);
+  const status = mapPaceStatusToDbStatus(clientStatus);
 
   const paceData: Partial<PaceOfPlayInsert> = {
     turn9Time,
@@ -190,11 +180,10 @@ export async function updateFinishTime(
     throw new Error("Pace of play record not found");
   }
 
-  const status = determinePaceStatus(
-    finishTime,
-    new Date(currentPace.expectedFinishTime),
-    true,
-  );
+  // Calculate status using unified logic
+  const tempPace = { ...currentPace, finishTime };
+  const clientStatus = calculatePaceStatus(tempPace);
+  const status = mapPaceStatusToDbStatus(clientStatus, true);
 
   // If notes aren't provided, use turn notes if available, or fall back to existing notes
   const updateNotes =
@@ -235,6 +224,20 @@ async function updateMemberSpeedProfiles(
       (finishTime.getTime() - startTime.getTime()) / (1000 * 60),
     );
 
+    // Validate round duration
+    if (
+      roundDurationMinutes < MIN_ROUND_MINUTES ||
+      roundDurationMinutes > MAX_ROUND_MINUTES
+    ) {
+      console.log(
+        `Skipping speed profile update: abnormal round duration ${roundDurationMinutes} minutes`,
+      );
+      return;
+    }
+
+    // Get algorithm config for thresholds
+    const config = await getAlgorithmConfig();
+
     // Get all members in this timeblock
     const timeBlockData = await db.query.timeBlocks.findFirst({
       where: eq(timeBlocks.id, timeBlockId),
@@ -253,57 +256,24 @@ async function updateMemberSpeedProfiles(
     for (const tbm of timeBlockData.timeBlockMembers) {
       const memberId = tbm.memberId;
 
-      // Get member's completed rounds from last 3 months
-      const threeMonthsAgo = new Date();
-      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      // Get existing profile
+      const existingProfile = await db.query.memberSpeedProfiles.findFirst({
+        where: eq(memberSpeedProfiles.memberId, memberId),
+      });
 
-      const completedRounds = await db
-        .select({
-          startTime: paceOfPlay.startTime,
-          finishTime: paceOfPlay.finishTime,
-        })
-        .from(paceOfPlay)
-        .innerJoin(timeBlocks, eq(paceOfPlay.timeBlockId, timeBlocks.id))
-        .innerJoin(
-          timeBlockMembers,
-          eq(timeBlocks.id, timeBlockMembers.timeBlockId),
-        )
-        .where(
-          and(
-            eq(timeBlockMembers.memberId, memberId),
-            sql`${paceOfPlay.finishTime} IS NOT NULL`,
-            sql`${paceOfPlay.startTime} IS NOT NULL`,
-            sql`${paceOfPlay.createdAt} >= ${threeMonthsAgo}`,
-          ),
-        );
+      // Calculate new cumulative stats
+      const currentTotalMinutes = existingProfile?.totalMinutes || 0;
+      const currentRoundCount = existingProfile?.roundCount || 0;
 
-      // Calculate average duration
-      const durations = completedRounds
-        .map((round) => {
-          if (!round.startTime || !round.finishTime) return null;
-          return Math.floor(
-            (new Date(round.finishTime).getTime() -
-              new Date(round.startTime).getTime()) /
-              (1000 * 60),
-          );
-        })
-        .filter((d): d is number => d !== null);
+      const newTotalMinutes = currentTotalMinutes + roundDurationMinutes;
+      const newRoundCount = currentRoundCount + 1;
+      const newAverageMinutes = Math.round(newTotalMinutes / newRoundCount);
 
-      const avgMinutes =
-        durations.length > 0
-          ? Math.round(
-              durations.reduce((sum, d) => sum + d, 0) / durations.length,
-            )
-          : roundDurationMinutes;
-
-      // Determine speed tier based on thresholds
-      // FAST: < 230 minutes (3:50)
-      // AVERAGE: 230-245 minutes (3:50 - 4:05)
-      // SLOW: > 245 minutes
-      let speedTier: "FAST" | "AVERAGE" | "SLOW";
-      if (avgMinutes < 230) {
+      // Determine speed tier based on config thresholds
+      let speedTier: "FAST" | "AVERAGE" | "SLOW" = "AVERAGE";
+      if (newAverageMinutes <= config.fastThresholdMinutes) {
         speedTier = "FAST";
-      } else if (avgMinutes <= 245) {
+      } else if (newAverageMinutes <= config.averageThresholdMinutes) {
         speedTier = "AVERAGE";
       } else {
         speedTier = "SLOW";
@@ -314,14 +284,20 @@ async function updateMemberSpeedProfiles(
         .insert(memberSpeedProfiles)
         .values({
           memberId,
-          averageMinutes: avgMinutes,
+          averageMinutes: newAverageMinutes,
+          totalMinutes: newTotalMinutes,
+          roundCount: newRoundCount,
+          hasData: true,
           speedTier,
           lastCalculated: new Date(),
         })
         .onConflictDoUpdate({
           target: memberSpeedProfiles.memberId,
           set: {
-            averageMinutes: avgMinutes,
+            averageMinutes: newAverageMinutes,
+            totalMinutes: newTotalMinutes,
+            roundCount: newRoundCount,
+            hasData: true,
             speedTier,
             lastCalculated: new Date(),
           },
@@ -363,15 +339,11 @@ export async function updateTurnAndFinishTime(
   }
 
   // Calculate status for both turn and finish
-  const turnStatus = determinePaceStatus(
-    turnTime,
-    new Date(currentPace.expectedTurn9Time),
-  );
-  const finishStatus = determinePaceStatus(
-    finishTime,
-    new Date(currentPace.expectedFinishTime),
-    true,
-  );
+  // Calculate status for both turn and finish
+  // For finish, we use the finish time logic
+  const tempPace = { ...currentPace, turn9Time: turnTime, finishTime };
+  const clientStatus = calculatePaceStatus(tempPace);
+  const finishStatus = mapPaceStatusToDbStatus(clientStatus, true);
 
   const paceData: Partial<PaceOfPlayInsert> = {
     turn9Time: turnTime,
@@ -385,29 +357,6 @@ export async function updateTurnAndFinishTime(
   revalidatePath("/admin/pace-of-play");
   revalidatePath("/admin/pace-of-play/finish");
   return { success: true };
-}
-
-// Get pace of play data for a specific timeblock
-export async function getPaceOfPlayData(
-  timeBlockId: number,
-): Promise<PaceOfPlay | null> {
-  try {
-    const result = await getPaceOfPlayByTimeBlockId(timeBlockId);
-    return result || null; // Explicitly return null if result is undefined
-  } catch (error) {
-    console.error("Error fetching pace of play data:", error);
-    return null;
-  }
-}
-
-// Get all pace of play data for a specific date
-export async function getAllPaceOfPlayForDate(date: Date) {
-  try {
-    return await getPaceOfPlayByDate(date);
-  } catch (error) {
-    console.error("Error fetching pace of play data for date:", error);
-    return [];
-  }
 }
 
 // Get pace of play history for a specific member

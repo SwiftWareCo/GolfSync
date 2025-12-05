@@ -50,25 +50,27 @@ export async function checkAndRunMonthlyMaintenance(): Promise<MaintenanceResult
 
     // Run monthly maintenance
     const resetResult = await resetMonthlyFairnessScores();
-    const speedResult = await recalculateSpeedProfiles();
+    // Note: Speed profiles are now cumulative and self-updating, so we don't recalculate them monthly
+    // We only reset fairness scores
 
-    const totalRecords =
-      (resetResult.data?.recordsAffected || 0) +
-      (speedResult.data?.recordsAffected || 0);
+    const totalRecords = resetResult.data?.recordsAffected || 0;
 
     // Record that maintenance was completed
-    await db.insert(systemMaintenance).values({
-      maintenanceType: "MONTHLY_RESET",
-      month: currentMonth,
-      recordsAffected: totalRecords,
-      notes: `Reset ${resetResult.data?.recordsAffected || 0} fairness scores, updated ${speedResult.data?.recordsAffected || 0} member profiles`,
-    }).onConflictDoNothing();
+    await db
+      .insert(systemMaintenance)
+      .values({
+        maintenanceType: "MONTHLY_RESET",
+        month: currentMonth,
+        recordsAffected: totalRecords,
+        notes: `Reset ${resetResult.data?.recordsAffected || 0} fairness scores`,
+      })
+      .onConflictDoNothing();
 
     return {
       success: true,
       data: {
         recordsAffected: totalRecords,
-        notes: `Monthly maintenance completed: Reset fairness scores and recalculated member profiles`,
+        notes: `Monthly maintenance completed: Reset fairness scores`,
       },
     };
   } catch (error) {
@@ -117,7 +119,10 @@ async function resetMonthlyFairnessScores(): Promise<MaintenanceResult> {
     }));
 
     if (newScores.length > 0) {
-      await db.insert(memberFairnessScores).values(newScores).onConflictDoNothing();
+      await db
+        .insert(memberFairnessScores)
+        .values(newScores)
+        .onConflictDoNothing();
     }
 
     return {
@@ -139,140 +144,62 @@ async function resetMonthlyFairnessScores(): Promise<MaintenanceResult> {
 /**
  * Recalculate member speed profiles from pace data (last 3 months)
  */
-async function recalculateSpeedProfiles(): Promise<MaintenanceResult> {
+/**
+ * Reclassify all member speed tiers based on current config thresholds
+ * Useful if admin changes the thresholds and wants to update everyone immediately
+ */
+export async function reclassifyAllSpeedTiers(): Promise<MaintenanceResult> {
   try {
-    // Get pace data from last 3 months
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-    const threeMonthsAgoStr = threeMonthsAgo.toISOString().split("T")[0]!;
+    const { getAlgorithmConfig } = await import(
+      "~/server/lottery/algorithm-config-data"
+    );
+    const config = await getAlgorithmConfig();
 
-    // Get all members with pace data from last 3 months
-    const memberPaceData = await db
-      .select({
-        memberId: timeBlockMembers.memberId,
-        totalMinutes: sql<number>`EXTRACT(EPOCH FROM (${paceOfPlay.finishTime} - ${paceOfPlay.startTime})) / 60`,
-        memberName: sql<string>`${members.firstName} || ' ' || ${members.lastName}`,
-      })
-      .from(paceOfPlay)
-      .innerJoin(timeBlocks, eq(paceOfPlay.timeBlockId, timeBlocks.id))
-      .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
-      .innerJoin(
-        timeBlockMembers,
-        eq(timeBlocks.id, timeBlockMembers.timeBlockId),
-      )
-      .innerJoin(members, eq(timeBlockMembers.memberId, members.id))
-      .where(
-        and(
-          gte(teesheets.date, threeMonthsAgoStr),
-          sql`${paceOfPlay.finishTime} IS NOT NULL`,
-          sql`${paceOfPlay.startTime} IS NOT NULL`,
-        ),
-      );
+    // Get all speed profiles
+    const profiles = await db.query.memberSpeedProfiles.findMany();
+    let updatedCount = 0;
 
-    // Group by member and calculate averages
-    const memberAverages = new Map<
-      number,
-      { totalMinutes: number; count: number; name: string }
-    >();
+    for (const profile of profiles) {
+      // Skip if no data
+      if (!profile.hasData || !profile.averageMinutes) continue;
 
-    memberPaceData.forEach((record) => {
-      if (!memberAverages.has(record.memberId)) {
-        memberAverages.set(record.memberId, {
-          totalMinutes: 0,
-          count: 0,
-          name: record.memberName,
-        });
+      let newTier: "FAST" | "AVERAGE" | "SLOW" = "AVERAGE";
+      if (profile.averageMinutes <= config.fastThresholdMinutes) {
+        newTier = "FAST";
+      } else if (profile.averageMinutes <= config.averageThresholdMinutes) {
+        newTier = "AVERAGE";
+      } else {
+        newTier = "SLOW";
       }
-      const existing = memberAverages.get(record.memberId)!;
-      existing.totalMinutes += record.totalMinutes;
-      existing.count += 1;
-    });
 
-    let updatedProfiles = 0;
-
-    // Update speed profiles for members with sufficient data (3+ rounds)
-    for (const [memberId, data] of memberAverages) {
-      if (data.count >= 3) {
-        const averageMinutes = data.totalMinutes / data.count;
-        let speedTier: "FAST" | "AVERAGE" | "SLOW" = "AVERAGE";
-
-        if (averageMinutes <= 235) {
-          speedTier = "FAST";
-        } else if (averageMinutes <= 245) {
-          speedTier = "AVERAGE";
-        } else {
-          speedTier = "SLOW";
-        }
-
-        // Check if profile exists
-        const existingProfile = await db.query.memberSpeedProfiles.findFirst({
-          where: eq(memberSpeedProfiles.memberId, memberId),
-        });
-
-        if (existingProfile) {
-          // Only update if not manually overridden
-          if (!existingProfile.manualOverride) {
-            await db
-              .update(memberSpeedProfiles)
-              .set({
-                averageMinutes,
-                speedTier,
-                lastCalculated: new Date(),
-                updatedAt: new Date(),
-              })
-              .where(eq(memberSpeedProfiles.memberId, memberId));
-            updatedProfiles++;
-          }
-        } else {
-          // Create new profile
-          await db.insert(memberSpeedProfiles).values({
-            memberId,
-            averageMinutes,
-            speedTier,
-            adminPriorityAdjustment: 0,
-            manualOverride: false,
-            lastCalculated: new Date(),
-            notes: null,
-          });
-          updatedProfiles++;
-        }
+      // Only update if tier changed and not manually overridden
+      if (profile.speedTier !== newTier && !profile.manualOverride) {
+        await db
+          .update(memberSpeedProfiles)
+          .set({
+            speedTier: newTier,
+            updatedAt: new Date(),
+          })
+          .where(eq(memberSpeedProfiles.memberId, profile.memberId));
+        updatedCount++;
       }
-    }
-
-    // Record speed calculation maintenance (only if not already recorded this month)
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const existingSpeedMaintenance = await db.query.systemMaintenance.findFirst({
-      where: and(
-        eq(systemMaintenance.maintenanceType, "SPEED_RECALCULATION"),
-        eq(systemMaintenance.month, currentMonth),
-      ),
-    });
-
-    if (!existingSpeedMaintenance) {
-      await db.insert(systemMaintenance).values({
-        maintenanceType: "SPEED_RECALCULATION",
-        month: currentMonth,
-        recordsAffected: updatedProfiles,
-        notes: `Recalculated member profiles for ${updatedProfiles} members with 3+ rounds in last 3 months`,
-      }).onConflictDoNothing();
     }
 
     return {
       success: true,
       data: {
-        recordsAffected: updatedProfiles,
-        notes: `Updated ${updatedProfiles} member profiles based on recent pace data`,
+        recordsAffected: updatedCount,
+        notes: `Reclassified ${updatedCount} members based on new thresholds`,
       },
     };
   } catch (error) {
-    console.error("Error recalculating speed profiles:", error);
+    console.error("Error reclassifying speed tiers:", error);
     return {
       success: false,
-      error: "Failed to recalculate speed profiles",
+      error: "Failed to reclassify speed tiers",
     };
   }
 }
-
 
 /**
  * Manual trigger for monthly maintenance (admin only)
@@ -280,19 +207,21 @@ async function recalculateSpeedProfiles(): Promise<MaintenanceResult> {
 export async function triggerManualMaintenance(): Promise<MaintenanceResult> {
   try {
     const resetResult = await resetMonthlyFairnessScores();
-    const speedResult = await recalculateSpeedProfiles();
+    // Manual maintenance now only resets fairness scores by default
+    // Admin can trigger reclassifyAllSpeedTiers separately if needed
 
-    const totalRecords =
-      (resetResult.data?.recordsAffected || 0) +
-      (speedResult.data?.recordsAffected || 0);
+    const totalRecords = resetResult.data?.recordsAffected || 0;
 
     // Record manual maintenance
-    await db.insert(systemMaintenance).values({
-      maintenanceType: "MANUAL_MAINTENANCE",
-      month: new Date().toISOString().slice(0, 7),
-      recordsAffected: totalRecords,
-      notes: `Manual maintenance: ${resetResult.data?.notes || ""}, ${speedResult.data?.notes || ""}`,
-    }).onConflictDoNothing();
+    await db
+      .insert(systemMaintenance)
+      .values({
+        maintenanceType: "MANUAL_MAINTENANCE",
+        month: new Date().toISOString().slice(0, 7),
+        recordsAffected: totalRecords,
+        notes: `Manual maintenance: ${resetResult.data?.notes || ""}`,
+      })
+      .onConflictDoNothing();
 
     revalidatePath("/admin/lottery");
     revalidatePath("/admin/lottery/member-profiles");

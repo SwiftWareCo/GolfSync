@@ -334,37 +334,6 @@ export function formatDateToYYYYMMDD(date: Date | string): string {
   return format(date, "yyyy-MM-dd");
 }
 
-/**
- * Formats a date for display in user-friendly format (e.g., "May 7th, 2025")
- */
-export function formatDisplayDate(date: Date | string): string {
-  const dateObj = typeof date === "string" ? new Date(date) : date;
-  return format(dateObj, "MMMM do, yyyy");
-}
-
-/**
- * Checks if two dates are on the same day (ignoring time) using UTC components
- * This is useful for server-side date comparisons
- */
-export function isSameDay(date1: Date, date2: Date): boolean {
-  return (
-    date1.getUTCFullYear() === date2.getUTCFullYear() &&
-    date1.getUTCMonth() === date2.getUTCMonth() &&
-    date1.getUTCDate() === date2.getUTCDate()
-  );
-}
-
-/**
- * Checks if two dates are on the same LOCAL day (ignoring time)
- * This is useful for client-side date comparisons in the user's timezone
- */
-export function isSameLocalDay(date1: Date, date2: Date): boolean {
-  return (
-    date1.getFullYear() === date2.getFullYear() &&
-    date1.getMonth() === date2.getMonth() &&
-    date1.getDate() === date2.getDate()
-  );
-}
 
 /**
  * Formats an array of day numbers (0-6) to readable text representation
@@ -589,34 +558,6 @@ export function formatTimeString(time: string): string {
   const date = new Date();
   date.setHours(hours, minutes, 0, 0);
   return format(date, "h:mm a");
-}
-
-/**
- * Safely formats a database timestamp for pace of play display
- * Handles null values and ensures proper local time display
- * @param timestamp Database timestamp that might be null
- * @param includeDate Whether to include the date in the output
- * @returns Formatted time string or placeholder if timestamp is null
- */
-export function formatPaceOfPlayTimestamp(
-  timestamp: Date | string | null | undefined,
-  includeDate = false,
-): string {
-  if (!timestamp) return "—";
-
-  try {
-    const date =
-      typeof timestamp === "string" ? new Date(timestamp) : timestamp;
-
-    // Validate the date is not invalid
-    if (isNaN(date.getTime())) return "Invalid Date";
-
-    // Format with or without date
-    return includeDate ? format(date, "MMM d, h:mm a") : format(date, "h:mm a");
-  } catch (error) {
-    console.error("Error formatting timestamp:", error);
-    return "Invalid Date";
-  }
 }
 
 /**

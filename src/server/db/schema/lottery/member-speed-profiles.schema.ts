@@ -29,7 +29,10 @@ export const memberSpeedProfiles = createTable(
     memberId: integer("member_id")
       .references(() => members.id, { onDelete: "cascade" })
       .primaryKey(),
-    averageMinutes: integer("average_minutes"), // Auto-calculated from pace data (last 3 months)
+    averageMinutes: integer("average_minutes"), // Auto-calculated from pace data (cumulative)
+    totalMinutes: integer("total_minutes").default(0).notNull(), // Sum of all round times
+    roundCount: integer("round_count").default(0).notNull(), // Number of rounds used in calculation
+    hasData: boolean("has_data").default(false).notNull(), // True if we have actual pace data (imported or live)
     speedTier: speedTierEnum("speed_tier").default("AVERAGE").notNull(),
     adminPriorityAdjustment: integer("admin_priority_adjustment")
       .default(0)
