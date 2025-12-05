@@ -43,7 +43,6 @@ export function StatisticsCards({ stats }: StatisticsCardsProps) {
           <div className="text-2xl font-bold text-green-600">
             {stats.speedTiers.fast}
           </div>
-          <p className="text-muted-foreground text-xs">≤ 3:55 pace</p>
         </CardContent>
       </Card>
 
