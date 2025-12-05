@@ -448,7 +448,10 @@ export async function processLotteryForDate(
         return group.members.every((member) => {
           const memberAllowedBlocks = filterBlocksByRestrictions(
             [block],
-            { memberId: member?.id as number, memberClassId: member?.memberClass?.id ?? 0 },
+            {
+              memberId: member?.id as number,
+              memberClassId: member?.memberClass?.id ?? 0,
+            },
             date,
             timeRestrictions,
           );
@@ -1353,18 +1356,23 @@ async function updateFairnessScoresAfterProcessing(
           const newTotalEntries = existingScore.totalEntriesMonth + 1;
           const newPreferencesGranted =
             existingScore.preferencesGrantedMonth + (preferenceGranted ? 1 : 0);
+          // Raw fulfillment rate for storage
           const newFulfillmentRate = newPreferencesGranted / newTotalEntries;
+          // Bayesian dampened rate for fairness calculation (prevents harsh 0% for new members)
+          // Formula: (granted + 1) / (total + 2) - starts at 50%, converges to actual rate
+          const dampenedFulfillmentRate =
+            (newPreferencesGranted + 1) / (newTotalEntries + 2);
           const newDaysWithoutGood = preferenceGranted
             ? 0
             : existingScore.daysWithoutGoodTime + 1;
 
-          // Calculate new fairness score (higher = more priority needed)
+          // Calculate new fairness score using dampened rate (higher = more priority needed)
           let newFairnessScore = 0;
-          if (newFulfillmentRate < 0.5) {
-            // Less than 50% fulfillment
+          if (dampenedFulfillmentRate < 0.5) {
+            // Less than 50% dampened fulfillment
             newFairnessScore += 20;
-          } else if (newFulfillmentRate < 0.7) {
-            // Less than 70% fulfillment
+          } else if (dampenedFulfillmentRate < 0.7) {
+            // Less than 70% dampened fulfillment
             newFairnessScore += 10;
           }
           newFairnessScore += Math.min(newDaysWithoutGood * 2, 30); // +2 per day without good time, max 30
@@ -1383,10 +1391,13 @@ async function updateFairnessScoresAfterProcessing(
         } else {
           // Create new record
           const fulfillmentRate = preferenceGranted ? 1 : 0;
+          // Bayesian dampened: 0/1 = 33%, 1/1 = 66% (much gentler for new members)
+          const dampenedRate = (preferenceGranted ? 2 : 1) / 3;
           const daysWithoutGood = preferenceGranted ? 0 : 1;
+          // Use dampened rate for fairness score calculation
           let fairnessScore = 0;
-          if (!preferenceGranted) {
-            fairnessScore = 10; // Base score for not getting preference
+          if (dampenedRate < 0.5) {
+            fairnessScore = 10; // Base score for not getting preference (but dampened)
           }
 
           await db.insert(memberFairnessScores).values({
@@ -1462,15 +1473,19 @@ async function updateFairnessScoresAfterProcessing(
             const newPreferencesGranted =
               existingScore.preferencesGrantedMonth +
               (preferenceGranted ? 1 : 0);
+            // Raw fulfillment rate for storage
             const newFulfillmentRate = newPreferencesGranted / newTotalEntries;
+            // Bayesian dampened rate for fairness calculation
+            const dampenedFulfillmentRate =
+              (newPreferencesGranted + 1) / (newTotalEntries + 2);
             const newDaysWithoutGood = preferenceGranted
               ? 0
               : existingScore.daysWithoutGoodTime + 1;
 
             let newFairnessScore = 0;
-            if (newFulfillmentRate < 0.5) {
+            if (dampenedFulfillmentRate < 0.5) {
               newFairnessScore += 20;
-            } else if (newFulfillmentRate < 0.7) {
+            } else if (dampenedFulfillmentRate < 0.7) {
               newFairnessScore += 10;
             }
             newFairnessScore += Math.min(newDaysWithoutGood * 2, 30);
@@ -1488,9 +1503,11 @@ async function updateFairnessScoresAfterProcessing(
               .where(eq(memberFairnessScores.memberId, memberId));
           } else {
             const fulfillmentRate = preferenceGranted ? 1 : 0;
+            // Bayesian dampened: 0/1 = 33%, 1/1 = 66%
+            const dampenedRate = (preferenceGranted ? 2 : 1) / 3;
             const daysWithoutGood = preferenceGranted ? 0 : 1;
             let fairnessScore = 0;
-            if (!preferenceGranted) {
+            if (dampenedRate < 0.5) {
               fairnessScore = 10;
             }
 
