@@ -4,19 +4,28 @@ import { useRef, useEffect, useMemo } from "react";
 import { AlertCircle, CalendarIcon, ClockIcon } from "lucide-react";
 import { formatDateWithDay } from "~/lib/dates";
 import { TimeBlockItem, type TimeBlockItemProps } from "./TimeBlockItem";
-import type { Member } from "~/app/types/MemberTypes";
 import type { Fill } from "~/server/db/schema";
+
+// Member type for client-side usage
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
 
 // View types matching TimeBlockItem expectations
 type TimeBlockMemberView = {
   id: number;
   firstName: string;
   lastName: string;
-  class?: string;
-  checkedIn: boolean;
+  checkedIn: boolean | null;
+  checkedInAt?: Date | null;
+  memberClass?: { label: string } | null;
+  [key: string]: any;
 };
-
-type TimeBlockFill = Fill;
 
 // Define proper types that match TimeBlockItem requirements
 type ClientTimeBlock = {
@@ -24,7 +33,7 @@ type ClientTimeBlock = {
   startTime: string;
   endTime: string;
   members: TimeBlockMemberView[];
-  fills: TimeBlockFill[];
+  fills: Fill[];
   maxMembers: number;
   restriction?: {
     isRestricted: boolean;
@@ -38,7 +47,7 @@ interface TeesheetGridProps {
   date: Date;
   timeBlocks: ClientTimeBlock[];
   config: any;
-  member: Member;
+  member: ClientMember;
   loading: boolean;
   selectedDate: string | Date;
   onTouchStart: (e: React.TouchEvent) => void;

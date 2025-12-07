@@ -88,38 +88,7 @@ export default async function MembersHome() {
               {upcomingEvents.map((event) => (
                 <EventTimetableRow
                   key={event.id}
-                  event={{
-                    id: event.id,
-                    name: event.name,
-                    description: event.description,
-                    eventType: event.eventType,
-                    startDate: event.startDate,
-                    endDate: event.endDate,
-                    startTime: event.startTime,
-                    endTime: event.endTime,
-                    location: event.location,
-                    capacity: event.capacity,
-                    requiresApproval: event.requiresApproval,
-                    registrationDeadline: event.registrationDeadline,
-                    isActive: event.isActive,
-                    memberClassIds: event.memberClassIds,
-                    teamSize: event.teamSize,
-                    guestsAllowed: event.guestsAllowed,
-                    createdAt: event.createdAt,
-                    updatedAt: event.updatedAt,
-                    details: event.details
-                      ? {
-                          format: event.details.format ?? undefined,
-                          rules: event.details.rules ?? undefined,
-                          prizes: event.details.prizes ?? undefined,
-                          entryFee: event.details.entryFee ?? undefined,
-                          additionalInfo:
-                            event.details.additionalInfo ?? undefined,
-                        }
-                      : null,
-                    registrationsCount: event.registrationsCount,
-                    pendingRegistrationsCount: event.pendingRegistrationsCount,
-                  }}
+                  event={event}
                   memberId={member?.id}
                   isRegistered={registrationMap.has(event.id)}
                   registrationStatus={registrationMap.get(event.id)}

@@ -50,6 +50,6 @@
     ".next/cache/**/*",
     "dist",
     "build",
-    "scripts"
+    "src/scripts"
   ]
 }

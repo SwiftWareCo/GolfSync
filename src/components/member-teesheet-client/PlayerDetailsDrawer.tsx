@@ -12,20 +12,19 @@ type TimeBlockMemberView = {
   id: number;
   firstName: string;
   lastName: string;
-  class?: string;
-  memberNumber?: string;
-  checkedIn: boolean;
+  checkedIn: boolean | null;
   checkedInAt?: Date | null;
+  memberClass?: { label: string } | null;
+  [key: string]: any;
 };
-
-type TimeBlockFill = Fill; // Alias for Fill from schema
 
 type ClientTimeBlock = {
   id: number;
   startTime: string;
   endTime: string;
   members: TimeBlockMemberView[];
-  fills: TimeBlockFill[];
+  fills: Fill[];
+  maxMembers?: number;
   [key: string]: any;
 };
 
@@ -61,7 +60,7 @@ export function PlayerDetailsDrawer({
   if (!isOpen || !timeBlock) return null;
 
   const totalPeople = timeBlock.members.length + (timeBlock.fills?.length || 0);
-  const maxPlayers = timeBlock.maxMembersPerBlock || 4;
+  const maxPlayers = timeBlock.maxMembers || 4;
   const startTimeDisplay = formatTimeString(timeBlock.startTime);
 
   return (
@@ -140,9 +139,9 @@ export function PlayerDetailsDrawer({
                           >
                             {member.firstName} {member.lastName}
                           </p>
-                          {member.class && (
+                          {member.memberClass?.label && (
                             <p className="text-xs text-gray-500">
-                              {member.class}
+                              {member.memberClass.label}
                             </p>
                           )}
                         </div>

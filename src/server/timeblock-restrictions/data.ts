@@ -57,7 +57,7 @@ export async function checkBatchTimeblockRestrictions(params: {
     date: string; // Add date parameter in YYYY-MM-DD format
   }>;
   memberId?: number;
-  memberClass?: string;
+  memberClassId?: number;
   guestId?: number;
 }): Promise<
   ResultType<
@@ -70,7 +70,7 @@ export async function checkBatchTimeblockRestrictions(params: {
   >
 > {
   try {
-    const { timeBlocks, memberId, memberClass, guestId } = params;
+    const { timeBlocks, memberId, memberClassId, guestId } = params;
     const results: Array<{
       timeBlockId: number;
       hasViolations: boolean;
@@ -91,7 +91,7 @@ export async function checkBatchTimeblockRestrictions(params: {
 
     // Get member class restrictions if needed
     let memberRestrictions: any[] = [];
-    if (memberId && memberClass) {
+    if (memberId && memberClassId) {
       const memberRestrictionsResult =
         await getTimeblockRestrictionsByCategory("MEMBER_CLASS");
       if ("error" in memberRestrictionsResult) {
@@ -101,7 +101,8 @@ export async function checkBatchTimeblockRestrictions(params: {
         .filter(
           (r) =>
             r.isActive &&
-            (!r.memberClasses?.length || r.memberClasses.includes(memberClass)),
+            (!r.memberClassIds?.length ||
+              r.memberClassIds.includes(memberClassId)),
         )
         .sort((a, b) => (b.priority || 0) - (a.priority || 0)); // Sort by priority DESC
     }
@@ -185,7 +186,7 @@ export async function checkBatchTimeblockRestrictions(params: {
       }
 
       // Check member class restrictions
-      if (memberId && memberClass) {
+      if (memberId && memberClassId) {
         for (const restriction of memberRestrictions) {
           if (restriction.restrictionType === "TIME") {
             // Check day of week - empty array means apply to all days
@@ -216,7 +217,7 @@ export async function checkBatchTimeblockRestrictions(params: {
                     restrictionName: restriction.name,
                     restrictionDescription: restriction.description,
                     restrictionCategory: "MEMBER_CLASS",
-                    memberClass,
+                    memberClassId,
                     type: "TIME",
                     message: `Booking time (${formatTimeString(bookingTime)}) is within restricted hours (${restriction.startTime ? formatTimeString(restriction.startTime) : "00:00"} - ${restriction.endTime ? formatTimeString(restriction.endTime) : "23:59"})`,
                     canOverride: restriction.canOverride,
@@ -267,7 +268,7 @@ export async function checkBatchTimeblockRestrictions(params: {
                   restrictionName: restriction.name,
                   restrictionDescription: restriction.description,
                   restrictionCategory: "MEMBER_CLASS",
-                  memberClass,
+                  memberClassId,
                   type: "FREQUENCY",
                   message: `Member has exceeded frequency limit (${currentBookingCount}/${restriction.maxCount} bookings in ${monthName})`,
                   canOverride: restriction.canOverride,

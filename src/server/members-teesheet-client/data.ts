@@ -8,7 +8,6 @@ import { auth } from "@clerk/nextjs/server";
 
 import { checkBatchTimeblockRestrictions } from "~/server/timeblock-restrictions/data";
 import { formatCalendarDate } from "~/lib/utils";
-import { type Member } from "~/app/types/MemberTypes";
 import { getBCToday, getBCNow } from "~/lib/dates";
 
 /**
@@ -26,7 +25,8 @@ export async function getMemberTeesheetData(date: Date, id: string) {
   const member = await getMemberData(id);
 
   // Get or create teesheet for the date
-  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
+  const dateString = formatCalendarDate(date);
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(dateString);
 
   // Get time blocks with all members
   const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
@@ -53,7 +53,8 @@ export async function getMemberTeesheet(date: Date) {
   const member = await getMemberData();
 
   // Get or create teesheet for the date
-  const { teesheet, config } = await getTeesheetWithTimeBlocks(date);
+  const dateString = formatCalendarDate(date);
+  const { teesheet, config } = await getTeesheetWithTimeBlocks(dateString);
 
   // Get time blocks with all members
   const timeBlocks = await getTimeBlocksForTeesheet(teesheet.id);
@@ -152,16 +153,18 @@ export async function getMemberTeesheetDataWithRestrictions(
   // Check restrictions for each time block
   let timeBlocksWithRestrictions = timeBlocks;
   try {
-    const timeBlocksForBatch = timeBlocks.map((tb) => ({
-      id: tb.id,
-      startTime: tb.startTime,
-      date: tb.date || formatCalendarDate(date),
-    }));
+    const timeBlocksForBatch = timeBlocks
+      .filter((tb) => tb.id !== undefined)
+      .map((tb) => ({
+        id: tb.id!,
+        startTime: tb.startTime,
+        date: dateString,
+      }));
 
     const batchResults = await checkBatchTimeblockRestrictions({
       timeBlocks: timeBlocksForBatch,
       memberId: member.id,
-      memberClass: member.memberClass?.label,
+      memberClassId: member.classId,
     });
 
     if (Array.isArray(batchResults)) {
@@ -227,7 +230,7 @@ export async function getMemberTeesheetDataWithRestrictions(
 /**
  * Get upcoming tee times for the current member
  */
-export async function getUpcomingTeeTimes(member: Member) {
+export async function getUpcomingTeeTimes(member: { id: number }) {
   const { userId } = await auth();
 
   if (!userId) {

@@ -30,7 +30,10 @@ interface EventTimetableRowProps {
 }
 
 // Get registration status badge and custom class
-const getRegistrationStatusBadge = (status: string) => {
+const getRegistrationStatusBadge = (status: string): {
+  variant: "default" | "secondary" | "destructive" | "outline";
+  className: string;
+} => {
   switch (status) {
     case "APPROVED":
       return { variant: "default", className: "" };
@@ -115,9 +118,7 @@ export function EventTimetableRow({
           </span>
           {isRegistered && registrationStatus && (
             <Badge
-              variant={
-                getRegistrationStatusBadge(registrationStatus).variant as any
-              }
+              variant={getRegistrationStatusBadge(registrationStatus).variant}
               className={cn(
                 "px-1.5 py-0.5 text-xs shrink-0",
                 getRegistrationStatusBadge(registrationStatus).className,
@@ -162,10 +163,7 @@ export function EventTimetableRow({
                 )}
                 {isRegistered && registrationStatus && (
                   <Badge
-                    variant={
-                      getRegistrationStatusBadge(registrationStatus)
-                        .variant as any
-                    }
+                    variant={getRegistrationStatusBadge(registrationStatus).variant}
                     className={cn(
                       "font-medium",
                       getRegistrationStatusBadge(registrationStatus).className,

@@ -6,13 +6,22 @@ import { Button } from "~/components/ui/button";
 import { MemberLotteryEntryForm } from "./MemberLotteryEntryForm";
 import { MemberLotteryEntryView } from "./MemberLotteryEntryView";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
-import type { Member } from "~/app/types/MemberTypes";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
+
+// Member type for client-side usage
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
 
 interface LotteryInterfaceProps {
   lotteryDate: string;
   lotteryEntry?: LotteryEntryData;
-  member: Member;
+  member: ClientMember;
   config: TeesheetConfigWithBlocks;
   error?: string | null;
   onDataChange?: () => void;

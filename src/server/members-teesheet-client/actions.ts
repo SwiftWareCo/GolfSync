@@ -1,15 +1,12 @@
 "use server";
 
 import { db } from "~/server/db";
-import { timeBlockMembers, timeBlocks, teesheets } from "~/server/db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { timeBlockMembers, timeBlocks } from "~/server/db/schema";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { auth } from "@clerk/nextjs/server";
-import { type Member } from "~/app/types/MemberTypes";
 import { formatDateToYYYYMMDD } from "~/lib/utils";
-import { formatTime12Hour, formatDate } from "~/lib/dates";
-import { sendNotificationToMember } from "~/server/pwa/actions";
 
 type ActionResult = {
   success: boolean;
@@ -22,7 +19,7 @@ type ActionResult = {
  */
 export async function bookTeeTime(
   timeBlockId: number,
-  member: Member,
+  member: { id: number },
 ): Promise<ActionResult> {
   try {
     // Get member data
@@ -35,32 +32,21 @@ export async function bookTeeTime(
       };
     }
 
-    // Get time block info and its teesheet date
+    // Get time block with teesheet relation
     const timeBlock = await db.query.timeBlocks.findFirst({
       where: eq(timeBlocks.id, timeBlockId),
+      with: { teesheet: true },
     });
 
-    if (!timeBlock) {
+    if (!timeBlock || !timeBlock.teesheet) {
       return {
         success: false,
         error: "Time block not found",
       };
     }
 
-    // Get teesheet to get the date
-    const teesheet = await db.query.teesheets.findFirst({
-      where: eq(teesheets.id, timeBlock.teesheetId),
-    });
-
-    if (!teesheet) {
-      return {
-        success: false,
-        error: "Teesheet not found",
-      };
-    }
-
     // Format the booking date and save the booking time
-    const bookingDate = formatDateToYYYYMMDD(teesheet.date);
+    const bookingDate = formatDateToYYYYMMDD(timeBlock.teesheet.date);
     const bookingTime = timeBlock.startTime;
 
     // Check for existing booking on the same time block
@@ -87,47 +73,6 @@ export async function bookTeeTime(
       checkedIn: false,
     });
 
-    // Send push notification to the member
-    try {
-      if (member.id && bookingTime) {
-        // Use the BC timezone date utility functions for proper formatting
-        const formattedTime = formatTime12Hour(bookingTime);
-        const formattedDate = formatDate(bookingDate, "EEEE, MMMM do");
-
-        const notificationResult = await sendNotificationToMember(
-          member.id,
-          "Tee Time Confirmed! ⛳",
-          `Your tee time is booked for ${formattedDate} at ${formattedTime}. See you on the course!`,
-        );
-
-        if (!notificationResult.success) {
-          if (notificationResult.expired) {
-            console.log(
-              `Push subscription expired for member ${member.id} - cleaned up automatically`,
-            );
-          } else if (notificationResult.shouldRetry) {
-            console.warn(
-              `Failed to send booking notification to member ${member.id}: ${notificationResult.error}`,
-            );
-          } else {
-            console.log(
-              `Member ${member.id} not subscribed to push notifications`,
-            );
-          }
-        } else {
-          console.log(
-            `Successfully sent booking notification to member ${member.id}`,
-          );
-        }
-      }
-    } catch (notificationError) {
-      // Don't fail the booking if notification fails - just log it
-      console.error(
-        "Unexpected error sending booking notification:",
-        notificationError,
-      );
-    }
-
     revalidatePath("/members/teesheet");
     return { success: true };
   } catch (error) {
@@ -144,7 +89,7 @@ export async function bookTeeTime(
  */
 export async function cancelTeeTime(
   timeBlockId: number,
-  member: Member,
+  member: { id: number },
 ): Promise<ActionResult> {
   try {
     // Get member data

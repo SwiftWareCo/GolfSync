@@ -13,13 +13,11 @@ export default async function EventsPage() {
   const { sessionClaims } = await auth();
   const member = await getMemberData(sessionClaims?.userId as string);
 
-  // Get all events for the member's class
-  const events = await getEventsForClass(member?.memberClass?.label!);
-
-  // Get member registrations for these events
-  const memberRegistrations = member?.id
-    ? await getMemberEventRegistrations(member.id)
-    : [];
+  // Parallelize fetching events and member registrations
+  const [events, memberRegistrations] = await Promise.all([
+    getEventsForClass(member?.memberClass?.id!),
+    member?.id ? getMemberEventRegistrations(member.id) : Promise.resolve([]),
+  ]);
 
   // Create a map of eventIds to registration status
   const registrationStatusMap = new Map();

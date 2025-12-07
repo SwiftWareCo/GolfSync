@@ -5,18 +5,27 @@ import { Button } from "~/components/ui/button";
 import { Users, Ban, AlertCircle, CheckCircle, ClockIcon } from "lucide-react";
 import { formatTime12Hour } from "~/lib/dates";
 import type { Fill } from "~/server/db/schema";
-import { type Member } from "~/app/types/MemberTypes";
+
+// Member type for client-side usage
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
 
 // View types for UI state
 type TimeBlockMemberView = {
   id: number;
   firstName: string;
   lastName: string;
-  class?: string;
-  checkedIn: boolean;
+  checkedIn: boolean | null;
+  checkedInAt?: Date | null;
+  memberClass?: { label: string } | null;
+  [key: string]: any;
 };
-
-type TimeBlockFill = Fill;
 
 // Define ClientTimeBlock for client-side usage to avoid type conflicts
 type ClientTimeBlock = {
@@ -24,7 +33,7 @@ type ClientTimeBlock = {
   startTime: string;
   endTime: string;
   members: TimeBlockMemberView[];
-  fills: TimeBlockFill[];
+  fills: Fill[];
   maxMembers: number;
   [key: string]: any;
 };
@@ -38,7 +47,7 @@ export interface TimeBlockItemProps {
   onCancel: () => void;
   onShowDetails?: () => void;
   disabled?: boolean;
-  member?: Member;
+  member?: ClientMember;
   id?: string;
   isRestricted?: boolean;
 }

@@ -29,13 +29,22 @@ import { Clock, Dice1, CheckCircle, Users, Plus, X, Eye } from "lucide-react";
 import { formatDate } from "~/lib/dates";
 import { submitLotteryEntry } from "~/server/lottery/actions";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
-import type { Member } from "~/app/types/MemberTypes";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import {
   TeesheetConfigWithBlocks,
   type LotteryEntry,
 } from "~/server/db/schema";
 import { type LotteryFormInput } from "~/server/db/schema/lottery";
+
+// Member type for client-side usage
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
 
 // For the member search results
 interface SearchMember {
@@ -55,7 +64,7 @@ type FormData = z.infer<typeof lotteryEntrySchema>;
 
 interface LotteryEntryFormProps {
   lotteryDate: string;
-  member: Member;
+  member: ClientMember;
   config: TeesheetConfigWithBlocks;
   existingEntry?: LotteryEntry | null;
   onSuccess?: () => void;

@@ -33,7 +33,16 @@ import {
 import { formatDate, formatTime12Hour } from "~/lib/dates";
 import { cancelLotteryEntry } from "~/server/lottery/actions";
 import type { LotteryEntry } from "~/server/db/schema/lottery/lottery-entries.schema";
-import type { Member } from "~/app/types/MemberTypes";
+
+// Member type for client-side usage
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
 
 // LotteryGroup is stored as LotteryEntry in the database with memberIds array populated
 
@@ -41,7 +50,7 @@ interface LotteryEntryViewProps {
   lotteryDate: string;
   entry: LotteryEntry;
   entryType: "individual" | "group" | "group_member";
-  member: Member;
+  member: ClientMember;
   onEdit?: () => void;
   onCancel?: () => void;
 }

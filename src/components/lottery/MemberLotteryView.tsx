@@ -11,13 +11,22 @@ import {
 } from "~/components/ui/dialog";
 import { getDateForDB } from "~/lib/dates";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
-import type { Member } from "~/app/types/MemberTypes";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
+
+// Member type for client-side usage
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
 
 interface LotteryViewProps {
   selectedDate: string | Date;
   lotteryEntry?: LotteryEntryData;
-  member: Member;
+  member: ClientMember;
   date: Date;
   config: TeesheetConfigWithBlocks;
   showDatePicker: boolean;

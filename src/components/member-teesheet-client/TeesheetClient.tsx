@@ -24,17 +24,37 @@ import { LotteryView } from "../lottery/MemberLotteryView";
 import toast from "react-hot-toast";
 import { isPast, getDateForDB } from "~/lib/dates";
 import { parse } from "date-fns";
-import { type Member } from "~/app/types/MemberTypes";
 
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
-import type { Fill, TimeBlockMember } from "~/server/db/schema";
+import type { Fill } from "~/server/db/schema";
+
+// Member type for client-side usage - matches server response shape
+type ClientMember = {
+  id: number;
+  classId: number;
+  firstName: string;
+  lastName: string;
+  memberClass?: { id: number; label: string } | null;
+  [key: string]: any;
+};
+
+// Member view type for flattened timeblock members
+type TimeBlockMemberView = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  checkedIn: boolean | null;
+  checkedInAt?: Date | null;
+  memberClass?: { label: string } | null;
+  [key: string]: any;
+};
 
 // Define proper types that match TimeBlockItem requirements
 type ClientTimeBlock = {
   id: number;
   startTime: string;
   endTime: string;
-  members: TimeBlockMember[];
+  members: TimeBlockMemberView[];
   fills: Fill[];
   maxMembers: number;
   restriction?: {
@@ -130,7 +150,7 @@ export default function TeesheetClient({
   config: any;
   timeBlocks: ClientTimeBlock[];
   selectedDate: string | Date;
-  member: Member;
+  member: ClientMember;
   lotteryEntry?: LotteryEntryData;
   isLotteryEligible?: boolean;
   lotterySettings?: any;

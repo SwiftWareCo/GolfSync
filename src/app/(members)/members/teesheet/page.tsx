@@ -2,7 +2,6 @@ import { getMemberTeesheetDataWithRestrictions } from "~/server/members-teesheet
 import { getLotteryEntryData } from "~/server/lottery/data";
 import TeesheetClient from "../../../../components/member-teesheet-client/TeesheetClient";
 import { auth } from "@clerk/nextjs/server";
-import type { Member } from "~/app/types/MemberTypes";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
 import {
   getBCToday,
@@ -61,8 +60,8 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
     <TeesheetClient
       teesheet={teesheet}
       config={config}
-      timeBlocks={timeBlocks}
-      member={member as Member}
+      timeBlocks={timeBlocks as any}
+      member={member!}
       selectedDate={dateString}
       lotteryEntry={lotteryEntry}
       isLotteryEligible={isLotteryEligible}
