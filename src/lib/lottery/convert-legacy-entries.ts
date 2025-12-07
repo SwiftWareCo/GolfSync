@@ -227,15 +227,11 @@ export function matchPlayerToMember(
 }
 
 /**
- * Determine entry status from legacy flags
+ * Legacy entries are always imported as "PENDING" regardless of their old status.
+ * The legacy is_assigned/is_cancelled flags only indicate status in the OLD system.
+ * In the NEW system, entries must be processed through processLotteryForDate()
+ * to create actual timeBlockMembers records and appear in the teesheet.
  */
-function getEntryStatus(
-  entry: LegacyEntry,
-): "PENDING" | "ASSIGNED" | "CANCELLED" {
-  if (entry.is_cancelled) return "CANCELLED";
-  if (entry.is_assigned) return "ASSIGNED";
-  return "PENDING";
-}
 
 /**
  * Split member IDs into balanced groups with a maximum size
@@ -313,7 +309,8 @@ export function convertLegacyEntry(
     }
   }
 
-  const status = getEntryStatus(entry);
+  // Always import as PENDING - legacy status flags are ignored
+  const status = "PENDING" as const;
   const submissionTimestamp = entry.created_at
     ? new Date(entry.created_at)
     : new Date();
