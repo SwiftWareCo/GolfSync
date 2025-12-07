@@ -8,7 +8,9 @@ import toast from "react-hot-toast";
 import { subscribeUserToPushNotifications } from "~/server/pwa/actions";
 import { urlBase64ToUint8Array } from "~/lib/utils";
 import { type Member, type MemberClass } from "~/server/db/schema";
-import { NotificationBell } from "~/components/notifications/NotificationBell";
+import { NotificationCenter } from "~/components/notifications/NotificationCenter";
+import { Badge } from "~/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
 
 type MemberWithClass = Member & { memberClass: MemberClass | null };
 
@@ -18,7 +20,23 @@ interface FooterNavClientProps {
 
 export const FooterNavClient = ({ member }: FooterNavClientProps) => {
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const pathname = usePathname();
+
+  // Query for unread notification count
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["notifications", "unread-count", member?.id],
+    queryFn: async () => {
+      if (!member) return 0;
+      const response = await fetch(`/api/notifications/unread-count`);
+      if (!response.ok) return 0;
+      const data = await response.json();
+      return data.count ?? 0;
+    },
+    enabled: !!member,
+    refetchInterval: 30000, // Refresh every 30 seconds
+    staleTime: 10000,
+  });
 
   // Hide footer navigation on pace of play routes
   const isPaceOfPlayRoute = pathname.includes("/pace-of-play");
@@ -261,12 +279,23 @@ export const FooterNavClient = ({ member }: FooterNavClientProps) => {
           ))}
           {/* Notification Bell */}
           {member && (
-            <div className="flex flex-col items-center justify-center px-2 py-3">
-              <NotificationBell memberId={member.id} />
-              <span className="mt-1 text-xs font-medium text-gray-600">
-                Alerts
-              </span>
-            </div>
+            <button
+              onClick={() => setIsNotificationCenterOpen(true)}
+              className="hover:text-org-primary flex flex-col items-center justify-center px-2 py-3 text-xs text-gray-600 transition-colors"
+            >
+              <div className="relative">
+                <Bell size={20} className="text-gray-600" />
+                {unreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center p-0 text-[10px]"
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </Badge>
+                )}
+              </div>
+              <span className="mt-1 font-medium">Alerts</span>
+            </button>
           )}
         </div>
       </div>
@@ -278,6 +307,15 @@ export const FooterNavClient = ({ member }: FooterNavClientProps) => {
           accessFromMember={true}
           isOpen={isAccountDialogOpen}
           onClose={() => setIsAccountDialogOpen(false)}
+        />
+      )}
+
+      {/* Notification Center */}
+      {member && (
+        <NotificationCenter
+          memberId={member.id}
+          isOpen={isNotificationCenterOpen}
+          onClose={() => setIsNotificationCenterOpen(false)}
         />
       )}
     </>

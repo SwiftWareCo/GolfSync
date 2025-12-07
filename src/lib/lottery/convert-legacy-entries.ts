@@ -238,14 +238,45 @@ function getEntryStatus(
 }
 
 /**
+ * Split member IDs into balanced groups with a maximum size
+ * Ensures groups are as evenly sized as possible
+ *
+ * @example
+ * splitIntoBalancedGroups([1,2,3,4,5,6,7], 4) => [[1,2,3,4], [5,6,7]]
+ * splitIntoBalancedGroups([1,2,3,4,5], 4) => [[1,2,3], [4,5]]
+ */
+function splitIntoBalancedGroups(memberIds: number[], maxSize: number): number[][] {
+  if (memberIds.length <= maxSize) {
+    return [memberIds];
+  }
+
+  const numGroups = Math.ceil(memberIds.length / maxSize);
+  const baseSize = Math.floor(memberIds.length / numGroups);
+  const remainder = memberIds.length % numGroups;
+
+  const groups: number[][] = [];
+  let currentIndex = 0;
+
+  for (let i = 0; i < numGroups; i++) {
+    // First 'remainder' groups get baseSize + 1 members
+    const groupSize = i < remainder ? baseSize + 1 : baseSize;
+    groups.push(memberIds.slice(currentIndex, currentIndex + groupSize));
+    currentIndex += groupSize;
+  }
+
+  return groups;
+}
+
+/**
  * Convert a single legacy entry to our format
+ * Returns an array because entries with >4 players are split into multiple groups
  */
 export function convertLegacyEntry(
   entry: LegacyEntry,
   lotteryDate: string,
   members: MemberReference[],
   windows: DynamicTimeWindowInfo[],
-): ConvertedLotteryEntry | null {
+): ConvertedLotteryEntry[] | null {
   // Match all players
   const playerMatches = entry.players.map((player) =>
     matchPlayerToMember(player, members),
@@ -261,13 +292,7 @@ export function convertLegacyEntry(
     return null;
   }
 
-  // Find organizer (first matched player or user_id based)
-  const organizerMatch = playerMatches.find(
-    (m) => m.playerId === entry.user_id,
-  );
-  const organizerId = organizerMatch?.memberId ?? memberIds[0]!;
-
-  // Convert times to windows
+  // Convert times to windows (shared across all split groups)
   const desiredMinutes = parseTimeToMinutes(entry.desired_time);
   const earliestMinutes = parseTimeToMinutes(entry.earliest_time);
   const latestMinutes = parseTimeToMinutes(entry.latest_time);
@@ -288,18 +313,57 @@ export function convertLegacyEntry(
     }
   }
 
-  return {
-    memberIds,
-    organizerId,
-    lotteryDate,
-    preferredWindow,
-    alternateWindow,
-    status: getEntryStatus(entry),
-    submissionTimestamp: entry.created_at
-      ? new Date(entry.created_at)
-      : new Date(),
-    playerMatches,
-  };
+  const status = getEntryStatus(entry);
+  const submissionTimestamp = entry.created_at
+    ? new Date(entry.created_at)
+    : new Date();
+
+  // Split into groups if more than 4 players
+  // Never create INDIVIDUAL entries (min group size is 2)
+  if (memberIds.length > 4) {
+    const memberGroups = splitIntoBalancedGroups(memberIds, 4);
+
+    return memberGroups.map((groupMemberIds) => {
+      // Use first member of this group as organizer (ensures unique organizer per entry)
+      const organizerId = groupMemberIds[0]!;
+
+      // Filter player matches to only those in this group
+      const groupPlayerMatches = playerMatches.filter(
+        (match) => match.memberId && groupMemberIds.includes(match.memberId)
+      );
+
+      return {
+        memberIds: groupMemberIds,
+        organizerId,
+        lotteryDate,
+        preferredWindow,
+        alternateWindow,
+        status,
+        submissionTimestamp,
+        playerMatches: groupPlayerMatches,
+      };
+    });
+  }
+
+  // For 4 or fewer players, create a single entry
+  // Find organizer (first matched player or user_id based)
+  const organizerMatch = playerMatches.find(
+    (m) => m.playerId === entry.user_id,
+  );
+  const organizerId = organizerMatch?.memberId ?? memberIds[0]!;
+
+  return [
+    {
+      memberIds,
+      organizerId,
+      lotteryDate,
+      preferredWindow,
+      alternateWindow,
+      status,
+      submissionTimestamp,
+      playerMatches,
+    },
+  ];
 }
 
 /**
@@ -359,13 +423,23 @@ export function validateAndConvertEntries(
     const converted = convertLegacyEntry(legacy, lotteryDate, members, windows);
 
     if (converted) {
-      result.convertedEntries.push(converted);
+      // convertLegacyEntry now returns an array (could be multiple entries if split)
+      result.convertedEntries.push(...converted);
 
-      // Count match types
-      for (const match of converted.playerMatches) {
-        if (match.matchType === "exact") result.matchStats.exact++;
-        else if (match.matchType === "fuzzy") result.matchStats.fuzzy++;
-        else result.matchStats.unmatched++;
+      // Count match types for all entries
+      for (const entry of converted) {
+        for (const match of entry.playerMatches) {
+          if (match.matchType === "exact") result.matchStats.exact++;
+          else if (match.matchType === "fuzzy") result.matchStats.fuzzy++;
+          else result.matchStats.unmatched++;
+        }
+      }
+
+      // Add info message if entry was split
+      if (converted.length > 1) {
+        result.warnings.push(
+          `Entry ${i + 1} (ID: ${legacy.id}) with ${legacy.players.length} players was split into ${converted.length} groups`,
+        );
       }
     } else {
       result.warnings.push(
