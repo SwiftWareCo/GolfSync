@@ -14,6 +14,7 @@ export * from "./schema/restrictions/restrictions.schema";
 export * from "./schema/events/events.schema";
 export * from "./schema/events/event-registrations.schema";
 export * from "./schema/misc/course-info.schema";
+export * from "./schema/notifications/notifications.schema";
 
 // Re-export relation types from relations.ts
 export type {

@@ -28,7 +28,7 @@ export default async function MembersHome() {
   const upcomingTeeTimes = await getUpcomingTeeTimes(member as Member);
 
   // Get upcoming events for member's class
-  const upcomingEvents = await getUpcomingEvents(3, member?.memberClass?.label);
+  const upcomingEvents = await getUpcomingEvents(3, member?.memberClass?.id);
 
   // Get member registrations for these events
   const memberRegistrations = member?.id
@@ -53,7 +53,7 @@ export default async function MembersHome() {
               Quilchena Golf Course
             </h1>
             <p className="text-lg text-gray-600">
-              Welcome, {member.firstName}!
+              Welcome, {member?.firstName}!
             </p>
           </div>
         </div>
@@ -118,8 +118,7 @@ export default async function MembersHome() {
                         }
                       : null,
                     registrationsCount: event.registrationsCount,
-                    pendingRegistrationsCount:
-                      event.pendingRegistrationsCount,
+                    pendingRegistrationsCount: event.pendingRegistrationsCount,
                   }}
                   memberId={member?.id}
                   isRegistered={registrationMap.has(event.id)}

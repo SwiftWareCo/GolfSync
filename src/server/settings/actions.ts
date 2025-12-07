@@ -12,7 +12,6 @@ import { eq } from "drizzle-orm";
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "~/lib/auth-server";
-import { generateTimeBlocks } from "~/lib/utils";
 import type {
   ConfigBlockInsert,
   TeesheetConfigWithBlocksInsert,

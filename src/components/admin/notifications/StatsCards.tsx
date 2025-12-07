@@ -4,7 +4,7 @@ import { Card, CardHeader, CardContent, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Bell, Users, BarChart3, Wrench } from "lucide-react";
-import { runPushNotificationMaintenance } from "~/server/pwa/maintenance";
+import { runPushNotificationMaintenance } from "~/server/pwa/actions";
 import toast from "react-hot-toast";
 import { useState } from "react";
 

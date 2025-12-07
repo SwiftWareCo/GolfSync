@@ -2,7 +2,11 @@
 // Kept separate from schema.ts to avoid triggering relation evaluation during prerendering
 
 import { relations } from "drizzle-orm";
-import { members, memberClasses, type Member } from "./schema/core/members.schema";
+import {
+  members,
+  memberClasses,
+  type Member,
+} from "./schema/core/members.schema";
 import { guests, type Guest } from "./schema/core/guests.schema";
 import {
   timeBlocks,
@@ -34,6 +38,7 @@ import {
   memberFairnessScores,
   memberSpeedProfiles,
 } from "./schema/lottery";
+import { notifications } from "./schema/notifications/notifications.schema";
 
 // Cross-domain relations (defined here to avoid circular imports)
 
@@ -293,9 +298,20 @@ export const memberSpeedProfilesRelations = relations(
   }),
 );
 
+// Notifications Relations
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  member: one(members, {
+    fields: [notifications.memberId],
+    references: [members.id],
+  }),
+}));
+
 // Hydrated types with relations
 export type TimeBlockWithRelations = TimeBlockInsert & {
-  members: (Member & Pick<TimeBlockMember, "checkedIn" | "checkedInAt"> & { memberClass?: { label: string } | null })[];
+  members: (Member &
+    Pick<TimeBlockMember, "checkedIn" | "checkedInAt"> & {
+      memberClass?: { label: string } | null;
+    })[];
   guests: (Guest & { invitedByMemberId: number; invitedByMember?: Member })[];
   fills: Fill[];
   paceOfPlay: PaceOfPlay | null;

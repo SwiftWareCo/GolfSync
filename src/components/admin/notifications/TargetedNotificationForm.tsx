@@ -9,17 +9,12 @@ import { Label } from "~/components/ui/label";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Badge } from "~/components/ui/badge";
 import { Target, Send, Users } from "lucide-react";
-import { sendTargetedNotification } from "~/server/pwa/targeted-actions";
+import { sendTargetedNotification } from "~/server/pwa/actions";
 import toast from "react-hot-toast";
-
-interface ClassCount {
-  class: string;
-  totalCount: number;
-  subscribedCount: number;
-}
+import type { ClassCount } from "~/server/pwa/data";
 
 interface TargetedNotificationFormProps {
-  memberClasses?: string[];
+  memberClasses?: { id: number; label: string }[];
   classCounts?: ClassCount[];
   hideCard?: boolean;
 }
@@ -31,12 +26,12 @@ export function TargetedNotificationForm({
 }: TargetedNotificationFormProps) {
   const [title, setTitle] = useState("Quilchena Golf Club");
   const [message, setMessage] = useState("");
-  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<number[]>([]);
   const [isSending, setIsSending] = useState(false);
 
-  // Filter class counts based on selected classes
+  // Filter class counts based on selected class IDs
   const selectedClassCounts = (classCounts || []).filter((count) =>
-    selectedClasses.includes(count.class),
+    selectedClassIds.includes(count.classId),
   );
 
   const totalTargetedMembers = selectedClassCounts.reduce(
@@ -44,9 +39,9 @@ export function TargetedNotificationForm({
     0,
   );
 
-  const handleClassSelection = (className: string, checked: boolean) => {
-    setSelectedClasses((prev) =>
-      checked ? [...prev, className] : prev.filter((c) => c !== className),
+  const handleClassSelection = (classId: number, checked: boolean) => {
+    setSelectedClassIds((prev) =>
+      checked ? [...prev, classId] : prev.filter((id) => id !== classId),
     );
   };
 
@@ -56,7 +51,7 @@ export function TargetedNotificationForm({
       return;
     }
 
-    if (selectedClasses.length === 0) {
+    if (selectedClassIds.length === 0) {
       toast.error("Please select at least one member class");
       return;
     }
@@ -66,15 +61,15 @@ export function TargetedNotificationForm({
       const result = await sendTargetedNotification(
         title,
         message,
-        selectedClasses,
+        selectedClassIds,
       );
 
       if (result.success) {
         toast.success(
-          `Targeted notification sent to ${result.sent} members in ${result.targetClasses?.join(", ") || "selected classes"}! ${result.expired} expired subscriptions cleaned up.`,
+          `Targeted notification sent to ${result.sent} members! ${result.expired} expired subscriptions cleaned up.`,
         );
         setMessage("");
-        setSelectedClasses([]);
+        setSelectedClassIds([]);
       } else {
         toast.error(result.error || "Failed to send targeted notifications");
       }
@@ -111,27 +106,27 @@ export function TargetedNotificationForm({
       <div>
         <Label className="text-base font-medium">Select Member Classes</Label>
         <div className="mt-2 grid grid-cols-2 gap-3 md:grid-cols-3">
-          {(memberClasses || []).map((className) => (
-            <div key={className} className="flex items-center space-x-2">
+          {(memberClasses || []).map((mc) => (
+            <div key={mc.id} className="flex items-center space-x-2">
               <Checkbox
-                id={`class-${className}`}
-                checked={selectedClasses.includes(className)}
+                id={`class-${mc.id}`}
+                checked={selectedClassIds.includes(mc.id)}
                 onCheckedChange={(checked) =>
-                  handleClassSelection(className, checked as boolean)
+                  handleClassSelection(mc.id, checked as boolean)
                 }
               />
               <Label
-                htmlFor={`class-${className}`}
+                htmlFor={`class-${mc.id}`}
                 className="cursor-pointer text-sm font-normal"
               >
-                {className}
+                {mc.label}
               </Label>
             </div>
           ))}
         </div>
       </div>
 
-      {selectedClasses.length > 0 && (
+      {selectedClassIds.length > 0 && (
         <div className="rounded-lg border bg-gray-50 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -140,10 +135,10 @@ export function TargetedNotificationForm({
           <div className="space-y-2">
             {selectedClassCounts.map((count) => (
               <div
-                key={count.class}
+                key={count.classId}
                 className="flex items-center justify-between text-sm"
               >
-                <span className="font-medium">{count.class}</span>
+                <span className="font-medium">{count.classLabel}</span>
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="text-xs">
                     {count.subscribedCount} subscribed
@@ -171,14 +166,14 @@ export function TargetedNotificationForm({
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
-          {selectedClasses.length > 0
-            ? `This will send a notification to ${totalTargetedMembers} members in ${selectedClasses.length} class${selectedClasses.length > 1 ? "es" : ""}`
+          {selectedClassIds.length > 0
+            ? `This will send a notification to ${totalTargetedMembers} members in ${selectedClassIds.length} class${selectedClassIds.length > 1 ? "es" : ""}`
             : "Select member classes to send targeted notification"}
         </p>
         <Button
           onClick={handleSendTargetedNotification}
           disabled={
-            isSending || !message.trim() || selectedClasses.length === 0
+            isSending || !message.trim() || selectedClassIds.length === 0
           }
           className="min-w-[120px]"
         >

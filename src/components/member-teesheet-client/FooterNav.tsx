@@ -7,5 +7,6 @@ export async function FooterNav() {
 
   const member = await getMemberData(sessionClaims?.userId as string);
 
-  return <FooterNavClient member={member} isMember={true} />;
+  // Cast to any to resolve pushSubscription type mismatch (Drizzle returns unknown, but Member type expects Json)
+  return <FooterNavClient member={member as any} />;
 }

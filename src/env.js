@@ -13,10 +13,10 @@ export const env = createEnv({
       .default("development"),
     CLERK_SECRET_KEY: z.string().min(1),
     VAPID_PRIVATE_KEY: z.string().min(1),
-    WEATHER_API_KEY: z.string().min(1).optional(),
     DEFAULT_LAT: z.string().optional(),
     DEFAULT_LON: z.string().optional(),
     CRON_SECRET: z.string().min(1).optional(),
+    OPENWEATHER_API_KEY: z.string().min(1).optional(),
   },
 
   /**
@@ -49,7 +49,7 @@ export const env = createEnv({
       process.env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL,
     NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
-    WEATHER_API_KEY: process.env.WEATHER_API_KEY,
+    OPENWEATHER_API_KEY: process.env.OPENWEATHER_API_KEY,
     DEFAULT_LAT: process.env.DEFAULT_LAT,
     DEFAULT_LON: process.env.DEFAULT_LON,
     CRON_SECRET: process.env.CRON_SECRET,

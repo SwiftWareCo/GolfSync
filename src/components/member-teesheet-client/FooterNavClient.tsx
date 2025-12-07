@@ -4,17 +4,19 @@ import Link from "next/link";
 import { AccountDialog } from "./AccountDialog";
 import { Home, Calendar, User, Bell } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useClerk } from "@clerk/nextjs";
 import toast from "react-hot-toast";
 import { subscribeUserToPushNotifications } from "~/server/pwa/actions";
 import { urlBase64ToUint8Array } from "~/lib/utils";
+import { type Member, type MemberClass } from "~/server/db/schema";
+import { NotificationBell } from "~/components/notifications/NotificationBell";
+
+type MemberWithClass = Member & { memberClass: MemberClass | null };
 
 interface FooterNavClientProps {
-  member?: any;
-  isMember?: boolean;
+  member?: MemberWithClass;
 }
 
-export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
+export const FooterNavClient = ({ member }: FooterNavClientProps) => {
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const pathname = usePathname();
 
@@ -32,13 +34,13 @@ export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
       const showToast = () => {
         // Use a unique ID to prevent duplicate toasts
         const toastId = "push-notification-prompt";
-        
+
         // Check if this toast is already showing
         const existingToasts = document.querySelectorAll('[role="status"]');
-        const isAlreadyShowing = Array.from(existingToasts).some(
-          (toast) => toast.textContent?.includes("Stay updated with course notifications")
+        const isAlreadyShowing = Array.from(existingToasts).some((toast) =>
+          toast.textContent?.includes("Stay updated with course notifications"),
         );
-        
+
         if (isAlreadyShowing) {
           return;
         }
@@ -148,6 +150,49 @@ export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
     }
   }, [member]);
 
+  // Auto-resubscription: silently refresh push subscription on app load
+  // This handles the case where subscriptions expire server-side
+  useEffect(() => {
+    const autoResubscribe = async () => {
+      // Only run for members with notifications already enabled
+      if (!member || !member.pushNotificationsEnabled) return;
+
+      // Check if push is supported
+      if (!("serviceWorker" in navigator && "PushManager" in window)) return;
+
+      try {
+        // Ensure service worker is registered
+        await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        });
+
+        const registration = await navigator.serviceWorker.ready;
+
+        // Get fresh subscription (will return same if still valid, or new if expired)
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(
+            process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+          ),
+        });
+
+        // Update the subscription in the database (silently)
+        const serializedSubscription = JSON.parse(JSON.stringify(subscription));
+        await subscribeUserToPushNotifications(serializedSubscription);
+
+        console.log("Push subscription refreshed successfully");
+      } catch (error) {
+        console.error("Failed to auto-refresh push subscription:", error);
+        // Don't show error to user - this is a silent background operation
+      }
+    };
+
+    // Run after a short delay to not block initial render
+    const timer = setTimeout(autoResubscribe, 2000);
+    return () => clearTimeout(timer);
+  }, [member]);
+
   const isActive = (path: string) => {
     if (path === "/members" && pathname === "/members") {
       return true;
@@ -183,7 +228,7 @@ export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
     <>
       {/* Bottom Navigation Bar */}
       <div className="pb-safe fixed right-0 bottom-0 left-0 z-50 border-t border-gray-200 bg-white shadow-lg">
-        <div className="grid grid-cols-3">
+        <div className="grid grid-cols-4">
           {navItems.map((item, index) => (
             <div key={index}>
               {item.href ? (
@@ -214,16 +259,27 @@ export const FooterNavClient = ({ member, isMember }: FooterNavClientProps) => {
               )}
             </div>
           ))}
+          {/* Notification Bell */}
+          {member && (
+            <div className="flex flex-col items-center justify-center px-2 py-3">
+              <NotificationBell memberId={member.id} />
+              <span className="mt-1 text-xs font-medium text-gray-600">
+                Alerts
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Account Dialog */}
-      <AccountDialog
-        member={member}
-        isOpen={isAccountDialogOpen}
-        onClose={() => setIsAccountDialogOpen(false)}
-        isMember={isMember ?? false}
-      />
+      {member && (
+        <AccountDialog
+          player={{ member } as any}
+          accessFromMember={true}
+          isOpen={isAccountDialogOpen}
+          onClose={() => setIsAccountDialogOpen(false)}
+        />
+      )}
     </>
   );
 };
