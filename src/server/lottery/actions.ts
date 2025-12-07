@@ -1182,6 +1182,100 @@ export async function clearLotteryEntriesForDate(
 }
 
 /**
+ * [TESTING ONLY] Import legacy lottery entries from old app format
+ * Used for migrating data from the legacy teesheet system
+ */
+export async function importLegacyLotteryEntries(
+  lotteryDate: string,
+  entries: Array<{
+    memberIds: number[];
+    organizerId: number;
+    lotteryDate: string;
+    preferredWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING";
+    alternateWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING" | null;
+    status: "PENDING" | "ASSIGNED" | "CANCELLED";
+    submissionTimestamp: Date;
+  }>,
+): Promise<ActionResult> {
+  try {
+    if (entries.length === 0) {
+      return { success: false, error: "No entries to import" };
+    }
+
+    let importedCount = 0;
+    const failedEntries: string[] = [];
+
+    for (const entry of entries) {
+      try {
+        // Validate that all member IDs exist
+        const memberIds = await db.query.members.findMany({
+          where: inArray(members.id, entry.memberIds),
+        });
+
+        if (memberIds.length !== entry.memberIds.length) {
+          failedEntries.push(
+            `Entry with organizer ${entry.organizerId}: Some members not found`,
+          );
+          continue;
+        }
+
+        // Check if any member already has an entry for this date
+        const existingEntries = await db.query.lotteryEntries.findMany({
+          where: eq(lotteryEntries.lotteryDate, lotteryDate),
+        });
+
+        const conflictingMember = entry.memberIds.find((memberId) =>
+          existingEntries.some((e) => e.memberIds.includes(memberId)),
+        );
+
+        if (conflictingMember) {
+          const member = memberIds.find((m) => m.id === conflictingMember);
+          const memberName = member
+            ? `${member.firstName} ${member.lastName}`
+            : `Member #${conflictingMember}`;
+          failedEntries.push(
+            `${memberName} already has an entry for this date`,
+          );
+          continue;
+        }
+
+        // Create the lottery entry
+        await db.insert(lotteryEntries).values({
+          memberIds: entry.memberIds,
+          organizerId: entry.organizerId,
+          lotteryDate: entry.lotteryDate,
+          preferredWindow: entry.preferredWindow,
+          alternateWindow: entry.alternateWindow,
+          status: entry.status,
+          submissionTimestamp: entry.submissionTimestamp,
+        });
+
+        importedCount++;
+      } catch (entryError) {
+        failedEntries.push(
+          `Entry with organizer ${entry.organizerId}: ${entryError instanceof Error ? entryError.message : String(entryError)}`,
+        );
+      }
+    }
+
+    revalidatePath("/admin/lottery");
+    revalidatePath(`/admin/lottery/${lotteryDate}`);
+
+    return {
+      success: true,
+      data: {
+        importedCount,
+        totalAttempted: entries.length,
+        failedEntries,
+      },
+    };
+  } catch (error) {
+    console.error("Error importing legacy lottery entries:", error);
+    return { success: false, error: "Failed to import legacy lottery entries" };
+  }
+}
+
+/**
  * Batch update lottery assignments (save all client-side changes at once - consolidated schema)
  * This function actually moves the timeBlockMembers records, not just updates assignedTimeBlockId
  */

@@ -4,10 +4,11 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Settings, Sliders } from "lucide-react";
+import { Settings, Sliders, Upload } from "lucide-react";
 import { LotteryProcessor } from "./LotteryProcessor";
 import { LotteryResultsView } from "./LotteryResultsView";
 import { LotteryAlgorithmSettingsDialog } from "./LotteryAlgorithmSettingsDialog";
+import { ImportLegacyEntriesDialog } from "./ImportLegacyEntriesDialog";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import type {
   TeesheetConfigWithBlocks,
@@ -82,6 +83,7 @@ export function LotteryDashboard({
   const [isClearing, setIsClearing] = useState(false);
   const [processingExpanded, setProcessingExpanded] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
     title: "",
@@ -163,19 +165,27 @@ export function LotteryDashboard({
 
   return (
     <div className="space-y-6">
-      {/* Debug Controls - Available in production for now */}
+      {/* Testing Controls - Available in production for now */}
       <Card className="border-orange-200 bg-orange-50">
         <CardHeader>
-          <CardTitle className="text-orange-800">Lottery Controls</CardTitle>
+          <CardTitle className="text-orange-800">🧪 Testing Controls</CardTitle>
         </CardHeader>
-        <CardContent className="flex gap-4">
+        <CardContent className="flex flex-wrap gap-4">
+          <Button
+            onClick={() => setImportDialogOpen(true)}
+            variant="outline"
+            className="border-blue-300 text-blue-700 hover:bg-blue-100"
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Import Legacy Entries
+          </Button>
           <Button
             onClick={handleCreateTestEntries}
             disabled={isCreatingTest}
             variant="outline"
             className="border-orange-300 text-orange-700 hover:bg-orange-100"
           >
-            {isCreatingTest ? "Creating..." : "Create Test Entries"}
+            {isCreatingTest ? "Creating..." : "Create Random Test Entries"}
           </Button>
           <Button
             onClick={handleClearEntries}
@@ -268,6 +278,20 @@ export function LotteryDashboard({
         isOpen={settingsDialogOpen}
         onClose={() => setSettingsDialogOpen(false)}
         initialData={algorithmConfig}
+      />
+
+      {/* Import Legacy Entries Dialog */}
+      <ImportLegacyEntriesDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        lotteryDate={date}
+        members={members.map((m) => ({
+          id: m.id,
+          firstName: m.firstName,
+          lastName: m.lastName,
+        }))}
+        availableConfigs={teesheetData?.availableConfigs ?? []}
+        currentConfig={config}
       />
     </div>
   );

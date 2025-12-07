@@ -22,13 +22,12 @@
     "test:watch": "vitest --watch",
     "format:write": "prettier --write \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mdx}\" --cache",
-    "import-users": "tsx scripts/import-users.ts",
-    "analyze-duplicates": "tsx scripts/analyze-duplicates.ts",
-    "fix-member-numbers": "tsx scripts/fix-member-numbers.ts",
-    "export-members-for-clerk": "tsx scripts/export-members-for-clerk.ts",
+    "import-members": "tsx src/scripts/import-members.ts",
+    "import-members:clear": "tsx src/scripts/import-members.ts --clear",
+    "import-members:dry-run": "tsx src/scripts/import-members.ts --dry-run",
+    "export-members-for-clerk": "tsx src/scripts/export-members-for-clerk.ts",
     "import-pace-data": "tsx src/scripts/import-pace-data.ts",
-    "check-name-mapping": "tsx scripts/check-name-mapping.ts",
-    "migrate-member-classes": "tsx scripts/run-migration.ts"
+    "migrate-member-classes": "tsx src/scripts/run-migration.ts"
   },
   "dependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
