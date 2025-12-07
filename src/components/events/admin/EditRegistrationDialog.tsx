@@ -19,7 +19,7 @@ import { updateEventRegistrationDetails } from "~/server/events/actions";
 import { searchMembersAction, getMembersByIds } from "~/server/members/actions";
 import { searchGuestsAction, createGuest } from "~/server/guests/actions";
 import toast from "react-hot-toast";
-import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
+import { GuestForm } from "~/components/guests/GuestForm";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
 
 interface EditRegistrationDialogProps {
@@ -159,8 +159,7 @@ export function EditRegistrationDialog({
         // Filter out captain and already added team members
         const filtered = results.filter(
           (m: Member) =>
-            m.id !== captain?.id &&
-            !teamMembers.some((tm) => tm.id === m.id)
+            m.id !== captain?.id && !teamMembers.some((tm) => tm.id === m.id),
         );
         setMemberSearchResults(filtered);
       }
@@ -202,7 +201,9 @@ export function EditRegistrationDialog({
     }
 
     if (isMemberAlreadyRegistered(member.id)) {
-      toast.error(`${member.firstName} ${member.lastName} is already registered for this event`);
+      toast.error(
+        `${member.firstName} ${member.lastName} is already registered for this event`,
+      );
       return;
     }
 
@@ -332,11 +333,11 @@ export function EditRegistrationDialog({
           <div className="space-y-6 py-4">
             {/* Captain Section */}
             <div>
-              <Label className="text-sm font-semibold mb-2 block">
+              <Label className="mb-2 block text-sm font-semibold">
                 Registered by (Captain)
               </Label>
-              <div className="flex items-center gap-3 rounded-lg border bg-org-primary/5 border-org-primary/20 p-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-org-primary text-white font-medium">
+              <div className="bg-org-primary/5 border-org-primary/20 flex items-center gap-3 rounded-lg border p-3">
+                <div className="bg-org-primary flex h-10 w-10 items-center justify-center rounded-full font-medium text-white">
                   {captain?.firstName.charAt(0)}
                 </div>
                 <div className="flex-1">
@@ -352,7 +353,9 @@ export function EditRegistrationDialog({
 
             {/* Current People Count */}
             <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-3">
-              <span className="text-sm font-medium">People in Registration:</span>
+              <span className="text-sm font-medium">
+                People in Registration:
+              </span>
               <Badge variant={isFull ? "destructive" : "secondary"}>
                 {currentPeople} / {maxPeople}
               </Badge>
@@ -361,7 +364,7 @@ export function EditRegistrationDialog({
             {/* Team Members Section */}
             {!isFull && (
               <div>
-                <Label className="text-sm font-semibold mb-2 block">
+                <Label className="mb-2 block text-sm font-semibold">
                   Add Team Members
                 </Label>
                 <div className="space-y-3">
@@ -374,19 +377,20 @@ export function EditRegistrationDialog({
                     <p className="text-sm text-gray-500">Searching...</p>
                   )}
                   {memberSearchResults.length > 0 && (
-                    <div className="max-h-48 overflow-y-auto border rounded-md">
+                    <div className="max-h-48 overflow-y-auto rounded-md border">
                       {memberSearchResults.map((member) => (
                         <div
                           key={member.id}
-                          className="flex items-center justify-between p-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                          className="flex cursor-pointer items-center justify-between border-b p-2 last:border-b-0 hover:bg-gray-50"
                           onClick={() => handleAddTeamMember(member)}
                         >
                           <div>
-                            <div className="font-medium text-sm">
+                            <div className="text-sm font-medium">
                               {member.firstName} {member.lastName}
                             </div>
                             <div className="text-xs text-gray-500">
-                              #{member.memberNumber} - {member.memberClass.label}
+                              #{member.memberNumber} -{" "}
+                              {member.memberClass.label}
                             </div>
                           </div>
                           <UserPlus className="h-4 w-4 text-gray-400" />
@@ -401,7 +405,7 @@ export function EditRegistrationDialog({
             {/* Current Team Members */}
             {teamMembers.length > 0 && (
               <div>
-                <Label className="text-sm font-semibold mb-2 block">
+                <Label className="mb-2 block text-sm font-semibold">
                   Playing with ({teamMembers.length})
                 </Label>
                 <div className="space-y-2">
@@ -414,7 +418,7 @@ export function EditRegistrationDialog({
                         {member.firstName.charAt(0)}
                       </div>
                       <div className="flex-1">
-                        <div className="font-medium text-sm">
+                        <div className="text-sm font-medium">
                           {member.firstName} {member.lastName}
                         </div>
                         <div className="text-xs text-gray-500">
@@ -438,7 +442,7 @@ export function EditRegistrationDialog({
             {/* Fills Section (only if guests allowed) */}
             {guestsAllowed && !isFull && (
               <div>
-                <Label className="text-sm font-semibold mb-2 block">
+                <Label className="mb-2 block text-sm font-semibold">
                   Add Fills/Guests
                 </Label>
                 <Tabs defaultValue="search" className="w-full">
@@ -455,19 +459,21 @@ export function EditRegistrationDialog({
                       onChange={(e) => handleGuestSearch(e.target.value)}
                     />
                     {guestSearchResults.length > 0 && (
-                      <div className="max-h-48 overflow-y-auto border rounded-md">
+                      <div className="max-h-48 overflow-y-auto rounded-md border">
                         {guestSearchResults.map((guest) => (
                           <div
                             key={guest.id}
-                            className="flex items-center justify-between p-2 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                            className="flex cursor-pointer items-center justify-between border-b p-2 last:border-b-0 hover:bg-gray-50"
                             onClick={() => handleAddGuestFill(guest)}
                           >
                             <div>
-                              <div className="font-medium text-sm">
+                              <div className="text-sm font-medium">
                                 {guest.firstName} {guest.lastName}
                               </div>
                               <div className="text-xs text-gray-500">
-                                {guest.email || guest.phone || "No contact info"}
+                                {guest.email ||
+                                  guest.phone ||
+                                  "No contact info"}
                               </div>
                             </div>
                             <UserPlus className="h-4 w-4 text-gray-400" />
@@ -526,7 +532,7 @@ export function EditRegistrationDialog({
             {/* Current Fills */}
             {fills.length > 0 && (
               <div>
-                <Label className="text-sm font-semibold mb-2 block">
+                <Label className="mb-2 block text-sm font-semibold">
                   Fills ({fills.length})
                 </Label>
                 <div className="space-y-2">
@@ -539,10 +545,12 @@ export function EditRegistrationDialog({
                         F
                       </div>
                       <div className="flex-1">
-                        <div className="font-medium text-sm">
+                        <div className="text-sm font-medium">
                           {getFillDisplayName(fill)}
                         </div>
-                        <div className="text-xs text-gray-500">{fill.fillType}</div>
+                        <div className="text-xs text-gray-500">
+                          {fill.fillType}
+                        </div>
                       </div>
                       <Button
                         size="icon"
@@ -575,11 +583,20 @@ export function EditRegistrationDialog({
       </Dialog>
 
       {/* Add Guest Dialog */}
-      <AddGuestDialog
-        open={showAddGuestDialog}
-        onOpenChange={setShowAddGuestDialog}
-        onSubmit={handleCreateGuest}
-      />
+      <Dialog open={showAddGuestDialog} onOpenChange={setShowAddGuestDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Guest</DialogTitle>
+          </DialogHeader>
+          <GuestForm
+            mode="create"
+            onSuccess={() => {
+              setShowAddGuestDialog(false);
+            }}
+            onCancel={() => setShowAddGuestDialog(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

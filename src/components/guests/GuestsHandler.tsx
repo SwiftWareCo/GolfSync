@@ -1,18 +1,20 @@
 "use client";
+
 import { useState, useEffect } from "react";
-import { Button } from "~/components/ui/button";
-import { GuestTable } from "./GuestTable";
-import { AddGuestDialog } from "./AddGuestDialog";
-import { EditGuestDialog } from "./EditGuestDialog";
-import {
-  createGuest,
-  updateGuest,
-  deleteGuest,
-  searchGuestsAction,
-} from "~/server/guests/actions";
-import toast from "react-hot-toast";
 import { Plus } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { GuestTable } from "./GuestTable";
+import { GuestForm } from "./GuestForm";
 import { SearchBar } from "~/components/ui/search-bar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import { deleteGuest, searchGuestsAction } from "~/server/guests/actions";
+import toast from "react-hot-toast";
 import { type BaseGuest } from "~/app/types/GuestTypes";
 import { DeleteConfirmationDialog } from "~/components/ui/delete-confirmation-dialog";
 
@@ -26,8 +28,7 @@ export function GuestsHandler({ initialGuests }: GuestsHandlerProps) {
   const [guests, setGuests] = useState<BaseGuest[]>(initialGuests);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedGuest, setSelectedGuest] = useState<BaseGuest | null>(null);
 
@@ -55,71 +56,6 @@ export function GuestsHandler({ initialGuests }: GuestsHandlerProps) {
     return () => clearTimeout(timer);
   }, [searchQuery, initialGuests]);
 
-  const handleAddGuest = async (data: {
-    firstName: string;
-    lastName: string;
-    email?: string;
-    phone?: string;
-  }) => {
-    try {
-      const result = await createGuest(data);
-
-      if (result.success && result.data) {
-        // Type assertion to match BaseGuest
-        const newGuest = {
-          id: result.data.id,
-          firstName: result.data.firstName,
-          lastName: result.data.lastName,
-          email: result.data.email,
-          phone: result.data.phone,
-        } as BaseGuest;
-
-        setGuests([...guests, newGuest]);
-        toast.success("Guest created successfully");
-      } else {
-        toast.error(result.error || "Failed to create guest");
-      }
-    } catch (error) {
-      toast.error("An error occurred");
-      console.error(error);
-    }
-  };
-
-  const handleEditGuest = async (
-    guestId: number,
-    data: {
-      firstName: string;
-      lastName: string;
-      email?: string;
-      phone?: string;
-    },
-  ) => {
-    try {
-      const result = await updateGuest(guestId, data);
-
-      if (result.success && result.data) {
-        // Type assertion to match BaseGuest
-        const updatedGuest = {
-          id: result.data.id,
-          firstName: result.data.firstName,
-          lastName: result.data.lastName,
-          email: result.data.email,
-          phone: result.data.phone,
-        } as BaseGuest;
-
-        setGuests(
-          guests.map((guest) => (guest.id === guestId ? updatedGuest : guest)),
-        );
-        toast.success("Guest updated successfully");
-      } else {
-        toast.error(result.error || "Failed to update guest");
-      }
-    } catch (error) {
-      toast.error("An error occurred");
-      console.error(error);
-    }
-  };
-
   const handleDeleteGuest = async () => {
     if (!selectedGuest) return;
 
@@ -140,53 +76,79 @@ export function GuestsHandler({ initialGuests }: GuestsHandlerProps) {
     }
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Guests</h1>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Guest
-        </Button>
-      </div>
+  const resetForm = () => {
+    setIsFormOpen(false);
+    setSelectedGuest(null);
+  };
 
-      <div className="space-y-4">
-        <div className="w-full">
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Guests</CardTitle>
+              <p className="text-muted-foreground mt-1.5 text-sm">
+                Manage guest visitors and their information
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                setSelectedGuest(null);
+                setIsFormOpen(true);
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Guest
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
           <SearchBar
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Search guests by name or email..."
           />
-        </div>
 
-        <GuestTable
-          guests={getCurrentPageGuests()}
-          onEdit={(guest) => {
-            setSelectedGuest(guest);
-            setIsEditDialogOpen(true);
-          }}
-          onDelete={(guest) => {
-            setSelectedGuest(guest);
-            setIsDeleteDialogOpen(true);
-          }}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-        />
-      </div>
+          <GuestTable
+            guests={getCurrentPageGuests()}
+            onEdit={(guest) => {
+              setSelectedGuest(guest);
+              setIsFormOpen(true);
+            }}
+            onDelete={(guest) => {
+              setSelectedGuest(guest);
+              setIsDeleteDialogOpen(true);
+            }}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+          />
+        </CardContent>
+      </Card>
 
-      <AddGuestDialog
-        open={isAddDialogOpen}
-        onOpenChange={setIsAddDialogOpen}
-        onSubmit={handleAddGuest}
-      />
-
-      <EditGuestDialog
-        guest={selectedGuest}
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        onSave={handleEditGuest}
-      />
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          if (!open) resetForm();
+          else setIsFormOpen(true);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedGuest ? "Edit Guest" : "Add Guest"}
+            </DialogTitle>
+          </DialogHeader>
+          <GuestForm
+            mode={selectedGuest ? "edit" : "create"}
+            guest={selectedGuest ?? undefined}
+            onSuccess={resetForm}
+            onCancel={resetForm}
+          />
+        </DialogContent>
+      </Dialog>
 
       <DeleteConfirmationDialog
         open={isDeleteDialogOpen}
@@ -200,6 +162,6 @@ export function GuestsHandler({ initialGuests }: GuestsHandlerProps) {
             : undefined
         }
       />
-    </div>
+    </>
   );
 }

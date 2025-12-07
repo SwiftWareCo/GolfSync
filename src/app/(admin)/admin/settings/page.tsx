@@ -64,7 +64,7 @@ async function RestrictionsTab() {
 
 async function MemberClassesTab() {
   const allMemberClasses = await getAllMemberClasses();
-  return <MemberClassesSettings initialMemberClasses={allMemberClasses} />;
+  return <MemberClassesSettings MemberClasses={allMemberClasses} />;
 }
 
 async function OverridesTab() {

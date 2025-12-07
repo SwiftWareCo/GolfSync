@@ -61,7 +61,7 @@ export function MembersTable({
     },
     {
       header: "Class",
-      accessorKey: "class",
+      cell: (member) => member.memberClass?.label ?? "—",
     },
     {
       header: "Email",
@@ -106,7 +106,7 @@ export function MembersTable({
       `${member.firstName} ${member.lastName}`.toLowerCase().includes(term) ||
       member.email.toLowerCase().includes(term) ||
       member.memberNumber.toLowerCase().includes(term) ||
-      member.class.toLowerCase().includes(term)
+      (member.memberClass?.label ?? "").toLowerCase().includes(term)
     );
   };
 

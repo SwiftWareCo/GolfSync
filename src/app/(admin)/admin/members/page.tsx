@@ -11,6 +11,7 @@ export default async function MembersPage() {
     getActiveMemberClasses(),
   ]);
 
+
   return (
     <div className="container space-y-6">
       <PageHeader

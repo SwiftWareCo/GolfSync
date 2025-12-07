@@ -15,9 +15,14 @@ import {
 import { FillForm } from "./fills/FillForm";
 import toast from "react-hot-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { type RestrictionViolation } from "~/app/types/RestrictionTypes";
 import { RestrictionViolationAlert } from "~/components/settings/timeblock-restrictions/RestrictionViolationAlert";
-import { AddGuestDialog } from "~/components/guests/AddGuestDialog";
 import { createGuest } from "~/server/guests/actions";
 import type { GuestFormValues } from "~/app/types/GuestTypes";
 import {
@@ -29,6 +34,7 @@ import {
 import { addMemberToTimeBlock } from "~/server/members/actions";
 import { addGuestToTimeBlock } from "~/server/guests/actions";
 import { teesheetKeys } from "~/services/teesheet/keys";
+import { GuestForm } from "../guests/GuestForm";
 
 interface TimeBlockMemberManagerProps {
   timeBlock: TimeBlockWithRelations;
@@ -739,11 +745,18 @@ export function TimeBlockMemberManager({
       />
 
       {/* Add Guest Dialog */}
-      <AddGuestDialog
-        open={showAddGuestDialog}
-        onOpenChange={setShowAddGuestDialog}
-        onSubmit={handleCreateGuest}
-      />
+      <Dialog open={showAddGuestDialog} onOpenChange={setShowAddGuestDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Guest</DialogTitle>
+          </DialogHeader>
+          <GuestForm
+            mode="create"
+            onSuccess={() => setShowAddGuestDialog(false)}
+            onCancel={() => setShowAddGuestDialog(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

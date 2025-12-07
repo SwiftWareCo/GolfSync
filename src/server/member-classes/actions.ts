@@ -1,49 +1,19 @@
 "use server";
 
 import { db } from "~/server/db";
-import { memberClasses, members } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  memberClasses,
+  timeblockRestrictions,
+  events,
+} from "~/server/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { type MemberClassInsert } from "~/server/db/schema";
-import { getActiveMemberClasses, getAllMemberClasses, getMemberClassById } from "./data";
+
 
 export interface ActionResult {
   success: boolean;
   error?: string;
   data?: any;
-}
-
-// Query actions for client components
-export async function getMemberClassesAction() {
-  try {
-    const classes = await getActiveMemberClasses();
-    return { success: true, data: classes };
-  } catch (error) {
-    console.error("Error fetching member classes:", error);
-    return { success: false, error: "Failed to fetch member classes", data: [] };
-  }
-}
-
-export async function getAllMemberClassesAction() {
-  try {
-    const classes = await getAllMemberClasses();
-    return { success: true, data: classes };
-  } catch (error) {
-    console.error("Error fetching all member classes:", error);
-    return { success: false, error: "Failed to fetch member classes", data: [] };
-  }
-}
-
-export async function getMemberClassByIdAction(id: number) {
-  try {
-    const memberClass = await getMemberClassById(id);
-    if (!memberClass) {
-      return { success: false, error: "Member class not found" };
-    }
-    return { success: true, data: memberClass };
-  } catch (error) {
-    console.error("Error fetching member class:", error);
-    return { success: false, error: "Failed to fetch member class" };
-  }
 }
 
 // Create new member class
@@ -104,41 +74,58 @@ export async function deleteMemberClassAction(
   id: number,
 ): Promise<ActionResult> {
   try {
-    // Get member class to check if system generated
+    // Verify member class exists
     const memberClass = await db.query.memberClasses.findFirst({
       where: eq(memberClasses.id, id),
     });
 
     if (!memberClass) {
-      throw new Error("Member class not found");
+      return { success: false, error: "Member class not found" };
     }
 
-    if (memberClass.isSystemGenerated) {
-      throw new Error("Cannot delete system generated member class");
+    // Check if class is referenced in restriction/event arrays
+    // (These are NOT FK constraints, so we must check manually to prevent orphaned IDs)
+    const restrictionsUsingClass =
+      await db.query.timeblockRestrictions.findFirst({
+        where: sql`${id} = ANY(${timeblockRestrictions.memberClassIds})`,
+      });
+
+    if (restrictionsUsingClass) {
+      return {
+        success: false,
+        error: "Cannot delete: class is used by timeblock restrictions",
+      };
     }
 
-    // Check if any members are using this class
-    const membersUsingClass = await db.query.members.findFirst({
-      where: eq(members.classId, id),
+    const eventsUsingClass = await db.query.events.findFirst({
+      where: sql`${id} = ANY(${events.memberClassIds})`,
     });
 
-    if (membersUsingClass) {
-      throw new Error("Cannot delete member class that is in use by members");
+    if (eventsUsingClass) {
+      return {
+        success: false,
+        error: "Cannot delete: class is used by events",
+      };
     }
 
-    const result = await db
-      .delete(memberClasses)
-      .where(eq(memberClasses.id, id));
-    const success = result.rowCount > 0;
-    return { success, data: success };
+    // Attempt delete - members.classId FK will throw if members exist
+    await db.delete(memberClasses).where(eq(memberClasses.id, id));
+    return { success: true };
   } catch (error) {
     console.error("Error deleting member class:", error);
+
+    // Check for FK violation (members using this class)
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("violates foreign key constraint")) {
+      return {
+        success: false,
+        error: "Cannot delete: class is assigned to members",
+      };
+    }
+
     return {
       success: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to delete member class",
+      error: "Failed to delete member class",
     };
   }
 }

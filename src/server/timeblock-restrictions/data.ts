@@ -47,26 +47,6 @@ export async function getTimeblockRestrictionsByCategory(
   }
 }
 
-// Get timeblock restriction by ID
-export async function getTimeblockRestrictionById(
-  id: number,
-): Promise<ResultType<any>> {
-  try {
-    const restriction = await db.query.timeblockRestrictions.findFirst({
-      where: eq(timeblockRestrictions.id, id),
-    });
-
-    if (!restriction) {
-      return { success: false, error: "Restriction not found" };
-    }
-
-    return restriction;
-  } catch (error) {
-    console.error("Error getting timeblock restriction by ID:", error);
-    return { success: false, error: "Failed to get restriction" };
-  }
-}
-
 /**
  * Check restrictions for multiple timeblocks in a batch to improve performance
  */

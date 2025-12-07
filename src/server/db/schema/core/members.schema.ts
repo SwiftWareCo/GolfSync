@@ -26,7 +26,6 @@ export const memberClasses = createTable(
     label: varchar("label", { length: 100 }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
-    isSystemGenerated: boolean("is_system_generated").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),

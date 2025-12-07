@@ -168,7 +168,7 @@ export function MultiSelect({
           e.stopPropagation();
         }}
       >
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search options..."
             value={searchQuery}
@@ -183,7 +183,7 @@ export function MultiSelect({
             {filteredOptions.map((option) => (
               <CommandItem
                 key={option.value}
-                value={option.value}
+                value={option.label}
                 className={cn(
                   "flex cursor-pointer items-center",
                   selectedSet.has(option.value) && "bg-org-primary-light",

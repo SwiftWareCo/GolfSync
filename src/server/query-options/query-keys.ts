@@ -21,34 +21,6 @@ export const queryKeys = {
     search: (query: string) => ['guests', 'search', query] as const,
     byId: (id: number) => ['guests', 'byId', id] as const,
   },
-
-  // Timeblock queries
-  timeblocks: {
-    all: () => ['timeblocks'] as const,
-    byId: (id: number) => ['timeblocks', 'byId', id] as const,
-    byDate: (date: string) => ['timeblocks', 'date', date] as const,
-  },
-
-  // Pace of play queries
-  paceOfPlay: {
-    all: () => ['paceOfPlay'] as const,
-    byDate: (date: string) => ['paceOfPlay', 'date', date] as const,
-  },
-
-  // Restriction queries (timeblock restrictions)
-  restrictions: {
-    all: () => ['restrictions'] as const,
-    check: (params: any) => ['restrictions', 'check', params] as const,
-    timeblocks: () => ['restrictions', 'timeblocks'] as const,
-    overrides: () => ['restrictions', 'overrides'] as const,
-  },
-
-  // Config queries
-  configs: {
-    all: () => ['configs'] as const,
-    teesheet: () => ['configs', 'teesheet'] as const,
-  },
-
   // Lottery queries
   lottery: {
     all: () => ['lottery'] as const,
@@ -67,12 +39,5 @@ export const queryKeys = {
     courseInfo: () => ['settings', 'courseInfo'] as const,
     teesheetConfigs: () => ['settings', 'teesheetConfigs'] as const,
     teesheetVisibility: (teesheetId: number) => ['settings', 'teesheetVisibility', teesheetId] as const,
-  },
-
-  // Member classes queries
-  memberClasses: {
-    all: () => ['memberClasses'] as const,
-    active: () => ['memberClasses', 'active'] as const,
-    byId: (id: number) => ['memberClasses', 'byId', id] as const,
   },
 } as const;

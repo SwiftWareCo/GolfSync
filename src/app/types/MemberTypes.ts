@@ -3,7 +3,6 @@ export interface MemberClass {
   label: string;
   isActive: boolean;
   sortOrder: number;
-  isSystemGenerated: boolean;
   createdAt: Date;
   updatedAt: Date | null;
 }

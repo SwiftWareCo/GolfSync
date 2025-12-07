@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -14,31 +15,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
 import { Badge } from "~/components/ui/badge";
 import { LoadingSpinner } from "~/components/ui/loading-spinner";
 import { DeleteConfirmationDialog } from "~/components/ui/delete-confirmation-dialog";
 import { toast } from "react-hot-toast";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  GripVertical,
-  Shield,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { Plus, Edit, Trash2, Eye, EyeOff } from "lucide-react";
 import type { MemberClass } from "~/server/db/schema";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { memberClassesQueryOptions } from "~/server/query-options/member-classes-query-options";
-import { memberClassesMutations } from "~/server/query-options/member-classes-mutation-options";
+import {
+  BaseDataTable,
+  type ActionDef,
+  type ColumnDef,
+} from "~/components/ui/BaseDataTable";
+import {
+  createMemberClassAction,
+  updateMemberClassAction,
+  deleteMemberClassAction,
+} from "~/server/member-classes/actions";
 
 interface MemberClassForm {
   label: string;
@@ -53,22 +45,20 @@ const initialForm: MemberClassForm = {
 };
 
 interface MemberClassesSettingsProps {
-  initialMemberClasses: MemberClass[];
+  MemberClasses: MemberClass[];
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export function MemberClassesSettings({
-  initialMemberClasses,
+  MemberClasses,
 }: MemberClassesSettingsProps) {
-  const queryClient = useQueryClient();
-
-  // Use TanStack Query for member classes
-  const { data: memberClasses = initialMemberClasses, isLoading } = useQuery(
-    memberClassesQueryOptions.all()
-  );
-
+  const router = useRouter();
   const [showDialog, setShowDialog] = useState(false);
   const [editingClass, setEditingClass] = useState<MemberClass | null>(null);
   const [form, setForm] = useState<MemberClassForm>(initialForm);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
     memberClass: MemberClass | null;
@@ -77,61 +67,99 @@ export function MemberClassesSettings({
     memberClass: null,
   });
 
-  // Setup mutations with factory pattern
-  const createMutation = useMutation({
-    ...memberClassesMutations.create(queryClient),
-    onSuccess: () => {
-      toast.success("Member class created successfully");
-      setShowDialog(false);
-      setForm(initialForm);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to create member class");
-    },
-  });
+  // Pagination
+  const totalPages = Math.ceil(MemberClasses.length / ITEMS_PER_PAGE);
+  const paginatedClasses = MemberClasses.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
 
-  const updateMutation = useMutation({
-    ...memberClassesMutations.update(queryClient),
-    onSuccess: () => {
-      toast.success("Member class updated successfully");
-      setShowDialog(false);
-      setEditingClass(null);
-      setForm(initialForm);
+  // Column definitions for BaseDataTable
+  const columns: ColumnDef<MemberClass>[] = [
+    {
+      header: "#",
+      cell: (item) => (
+        <span className="text-muted-foreground font-mono text-sm">
+          {MemberClasses.indexOf(item) + 1}
+        </span>
+      ),
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to update member class");
+    {
+      header: "Label",
+      cell: (item) => <span className="font-medium">{item.label}</span>,
     },
-  });
+    {
+      header: "Status",
+      cell: (item) => (
+        <Badge
+          variant={item.isActive ? "default" : "secondary"}
+          className="gap-1"
+        >
+          {item.isActive ? (
+            <>
+              <Eye className="h-3 w-3" />
+              Active
+            </>
+          ) : (
+            <>
+              <EyeOff className="h-3 w-3" />
+              Inactive
+            </>
+          )}
+        </Badge>
+      ),
+    },
+  ];
 
-  const deleteMutation = useMutation({
-    ...memberClassesMutations.delete(queryClient),
-    onSuccess: () => {
-      toast.success("Member class deleted successfully");
-      setDeleteDialog({ open: false, memberClass: null });
+  // Action definitions for BaseDataTable
+  const actions: ActionDef<MemberClass>[] = [
+    {
+      label: "Edit",
+      icon: <Edit className="mr-2 h-4 w-4" />,
+      onClick: handleEdit,
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "Failed to delete member class");
+    {
+      label: "Delete",
+      icon: <Trash2 className="mr-2 h-4 w-4" />,
+      onClick: (item) => setDeleteDialog({ open: true, memberClass: item }),
+      className: "text-destructive",
     },
-  });
+  ];
 
   // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    if (editingClass) {
-      // Update existing class
-      updateMutation.mutate({
-        id: editingClass.id,
-        data: form,
-      });
-    } else {
-      // Create new class
-      createMutation.mutate(form);
+    try {
+      if (editingClass) {
+        const result = await updateMemberClassAction(editingClass.id, form);
+        if (result.success) {
+          toast.success("Member class updated");
+          setShowDialog(false);
+          router.refresh();
+        } else {
+          toast.error(result.error ?? "Failed to update member class");
+        }
+      } else {
+        const result = await createMemberClassAction(form);
+        if (result.success) {
+          toast.success("Member class created");
+          setShowDialog(false);
+          router.refresh();
+        } else {
+          toast.error(result.error ?? "Failed to create member class");
+        }
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsSubmitting(false);
     }
-  };
+  }
 
   // Handle edit
-  const handleEdit = (memberClass: MemberClass) => {
+  function handleEdit(memberClass: MemberClass) {
     setEditingClass(memberClass);
     setForm({
       label: memberClass.label,
@@ -139,118 +167,71 @@ export function MemberClassesSettings({
       sortOrder: memberClass.sortOrder,
     });
     setShowDialog(true);
-  };
+  }
 
   // Handle delete
-  const handleDelete = (memberClass: MemberClass) => {
-    deleteMutation.mutate(memberClass.id);
-  };
+  async function handleDelete(memberClass: MemberClass) {
+    try {
+      const result = await deleteMemberClassAction(memberClass.id);
+      if (result.success) {
+        toast.success("Member class deleted");
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Failed to delete member class");
+      }
+    } catch (error) {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setDeleteDialog({ open: false, memberClass: null });
+    }
+  }
+
+  // Reset form when dialog closes
+  function handleDialogChange(open: boolean) {
+    setShowDialog(open);
+    if (!open) {
+      setEditingClass(null);
+      setForm(initialForm);
+    }
+  }
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Member Classes</CardTitle>
-            <p className="mt-1 text-sm text-gray-600">
-              Manage member class types and their display order
+            <p className="text-muted-foreground mt-1.5 text-sm">
+              Manage membership categories and their visibility
             </p>
           </div>
           <Button
             onClick={() => {
               setEditingClass(null);
-              setForm({ ...initialForm, sortOrder: memberClasses.length });
+              setForm({ ...initialForm, sortOrder: MemberClasses.length });
               setShowDialog(true);
             }}
+            className="gap-2"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Member Class
+            <Plus className="h-4 w-4" />
+            Add Class
           </Button>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">Order</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead className="w-32">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {memberClasses.map((memberClass, index) => (
-                <TableRow key={memberClass.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <GripVertical className="h-4 w-4 text-gray-400" />
-                      <span className="text-sm text-gray-600">{index + 1}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {memberClass.label}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={memberClass.isActive ? "default" : "secondary"}
-                    >
-                      {memberClass.isActive ? (
-                        <>
-                          <Eye className="mr-1 h-3 w-3" />
-                          Active
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="mr-1 h-3 w-3" />
-                          Inactive
-                        </>
-                      )}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {memberClass.isSystemGenerated && (
-                      <Badge variant="outline">
-                        <Shield className="mr-1 h-3 w-3" />
-                        System
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(memberClass)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      {!memberClass.isSystemGenerated && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setDeleteDialog({
-                              open: true,
-                              memberClass,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <BaseDataTable
+          data={paginatedClasses}
+          columns={columns}
+          actions={actions}
+          emptyMessage="No member classes found. Create one to get started."
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+        />
 
         {/* Add/Edit Dialog */}
-        <Dialog open={showDialog} onOpenChange={setShowDialog}>
-          <DialogContent>
+        <Dialog open={showDialog} onOpenChange={handleDialogChange}>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
                 {editingClass ? "Edit Member Class" : "Add Member Class"}
@@ -258,7 +239,7 @@ export function MemberClassesSettings({
               <DialogDescription>
                 {editingClass
                   ? "Update the member class details"
-                  : "Create a new member class"}
+                  : "Create a new member class category"}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit}>
@@ -275,7 +256,15 @@ export function MemberClassesSettings({
                     required
                   />
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="isActive" className="text-sm font-medium">
+                      Active Status
+                    </Label>
+                    <p className="text-muted-foreground text-xs">
+                      Inactive classes won't appear in selections
+                    </p>
+                  </div>
                   <Switch
                     id="isActive"
                     checked={form.isActive}
@@ -283,7 +272,6 @@ export function MemberClassesSettings({
                       setForm({ ...form, isActive: checked })
                     }
                   />
-                  <Label htmlFor="isActive">Active</Label>
                 </div>
               </div>
               <DialogFooter>
@@ -294,11 +282,8 @@ export function MemberClassesSettings({
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending}
-                >
-                  {(createMutation.isPending || updateMutation.isPending) ? (
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
                     <>
                       <LoadingSpinner className="mr-2 h-4 w-4" />
                       Saving...
