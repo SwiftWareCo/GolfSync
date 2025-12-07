@@ -11,11 +11,9 @@ import {
   getMemberPaceOfPlayHistory,
 } from "./data";
 import { db } from "../db";
-import { and, eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   timeBlocks,
-  timeBlockMembers,
-  paceOfPlay,
   memberSpeedProfiles,
 } from "../db/schema";
 import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
@@ -23,6 +21,7 @@ import {
   calculatePaceStatus,
   mapPaceStatusToDbStatus,
 } from "~/lib/pace-helpers";
+import { parseDateTime, getDateForDB } from "~/lib/dates";
 
 // Constants for round validation
 const MIN_ROUND_MINUTES = 180; // 3 hours
@@ -88,21 +87,11 @@ export async function initializePaceOfPlay(
 
   if (scheduledTeeTimeStr) {
     try {
-      // Extract hours and minutes from the time string (e.g. "11:45")
-      const parts = scheduledTeeTimeStr.split(":");
-      if (parts.length >= 2 && parts[0] && parts[1]) {
-        const hours = parseInt(parts[0], 10);
-        const minutes = parseInt(parts[1], 10);
+      // Get today's date in YYYY-MM-DD format (BC timezone)
+      const todayBC = getDateForDB(startTime);
 
-        if (!isNaN(hours) && !isNaN(minutes)) {
-          // Create a new date with today's date but with the scheduled hours/minutes
-          teeTimeDate = new Date(startTime); // Clone the date
-          teeTimeDate.setHours(hours);
-          teeTimeDate.setMinutes(minutes);
-          teeTimeDate.setSeconds(0);
-          teeTimeDate.setMilliseconds(0);
-        }
-      }
+      // Parse the tee time in BC timezone
+      teeTimeDate = parseDateTime(todayBC, scheduledTeeTimeStr);
     } catch (error) {
       console.error("Error parsing tee time:", error);
     }
