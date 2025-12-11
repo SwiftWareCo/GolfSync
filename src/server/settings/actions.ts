@@ -16,6 +16,11 @@ import type {
   ConfigBlockInsert,
   TeesheetConfigWithBlocksInsert,
 } from "~/server/db/schema";
+import {
+  validateConfigDaysOfWeek,
+  validateConfigName,
+  validateBlockStructure,
+} from "./data";
 
 export async function deleteTeesheetConfig(
   previousState: any,
@@ -173,7 +178,57 @@ export async function createTeesheetConfig(
   try {
     const { id, blocks, ...configData } = data;
 
-    // Create the config
+    // VALIDATION 1: Check for duplicate name
+    const nameValidation = await validateConfigName(null, configData.name);
+    if (!nameValidation.isValid) {
+      return {
+        success: false,
+        error: `A configuration with the name "${configData.name}" already exists.`,
+      };
+    }
+
+    // VALIDATION 2: Check for duplicate block structure
+    const blockValidation = await validateBlockStructure(
+      null,
+      blocks || [],
+      blocks?.[0]?.displayName,
+    );
+    if (!blockValidation.isValid) {
+      return {
+        success: false,
+        error: `This time block configuration already exists in "${blockValidation.duplicateConfigName}". Please modify the blocks or display name.`,
+      };
+    }
+
+    // VALIDATION 3: Check for day-of-week conflicts (if active)
+    const dayValidation = await validateConfigDaysOfWeek(
+      null,
+      configData.daysOfWeek || [],
+      configData.isActive || false,
+    );
+    if (!dayValidation.isValid) {
+      const dayNames = dayValidation.conflictingDays
+        .map(
+          (d) =>
+            [
+              "Sunday",
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+            ][d],
+        )
+        .join(", ");
+
+      return {
+        success: false,
+        error: `Cannot activate config: conflicts with existing configs on ${dayNames}. Conflicting configs: ${dayValidation.conflictingConfigNames.join(", ")}`,
+      };
+    }
+
+    // All validations passed, proceed with creation
     const [createdConfig] = await db
       .insert(teesheetConfigs)
       .values(configData)
@@ -229,7 +284,57 @@ export async function updateTeesheetConfig(
       throw new Error("Configuration not found");
     }
 
-    // Update the config
+    // VALIDATION 1: Check for duplicate name
+    const nameValidation = await validateConfigName(id, configData.name);
+    if (!nameValidation.isValid) {
+      return {
+        success: false,
+        error: `A configuration with the name "${configData.name}" already exists.`,
+      };
+    }
+
+    // VALIDATION 2: Check for duplicate block structure
+    const blockValidation = await validateBlockStructure(
+      id,
+      blocks || [],
+      blocks?.[0]?.displayName,
+    );
+    if (!blockValidation.isValid) {
+      return {
+        success: false,
+        error: `This time block configuration already exists in "${blockValidation.duplicateConfigName}". Please modify the blocks or display name.`,
+      };
+    }
+
+    // VALIDATION 3: Check for day-of-week conflicts (if active)
+    const dayValidation = await validateConfigDaysOfWeek(
+      id,
+      configData.daysOfWeek || [],
+      configData.isActive || false,
+    );
+    if (!dayValidation.isValid) {
+      const dayNames = dayValidation.conflictingDays
+        .map(
+          (d) =>
+            [
+              "Sunday",
+              "Monday",
+              "Tuesday",
+              "Wednesday",
+              "Thursday",
+              "Friday",
+              "Saturday",
+            ][d],
+        )
+        .join(", ");
+
+      return {
+        success: false,
+        error: `Cannot activate config: conflicts with existing configs on ${dayNames}. Conflicting configs: ${dayValidation.conflictingConfigNames.join(", ")}`,
+      };
+    }
+
+    // All validations passed, proceed with update
     const [updatedConfig] = await db
       .update(teesheetConfigs)
       .set(configData)

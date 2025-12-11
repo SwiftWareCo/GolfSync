@@ -2,12 +2,11 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useActionState, useState } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
-import { CardHeader, CardTitle, CardDescription } from "~/components/ui/card";
 import { ConfigPreview } from "./ConfigPreview";
 import type {
   TeesheetConfigWithBlocks,
@@ -110,7 +109,7 @@ export function ConfigEditor({
   const actionToUse =
     mode === "create" ? createTeesheetConfig : updateTeesheetConfig;
 
-  const [error, action, isPending] = useActionState(actionToUse, null);
+  const [state, formAction, isPending] = useActionState(actionToUse, null);
 
   const handleGenerate = () => {
     if (
@@ -133,31 +132,29 @@ export function ConfigEditor({
     toast.success(`Generated ${newBlocks.length} blocks`);
   };
 
+  // Handle state changes from server action
+  useEffect(() => {
+    if (state?.success) {
+      toast.success(
+        mode === "create"
+          ? "Configuration created successfully"
+          : "Configuration updated successfully",
+      );
+      onSuccess();
+    } else if (state?.error) {
+      toast.error(state.error);
+    }
+  }, [state, mode, onSuccess]);
+
   const onSubmit = handleSubmit(
     async (data: TeesheetConfigWithBlocksInsert) => {
-      try {
+      startTransition(async () => {
         if (mode === "edit" && config) {
-          startTransition(async () => {
-            await action({ id: config.id, ...data });
-          });
+          await formAction({ id: config.id, ...data });
         } else {
-          startTransition(async () => {
-            await action({ id: 0, ...data });
-          });
+          await formAction({ id: 0, ...data });
         }
-        toast.success(
-          mode === "create"
-            ? "Configuration created successfully"
-            : "Configuration updated successfully",
-        );
-        onSuccess();
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to save configuration",
-        );
-      }
+      });
     },
   );
 

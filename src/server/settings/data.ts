@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "~/server/db";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, ne } from "drizzle-orm";
 import {
   teesheetConfigs,
   lotteryEntries,
@@ -63,6 +63,189 @@ export async function getConfigForDate(
   }
 
   return matchingConfig;
+}
+
+/**
+ * Validate that active config's days don't conflict with other active configs
+ *
+ * @param configId - ID of config being updated (null for create)
+ * @param daysOfWeek - Days of week for this config
+ * @param isActive - Whether config is being activated
+ * @returns Validation result with conflicts if any
+ */
+export async function validateConfigDaysOfWeek(
+  configId: number | null,
+  daysOfWeek: number[],
+  isActive: boolean,
+): Promise<{
+  isValid: boolean;
+  conflictingDays: number[];
+  conflictingConfigNames: string[];
+}> {
+  // Only validate if being set to active
+  if (!isActive) {
+    return {
+      isValid: true,
+      conflictingDays: [],
+      conflictingConfigNames: [],
+    };
+  }
+
+  // Get all OTHER active configs
+  const activeConfigs = await db.query.teesheetConfigs.findMany({
+    where: configId
+      ? and(eq(teesheetConfigs.isActive, true), ne(teesheetConfigs.id, configId))
+      : eq(teesheetConfigs.isActive, true),
+    columns: {
+      id: true,
+      name: true,
+      daysOfWeek: true,
+    },
+  });
+
+  // Find day overlaps
+  const conflicts = new Map<number, string[]>(); // day -> [config names]
+
+  for (const activeConfig of activeConfigs) {
+    if (!activeConfig.daysOfWeek) continue;
+
+    for (const day of daysOfWeek) {
+      if (activeConfig.daysOfWeek.includes(day)) {
+        if (!conflicts.has(day)) {
+          conflicts.set(day, []);
+        }
+        conflicts.get(day)!.push(activeConfig.name);
+      }
+    }
+  }
+
+  if (conflicts.size === 0) {
+    return {
+      isValid: true,
+      conflictingDays: [],
+      conflictingConfigNames: [],
+    };
+  }
+
+  const conflictingDays = Array.from(conflicts.keys()).sort();
+  const conflictingConfigNamesSet = new Set<string>();
+  conflicts.forEach((names) =>
+    names.forEach((n) => conflictingConfigNamesSet.add(n)),
+  );
+
+  return {
+    isValid: false,
+    conflictingDays,
+    conflictingConfigNames: Array.from(conflictingConfigNamesSet),
+  };
+}
+
+/**
+ * Validate that config name is unique
+ *
+ * @param configId - ID of config being updated (null for create)
+ * @param name - Config name to validate
+ * @returns Validation result with existing config name if duplicate
+ */
+export async function validateConfigName(
+  configId: number | null,
+  name: string,
+): Promise<{
+  isValid: boolean;
+  existingConfigName?: string;
+}> {
+  // Get all OTHER configs with this name
+  const existingConfigs = await db.query.teesheetConfigs.findMany({
+    where: configId
+      ? and(eq(teesheetConfigs.name, name), ne(teesheetConfigs.id, configId))
+      : eq(teesheetConfigs.name, name),
+    columns: {
+      id: true,
+      name: true,
+    },
+  });
+
+  if (existingConfigs.length > 0) {
+    return {
+      isValid: false,
+      existingConfigName: existingConfigs[0]?.name,
+    };
+  }
+
+  return { isValid: true };
+}
+
+/**
+ * Validate that blocks + displayName combination is unique
+ * Checks if another config has BOTH the same time blocks AND same display name
+ *
+ * @param configId - ID of config being updated (null for create)
+ * @param blocks - Array of blocks with startTime and displayName
+ * @param displayNameToCheck - Display name to check for duplicates
+ * @returns Validation result with duplicate config name if found
+ */
+export async function validateBlockStructure(
+  configId: number | null,
+  blocks: Array<{ startTime: string; displayName?: string | null }>,
+  displayNameToCheck: string | null | undefined,
+): Promise<{
+  isValid: boolean;
+  duplicateConfigName?: string;
+}> {
+  // Get all OTHER configs with their blocks
+  const otherConfigs = await db.query.teesheetConfigs.findMany({
+    where: configId ? ne(teesheetConfigs.id, configId) : undefined,
+    with: {
+      blocks: {
+        columns: {
+          startTime: true,
+          displayName: true,
+        },
+        orderBy: (blocks, { asc }) => [asc(blocks.sortOrder)],
+      },
+    },
+  });
+
+  // Sort input blocks by startTime for comparison
+  const sortedInputBlocks = [...blocks].sort((a, b) =>
+    a.startTime.localeCompare(b.startTime),
+  );
+
+  for (const config of otherConfigs) {
+    // First check: Do all blocks have matching startTimes?
+    const sortedConfigBlocks = [...config.blocks].sort((a, b) =>
+      a.startTime.localeCompare(b.startTime),
+    );
+
+    // Must have same number of blocks
+    if (sortedInputBlocks.length !== sortedConfigBlocks.length) {
+      continue;
+    }
+
+    // Check if all startTimes match
+    const allTimesMatch = sortedInputBlocks.every((inputBlock, index) => {
+      return inputBlock.startTime === sortedConfigBlocks[index]?.startTime;
+    });
+
+    if (!allTimesMatch) {
+      continue;
+    }
+
+    // Times match, now check displayName
+    // Compare first block's displayName (assuming all blocks in config use same displayName)
+    const configDisplayName = config.blocks[0]?.displayName;
+    const normalizedInput = displayNameToCheck?.trim() || null;
+    const normalizedConfig = configDisplayName?.trim() || null;
+
+    if (normalizedInput === normalizedConfig) {
+      return {
+        isValid: false,
+        duplicateConfigName: config.name,
+      };
+    }
+  }
+
+  return { isValid: true };
 }
 
 export async function getTeesheetConfigs(): Promise<
