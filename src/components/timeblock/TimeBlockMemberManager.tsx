@@ -703,6 +703,7 @@ export function TimeBlockMemberManager({
             onAddMember={handleAddMember}
             isTimeBlockFull={isTimeBlockFull}
             existingMembers={members}
+            autoFocus={true}
           />
         </TabsContent>
 
@@ -720,6 +721,7 @@ export function TimeBlockMemberManager({
               selectedMemberId={selectedMemberId}
               onCreateGuest={handleShowCreateGuestDialog}
               existingGuests={guests}
+              autoFocus={true}
             />
           </div>
         </TabsContent>

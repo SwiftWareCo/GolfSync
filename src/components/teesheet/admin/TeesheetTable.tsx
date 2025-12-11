@@ -25,6 +25,7 @@ import { toast } from "react-hot-toast";
 import { Settings } from "lucide-react";
 import Link from "next/link";
 import { teesheetKeys } from "~/services/teesheet/keys";
+import type { PowerCartAssignmentData } from "~/app/types/ChargeTypes";
 
 interface TeesheetTableProps {
   dateString: string;
@@ -385,23 +386,10 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
 
   // Mutation for power cart assignment
   const assignPowerCartMutation = useMutation({
-    mutationFn: (variables: {
-      memberId: number;
-      numHoles: 9 | 18;
-      isSplit: boolean;
-      isMedical: boolean;
-      staffInitials: string;
-      date: Date;
-    }) => quickAssignPowerCart(variables),
+    mutationFn: (variables: PowerCartAssignmentData) =>
+      quickAssignPowerCart(variables),
 
-    onMutate: async (variables: {
-      memberId: number;
-      numHoles: 9 | 18;
-      isSplit: boolean;
-      isMedical: boolean;
-      staffInitials: string;
-      date: Date;
-    }) => {
+    onMutate: async (variables: PowerCartAssignmentData) => {
       await queryClient.cancelQueries({
         queryKey: teesheetKeys.detail(dateString),
       });
@@ -523,15 +511,8 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     }
   };
 
-  const handleAssignPowerCart = (memberId: number) => {
-    assignPowerCartMutation.mutate({
-      memberId,
-      numHoles: 18,
-      isSplit: false,
-      isMedical: false,
-      staffInitials: "",
-      date: new Date(),
-    });
+  const handleAssignPowerCart = (data: PowerCartAssignmentData) => {
+    assignPowerCartMutation.mutate(data);
   };
 
   const handlePlayerClick = (player: any) => {

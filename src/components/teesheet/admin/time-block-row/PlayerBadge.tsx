@@ -19,6 +19,7 @@ import type {
   Fill,
   TimeBlockMember,
 } from "~/server/db/schema";
+import type { PowerCartAssignmentData } from "~/app/types/ChargeTypes";
 
 export type PlayerType = "member" | "guest" | "fill";
 
@@ -53,7 +54,7 @@ interface PlayerBadgeProps {
   onRemove?: (id: number, type: PlayerType) => void;
   onCheckIn?: (id: number, type: PlayerType, isCheckedIn: boolean) => void;
   onClick?: (player: TimeBlockPlayer) => void;
-  onAssignPowerCart?: (memberId: number) => void;
+  onAssignPowerCart?: (data: PowerCartAssignmentData) => void;
   otherMembers?: Array<{ id: number; firstName: string; lastName: string }>;
 }
 
@@ -65,7 +66,6 @@ export function PlayerBadge({
   onAssignPowerCart,
   otherMembers = [],
 }: PlayerBadgeProps) {
-
   // Extract common data based on discriminated union type
   const id = player.data.id;
   const checkedIn =
@@ -159,7 +159,9 @@ export function PlayerBadge({
               </p>
             )}
             {player.type === "member" && (
-              <p className="text-xs">Class: {player.data.memberClass?.label || "N/A"}</p>
+              <p className="text-xs">
+                Class: {player.data.memberClass?.label || "N/A"}
+              </p>
             )}
             {player.type === "fill" && (
               <p className="text-xs">Type: {getFillLabel(player.data)}</p>
@@ -172,7 +174,7 @@ export function PlayerBadge({
           {player.type === "member" && onAssignPowerCart && (
             <QuickCartAssignment
               memberId={id}
-              onAssign={() => onAssignPowerCart(id)}
+              onAssign={onAssignPowerCart}
               otherMembers={otherMembers.filter((m) => m.id !== id)}
             />
           )}

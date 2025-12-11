@@ -1,5 +1,7 @@
 "use client";
 
+import type { PowerCartAssignmentData } from "~/app/types/ChargeTypes";
+
 import { useRef } from "react";
 import { formatTime12Hour } from "~/lib/dates";
 import {
@@ -52,7 +54,7 @@ interface TimeBlockRowProps {
   onRemovePlayer: (id: number, type: PlayerType) => void;
   onCheckInPlayer: (id: number, type: PlayerType, isCheckedIn: boolean) => void;
   onPlayerClick: (player: TimeBlockPlayer) => void;
-  onAssignPowerCart?: (memberId: number) => void;
+  onAssignPowerCart?: (data: PowerCartAssignmentData) => void;
   otherMembers?: Array<{ id: number; firstName: string; lastName: string }>;
   onTimeClick?: () => void;
   onCheckInAll?: (timeBlockId: number, isCheckedIn: boolean) => void;

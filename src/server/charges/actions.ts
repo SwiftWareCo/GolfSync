@@ -15,7 +15,6 @@ import { getFilteredCharges, type ChargeFilters } from "./data";
 
 // Create power cart charge
 export async function createPowerCartCharge(data: PowerCartAssignmentData) {
-
   const charge = await db
     .insert(powerCartCharges)
     .values({
@@ -30,7 +29,6 @@ export async function createPowerCartCharge(data: PowerCartAssignmentData) {
 
 // Create general charge
 export async function createGeneralCharge(data: any) {
-
   const charge = await db
     .insert(generalCharges)
     .values({
@@ -51,7 +49,6 @@ export async function completePowerCartCharge({
   id: number;
   staffInitials: string;
 }) {
-
   const charge = await db
     .update(powerCartCharges)
     .set({ charged: true, staffInitials })
@@ -72,7 +69,6 @@ export async function completeGeneralCharge({
   staffInitials: string;
   paymentMethod: (typeof PaymentMethod.enumValues)[number];
 }) {
-
   const charge = await db
     .update(generalCharges)
     .set({ charged: true, staffInitials, paymentMethod })
@@ -85,7 +81,6 @@ export async function completeGeneralCharge({
 
 // Quick cart assignment from teesheet
 export async function quickAssignPowerCart(data: PowerCartAssignmentData) {
-
   // If staff initials are empty, use a default value
   const staffInitials = data.staffInitials || "STAFF";
 
@@ -99,27 +94,22 @@ export async function quickAssignPowerCart(data: PowerCartAssignmentData) {
     .returning();
 
   revalidatePath("/admin/charges");
-  revalidatePath("/admin"); // Revalidate teesheet
   return charge[0];
 }
 
 // Delete a power cart charge
 export async function deletePowerCartCharge(id: number) {
+  await db.delete(powerCartCharges).where(eq(powerCartCharges.id, id));
 
-  await db
-    .delete(powerCartCharges)
-    .where(eq(powerCartCharges.id, id));
-
+  revalidatePath("/admin/charges");
   return { success: true };
 }
 
 // Delete a general charge
 export async function deleteGeneralCharge(id: number) {
+  await db.delete(generalCharges).where(eq(generalCharges.id, id));
 
-  await db
-    .delete(generalCharges)
-    .where(eq(generalCharges.id, id));
-
+  revalidatePath("/admin/charges");
   return { success: true };
 }
 

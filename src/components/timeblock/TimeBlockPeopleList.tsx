@@ -1,11 +1,10 @@
 "use client";
 
-import { UserMinus, UserPlus } from "lucide-react";
+import { UserPlus } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntitySearchCard } from "~/components/ui/entity-search-card";
 import { Badge } from "~/components/ui/badge";
-import { getMemberClassStyling } from "~/lib/utils";
 import { type Member, type Fill, type Guest } from "~/server/db/schema";
 import { TimeBlockPersonItem } from "./TimeBlockPersonItem";
 import { TimeBlockFillItem } from "./TimeBlockFillItem";
@@ -124,6 +123,7 @@ interface TimeBlockMemberSearchProps {
   onAddMember: (memberId: number) => Promise<void>;
   isTimeBlockFull: boolean;
   existingMembers?: Array<{ id: number }>;
+  autoFocus?: boolean;
 }
 
 export function TimeBlockMemberSearch({
@@ -134,6 +134,7 @@ export function TimeBlockMemberSearch({
   onAddMember,
   isTimeBlockFull,
   existingMembers = [],
+  autoFocus = false,
 }: TimeBlockMemberSearchProps) {
   return (
     <EntitySearchCard
@@ -148,6 +149,7 @@ export function TimeBlockMemberSearch({
       limitReachedMessage="This time block is full. Remove a member or guest before adding more."
       noResultsMessage="No members found matching your search"
       itemsPerPage={5}
+      autoFocus={autoFocus}
       renderEntityCard={(member) => {
         const isAlreadyAdded = existingMembers.some((m) => m.id === member.id);
         return (
@@ -210,6 +212,7 @@ interface TimeBlockGuestSearchProps {
   selectedMemberId: number | null;
   onCreateGuest?: () => void;
   existingGuests?: Array<{ id: number }>;
+  autoFocus?: boolean;
 }
 
 export function TimeBlockGuestSearch({
@@ -224,6 +227,7 @@ export function TimeBlockGuestSearch({
   selectedMemberId,
   onCreateGuest,
   existingGuests = [],
+  autoFocus = false,
 }: TimeBlockGuestSearchProps) {
   // Convert members to select options format, including Course Sponsored
   const courseSponsoredOption = {
@@ -261,6 +265,7 @@ export function TimeBlockGuestSearch({
       showCreateButton={true}
       createButtonText="Create Guest"
       onCreateNew={onCreateGuest}
+      autoFocus={autoFocus}
       renderEntityCard={(guest) => {
         const isAlreadyAdded = existingGuests.some((g) => g.id === guest.id);
         return (

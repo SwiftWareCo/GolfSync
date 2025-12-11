@@ -47,6 +47,7 @@ interface EntitySearchCardProps<T extends Entity> {
   showCreateButton?: boolean;
   createButtonText?: string;
   onCreateNew?: () => void;
+  autoFocus?: boolean;
 }
 
 export function EntitySearchCard<T extends Entity>({
@@ -69,6 +70,7 @@ export function EntitySearchCard<T extends Entity>({
   showCreateButton = false,
   createButtonText = "Create New",
   onCreateNew,
+  autoFocus = false,
 }: EntitySearchCardProps<T>) {
   const [localQuery, setLocalQuery] = useState(searchQuery);
   const [currentPage, setCurrentPage] = useState(1);
@@ -102,7 +104,13 @@ export function EntitySearchCard<T extends Entity>({
 
   return (
     <Card>
-      <CardHeader className={showCreateButton && onCreateNew ? "flex  flex-row items-center justify-between" : undefined}>
+      <CardHeader
+        className={
+          showCreateButton && onCreateNew
+            ? "flex flex-row items-center justify-between"
+            : undefined
+        }
+      >
         <CardTitle className="flex items-center space-x-2">
           <UserPlus className="h-5 w-5" />
           <span>{title}</span>
@@ -127,6 +135,7 @@ export function EntitySearchCard<T extends Entity>({
               value={localQuery}
               onChange={handleSearchChange}
               placeholder={searchPlaceholder}
+              autoFocus={autoFocus}
             />
 
             {showSelectFilter && onFilterSelect && (
