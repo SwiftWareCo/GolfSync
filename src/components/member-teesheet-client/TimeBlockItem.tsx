@@ -198,7 +198,7 @@ export function TimeBlockItem({
       onClick={handleShowDetails}
     >
       {/* Left Section: Time and Status */}
-      <div className="flex items-center gap-2 px-3 py-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
         {/* Time Display */}
         <div className="flex min-w-[70px] items-center">
           <span className="text-sm font-bold whitespace-nowrap text-gray-900">
@@ -226,7 +226,7 @@ export function TimeBlockItem({
       </div>
 
       {/* Right Section: Capacity and Actions */}
-      <div className="flex items-center gap-2 px-3 py-2.5">
+      <div className="flex flex-shrink-0 items-center gap-2 px-3 py-2.5">
         {/* Capacity Display */}
         <div
           className={`flex items-center justify-center gap-1 rounded-full px-2.5 py-1 font-medium ${

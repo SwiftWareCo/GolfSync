@@ -546,22 +546,23 @@ export default function TeesheetClient({
     teesheet?.privateMessage ||
     "This teesheet is not yet available for booking.";
 
-  // Logic based on user requirements:
-  // 1. If lottery enabled AND teesheet not public → show lottery
-  // 2. If lottery disabled AND teesheet not public → show "both not available" message
-  // 3. If teesheet public AND lottery disabled → show teesheet
-  // 4. If both enabled → teesheet takes precedence
+  // Determine which view to render based on settings
+  const shouldShowLottery =
+    !isTeesheetPublic &&
+    isLotteryEligible &&
+    isLotteryEnabled &&
+    !hasFullDayRestriction;
 
-  // If teesheet is public, show teesheet (both enabled = teesheet takes precedence)
-  if (isTeesheetPublic) {
-    // For public teesheets, always show the teesheet (not lottery)
-    // This handles cases 3 and 4 from user requirements
-    // Skip to regular teesheet rendering below
-  } else {
-    // Teesheet is private
-    if (isLotteryEligible && isLotteryEnabled && !hasFullDayRestriction) {
-      // Case 1: lottery enabled AND teesheet not public → show lottery
-      return (
+  const shouldShowNotAvailable = !isTeesheetPublic && !shouldShowLottery;
+
+  return (
+    <div
+      className="min-h-screen"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Case 1: Show Lottery View */}
+      {shouldShowLottery && (
         <LotteryView
           selectedDate={selectedDate}
           lotteryEntry={lotteryEntry}
@@ -576,10 +577,10 @@ export default function TeesheetClient({
           onDataChange={handleDataChange}
           onDateChange={handleDateChange}
         />
-      );
-    } else {
-      // Case 2: lottery disabled AND teesheet not public → show "both not available" message
-      return (
+      )}
+
+      {/* Case 2: Show "Not Available" Message */}
+      {shouldShowNotAvailable && (
         <div className="space-y-4 px-3 pb-6">
           <DateNavigationHeader
             date={date}
@@ -620,107 +621,106 @@ export default function TeesheetClient({
             </Dialog>
           )}
         </div>
-      );
-    }
-  }
+      )}
 
-  return (
-    <div className="space-y-4 px-3 pb-6">
-      {/* Date Navigation Header */}
-      <DateNavigationHeader
-        date={date}
-        onPreviousDay={goToPreviousDay}
-        onNextDay={goToNextDay}
-        onDatePickerToggle={() => dispatch({ type: "TOGGLE_DATE_PICKER" })}
-        loading={loading}
-        swipeLoading={swipeLoading}
-      />
+      {/* Case 3: Show Public Teesheet */}
+      {isTeesheetPublic && (
+        <div className="space-y-4 px-3 pb-6">
+          {/* Date Navigation Header */}
+          <DateNavigationHeader
+            date={date}
+            onPreviousDay={goToPreviousDay}
+            onNextDay={goToNextDay}
+            onDatePickerToggle={() => dispatch({ type: "TOGGLE_DATE_PICKER" })}
+            loading={loading}
+            swipeLoading={swipeLoading}
+          />
 
-      {/* General Notes Section */}
-      {teesheet?.generalNotes && (
-        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 bg-blue-50 p-4">
-            <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
-              <AlertCircle className="h-5 w-5 text-blue-600" />
-              Important Information
-            </h3>
-          </div>
-          <div className="p-4">
-            <div className="border-l-4 border-blue-500 pl-4 text-sm leading-relaxed text-gray-700">
-              {teesheet.generalNotes}
+          {/* General Notes Section */}
+          {teesheet?.generalNotes && (
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-100 bg-blue-50 p-4">
+                <h3 className="flex items-center gap-2 text-lg font-bold text-gray-900">
+                  <AlertCircle className="h-5 w-5 text-blue-600" />
+                  Important Information
+                </h3>
+              </div>
+              <div className="p-4">
+                <div className="border-l-4 border-blue-500 pl-4 text-sm leading-relaxed text-gray-700">
+                  {teesheet.generalNotes}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Full Day Restriction Alert or Tee Sheet Grid */}
+          {hasFullDayRestriction ? (
+            <div className="overflow-hidden rounded-xl border border-red-200 bg-white shadow-sm">
+              <div className="border-b border-red-200 bg-red-50 p-4">
+                <h3 className="flex items-center gap-2 text-lg font-bold text-red-900">
+                  <AlertCircle className="h-5 w-5 text-red-600" />
+                  Course Not Available
+                </h3>
+              </div>
+              <div className="p-4">
+                <div className="border-l-4 border-red-500 pl-4 text-sm leading-relaxed text-red-700">
+                  {fullDayRestrictionMessage}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <TeesheetGrid
+              date={date}
+              timeBlocks={timeBlocks}
+              config={config}
+              member={member}
+              loading={loading}
+              selectedDate={selectedDate}
+              onBook={checkBookingRestrictions}
+              onCancel={(timeBlockId) =>
+                dispatch({ type: "START_CANCELLING", payload: timeBlockId })
+              }
+              onShowDetails={handleShowPlayerDetails}
+              isTimeBlockBooked={isTimeBlockBooked}
+              isTimeBlockAvailable={isTimeBlockAvailable}
+              isTimeBlockInPast={isTimeBlockInPast}
+            />
+          )}
+
+          {/* Date Picker Dialog */}
+          {showDatePicker && (
+            <Dialog
+              open={showDatePicker}
+              onOpenChange={() => dispatch({ type: "TOGGLE_DATE_PICKER" })}
+            >
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Select Date</DialogTitle>
+                </DialogHeader>
+                <DatePicker selected={date} onChange={handleDateChange} />
+              </DialogContent>
+            </Dialog>
+          )}
+
+          {/* Player Details Drawer */}
+          <PlayerDetailsDrawer
+            isOpen={showPlayerDetails}
+            onClose={() => dispatch({ type: "HIDE_PLAYER_DETAILS" })}
+            timeBlock={selectedTimeBlock}
+          />
+
+          {/* Booking Dialogs */}
+          <BookingDialogs
+            bookingTimeBlockId={bookingTimeBlockId}
+            cancelTimeBlockId={cancelTimeBlockId}
+            loading={loading}
+            onBookConfirm={handleBookTeeTime}
+            onCancelConfirm={handleCancelTeeTime}
+            onBookingClose={() => dispatch({ type: "CLEAR_BOOKING" })}
+            onCancelClose={() => dispatch({ type: "CLEAR_CANCELLING" })}
+          />
         </div>
       )}
-
-      {/* Full Day Restriction Alert or Tee Sheet Grid */}
-      {hasFullDayRestriction ? (
-        <div className="overflow-hidden rounded-xl border border-red-200 bg-white shadow-sm">
-          <div className="border-b border-red-200 bg-red-50 p-4">
-            <h3 className="flex items-center gap-2 text-lg font-bold text-red-900">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              Course Not Available
-            </h3>
-          </div>
-          <div className="p-4">
-            <div className="border-l-4 border-red-500 pl-4 text-sm leading-relaxed text-red-700">
-              {fullDayRestrictionMessage}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <TeesheetGrid
-          date={date}
-          timeBlocks={timeBlocks}
-          config={config}
-          member={member}
-          loading={loading}
-          selectedDate={selectedDate}
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onBook={checkBookingRestrictions}
-          onCancel={(timeBlockId) =>
-            dispatch({ type: "START_CANCELLING", payload: timeBlockId })
-          }
-          onShowDetails={handleShowPlayerDetails}
-          isTimeBlockBooked={isTimeBlockBooked}
-          isTimeBlockAvailable={isTimeBlockAvailable}
-          isTimeBlockInPast={isTimeBlockInPast}
-        />
-      )}
-
-      {/* Date Picker Dialog */}
-      {showDatePicker && (
-        <Dialog
-          open={showDatePicker}
-          onOpenChange={() => dispatch({ type: "TOGGLE_DATE_PICKER" })}
-        >
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Select Date</DialogTitle>
-            </DialogHeader>
-            <DatePicker selected={date} onChange={handleDateChange} />
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Player Details Drawer */}
-      <PlayerDetailsDrawer
-        isOpen={showPlayerDetails}
-        onClose={() => dispatch({ type: "HIDE_PLAYER_DETAILS" })}
-        timeBlock={selectedTimeBlock}
-      />
-
-      {/* Booking Dialogs */}
-      <BookingDialogs
-        bookingTimeBlockId={bookingTimeBlockId}
-        cancelTimeBlockId={cancelTimeBlockId}
-        loading={loading}
-        onBookConfirm={handleBookTeeTime}
-        onCancelConfirm={handleCancelTeeTime}
-        onBookingClose={() => dispatch({ type: "CLEAR_BOOKING" })}
-        onCancelClose={() => dispatch({ type: "CLEAR_CANCELLING" })}
-      />
     </div>
   );
 }

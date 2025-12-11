@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useCallback } from "react";
 import { AlertCircle, CalendarIcon, ClockIcon } from "lucide-react";
 import { formatDateWithDay } from "~/lib/dates";
 import { TimeBlockItem, type TimeBlockItemProps } from "./TimeBlockItem";
@@ -50,8 +50,6 @@ interface TeesheetGridProps {
   member: ClientMember;
   loading: boolean;
   selectedDate: string | Date;
-  onTouchStart: (e: React.TouchEvent) => void;
-  onTouchEnd: (e: React.TouchEvent) => void;
   onBook: (timeBlockId: number) => void;
   onCancel: (timeBlockId: number) => void;
   onShowDetails: (timeBlock: ClientTimeBlock) => void;
@@ -67,8 +65,6 @@ export function TeesheetGrid({
   member,
   loading,
   selectedDate,
-  onTouchStart,
-  onTouchEnd,
   onBook,
   onCancel,
   onShowDetails,
@@ -91,19 +87,13 @@ export function TeesheetGrid({
 
   const hasTimeBlocks = uniqueTimeBlocks.length > 0;
 
-  // Auto-scroll to current time once when time blocks load
-  useEffect(() => {
-    if (uniqueTimeBlocks.length > 0) {
-      scrollToClosestTime(new Date(), selectedDate, uniqueTimeBlocks);
-    }
-  }, [uniqueTimeBlocks, selectedDate]);
-
   // Simple utility to scroll to a time block on today's date
-  function scrollToClosestTime(
-    now: Date,
-    selectedDate: Date | string,
-    timeBlocks: ClientTimeBlock[],
-  ) {
+  const scrollToClosestTime = useCallback(
+    (
+      now: Date,
+      selectedDate: Date | string,
+      timeBlocks: ClientTimeBlock[],
+    ) => {
     // Parse the date properly
     let parsedSelectedDate: Date;
     if (typeof selectedDate === "string") {
@@ -168,7 +158,14 @@ export function TeesheetGrid({
         element.scrollIntoView({ behavior: "auto", block: "center" });
       }
     }, 100);
-  }
+  }, []);
+
+  // Auto-scroll to current time once when time blocks load
+  useEffect(() => {
+    if (uniqueTimeBlocks.length > 0) {
+      scrollToClosestTime(new Date(), selectedDate, uniqueTimeBlocks);
+    }
+  }, [uniqueTimeBlocks, selectedDate, scrollToClosestTime]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -190,8 +187,6 @@ export function TeesheetGrid({
       <div
         ref={timeBlocksContainerRef}
         className="px-4 pb-4"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
         aria-live="polite"
       >
         {hasTimeBlocks ? (
