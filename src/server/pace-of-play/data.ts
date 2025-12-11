@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 
 import {
@@ -22,6 +22,7 @@ export type { PaceOfPlay, PaceOfPlayInsert };
 export type PaceOfPlayPlayer = {
   name: string;
   checkedIn: boolean;
+  isGuest: boolean;
 };
 
 // Composed type for time blocks with pace of play data
@@ -76,78 +77,76 @@ export async function getPaceOfPlayByTimeBlockId(timeBlockId: number) {
   return paceData;
 }
 
-// Get all pace of play records for a specific date
-export async function getPaceOfPlayByDate(
-  date: Date,
-): Promise<TimeBlockWithPaceOfPlay[]> {
-  const formattedDate = date.toISOString().split("T")[0];
-
-  const result = await db
-    .select({
-      timeBlock: timeBlocks,
-      paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT CASE WHEN ${timeBlockMembers.checkedIn} = true THEN ${timeBlockMembers.memberId} END) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      players: sql<
-        PaceOfPlayPlayer[]
-      >`COALESCE(json_agg(DISTINCT jsonb_build_object('name', CONCAT(${members.firstName}, ' ', ${members.lastName}), 'checkedIn', COALESCE(${timeBlockMembers.checkedIn}, false))) FILTER (WHERE ${members.id} IS NOT NULL AND ${timeBlockMembers.checkedIn} = true), '[]')`,
-    })
-    .from(timeBlocks)
-    .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
-    .leftJoin(paceOfPlay, eq(timeBlocks.id, paceOfPlay.timeBlockId))
-    .leftJoin(timeBlockMembers, eq(timeBlocks.id, timeBlockMembers.timeBlockId))
-    .leftJoin(members, eq(timeBlockMembers.memberId, members.id))
-    .leftJoin(timeBlockGuests, eq(timeBlocks.id, timeBlockGuests.timeBlockId))
-    .leftJoin(guests, eq(timeBlockGuests.guestId, guests.id))
-    .where(sql`${teesheets.date} = ${formattedDate}`)
-    .groupBy(timeBlocks.id, paceOfPlay.id)
-    .orderBy(asc(timeBlocks.startTime));
-
-  return result.map((row) => ({
-    ...row.timeBlock,
-    paceOfPlay: row.paceOfPlay,
-    players: row.players || [],
-    numPlayers: row.numPlayers,
-  }));
-}
-
 // Get active time blocks at the turn (have started but not recorded turn time)
 export async function getTimeBlocksAtTurn(
   date: Date,
 ): Promise<TimeBlockWithPaceOfPlay[]> {
   const formattedDate = date.toISOString().split("T")[0];
 
-  const result = await db
-    .select({
-      timeBlock: timeBlocks,
-      paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT CASE WHEN ${timeBlockMembers.checkedIn} = true THEN ${timeBlockMembers.memberId} END) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      players: sql<
-        PaceOfPlayPlayer[]
-      >`COALESCE(json_agg(DISTINCT jsonb_build_object('name', CONCAT(${members.firstName}, ' ', ${members.lastName}), 'checkedIn', COALESCE(${timeBlockMembers.checkedIn}, false))) FILTER (WHERE ${members.id} IS NOT NULL AND ${timeBlockMembers.checkedIn} = true), '[]')`,
-    })
-    .from(timeBlocks)
-    .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
-    .innerJoin(paceOfPlay, eq(timeBlocks.id, paceOfPlay.timeBlockId))
-    .leftJoin(timeBlockMembers, eq(timeBlocks.id, timeBlockMembers.timeBlockId))
-    .leftJoin(members, eq(timeBlockMembers.memberId, members.id))
-    .leftJoin(timeBlockGuests, eq(timeBlocks.id, timeBlockGuests.timeBlockId))
-    .leftJoin(guests, eq(timeBlockGuests.guestId, guests.id))
-    .where(
-      and(
-        sql`${teesheets.date} = ${formattedDate}`,
-        sql`${paceOfPlay.startTime} IS NOT NULL`,
-        sql`${paceOfPlay.turn9Time} IS NULL`,
-      ),
-    )
-    .groupBy(timeBlocks.id, paceOfPlay.id)
-    .orderBy(asc(timeBlocks.startTime));
+  // Use relational query to get pace of play with timeblock and players
+  const result = await db.query.paceOfPlay.findMany({
+    where: and(
+      sql`${paceOfPlay.startTime} IS NOT NULL`,
+      sql`${paceOfPlay.turn9Time} IS NULL`,
+    ),
+    with: {
+      timeBlock: {
+        with: {
+          teesheet: true,
+          timeBlockMembers: {
+            with: { member: true },
+          },
+          timeBlockGuests: {
+            with: { guest: true },
+          },
+        },
+      },
+    },
+  });
 
-  return result.map((row) => ({
-    ...row.timeBlock,
-    paceOfPlay: row.paceOfPlay,
-    players: row.players || [],
-    numPlayers: row.numPlayers,
-  }));
+  // Filter by date and transform to expected format
+  return result
+    .filter((pace) => pace.timeBlock?.teesheet?.date === formattedDate)
+    .map((pace) => {
+      const timeBlock = pace.timeBlock!;
+
+      // Build players array from checked-in members and guests
+      const players: PaceOfPlayPlayer[] = [
+        ...(timeBlock.timeBlockMembers || [])
+          .filter((tbm) => tbm.checkedIn)
+          .map((tbm) => ({
+            name: `${tbm.member.firstName} ${tbm.member.lastName}`,
+            checkedIn: true,
+            isGuest: false,
+          })),
+        ...(timeBlock.timeBlockGuests || [])
+          .filter((tbg) => tbg.checkedIn)
+          .map((tbg) => ({
+            name: `${tbg.guest.firstName} ${tbg.guest.lastName}`,
+            checkedIn: true,
+            isGuest: true,
+          })),
+      ].sort((a, b) => a.name.localeCompare(b.name));
+
+      const numPlayers = players.length;
+
+      return {
+        id: timeBlock.id,
+        teesheetId: timeBlock.teesheetId,
+        startTime: timeBlock.startTime,
+        endTime: timeBlock.endTime,
+        maxMembers: timeBlock.maxMembers,
+        displayName: timeBlock.displayName,
+        sortOrder: timeBlock.sortOrder,
+        notes: timeBlock.notes,
+        createdAt: timeBlock.createdAt,
+        updatedAt: timeBlock.updatedAt,
+        paceOfPlay: pace,
+        players,
+        numPlayers,
+      };
+    })
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
 }
 
 // Get active time blocks at the finish (have started, recorded turn time, but not finished)
@@ -157,42 +156,73 @@ export async function getTimeBlocksAtFinish(date: Date): Promise<{
 }> {
   const formattedDate = date.toISOString().split("T")[0];
 
-  // Base query conditions
-  const baseConditions = [
-    sql`${teesheets.date} = ${formattedDate}`,
-    sql`${paceOfPlay.startTime} IS NOT NULL`,
-    sql`${paceOfPlay.finishTime} IS NULL`,
-  ];
+  // Use relational query to get pace of play with timeblock and players
+  const result = await db.query.paceOfPlay.findMany({
+    where: and(
+      sql`${paceOfPlay.startTime} IS NOT NULL`,
+      sql`${paceOfPlay.finishTime} IS NULL`,
+    ),
+    with: {
+      timeBlock: {
+        with: {
+          teesheet: true,
+          timeBlockMembers: {
+            with: { member: true },
+          },
+          timeBlockGuests: {
+            with: { guest: true },
+          },
+        },
+      },
+    },
+  });
 
-  const result = await db
-    .select({
-      timeBlock: timeBlocks,
-      paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT CASE WHEN ${timeBlockMembers.checkedIn} = true THEN ${timeBlockMembers.memberId} END) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      players: sql<
-        PaceOfPlayPlayer[]
-      >`COALESCE(json_agg(DISTINCT jsonb_build_object('name', CONCAT(${members.firstName}, ' ', ${members.lastName}), 'checkedIn', COALESCE(${timeBlockMembers.checkedIn}, false))) FILTER (WHERE ${members.id} IS NOT NULL AND ${timeBlockMembers.checkedIn} = true), '[]')`,
+  // Filter by date and transform to expected format
+  const timeBlocksWithPace = result
+    .filter((pace) => pace.timeBlock?.teesheet?.date === formattedDate)
+    .map((pace) => {
+      const timeBlock = pace.timeBlock!;
+
+      // Build players array from checked-in members and guests
+      const players: PaceOfPlayPlayer[] = [
+        ...(timeBlock.timeBlockMembers || [])
+          .filter((tbm) => tbm.checkedIn)
+          .map((tbm) => ({
+            name: `${tbm.member.firstName} ${tbm.member.lastName}`,
+            checkedIn: true,
+            isGuest: false,
+          })),
+        ...(timeBlock.timeBlockGuests || [])
+          .filter((tbg) => tbg.checkedIn)
+          .map((tbg) => ({
+            name: `${tbg.guest.firstName} ${tbg.guest.lastName}`,
+            checkedIn: true,
+            isGuest: true,
+          })),
+      ].sort((a, b) => a.name.localeCompare(b.name));
+
+      const numPlayers = players.length;
+
+      return {
+        id: timeBlock.id,
+        teesheetId: timeBlock.teesheetId,
+        startTime: timeBlock.startTime,
+        endTime: timeBlock.endTime,
+        maxMembers: timeBlock.maxMembers,
+        displayName: timeBlock.displayName,
+        sortOrder: timeBlock.sortOrder,
+        notes: timeBlock.notes,
+        createdAt: timeBlock.createdAt,
+        updatedAt: timeBlock.updatedAt,
+        paceOfPlay: pace,
+        players,
+        numPlayers,
+        hasMissedTurn: !pace.turn9Time,
+      };
     })
-    .from(timeBlocks)
-    .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
-    .innerJoin(paceOfPlay, eq(timeBlocks.id, paceOfPlay.timeBlockId))
-    .leftJoin(timeBlockMembers, eq(timeBlocks.id, timeBlockMembers.timeBlockId))
-    .leftJoin(members, eq(timeBlockMembers.memberId, members.id))
-    .leftJoin(timeBlockGuests, eq(timeBlocks.id, timeBlockGuests.timeBlockId))
-    .leftJoin(guests, eq(timeBlockGuests.guestId, guests.id))
-    .where(and(...baseConditions))
-    .groupBy(timeBlocks.id, paceOfPlay.id)
-    .orderBy(asc(timeBlocks.startTime));
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  const timeBlocksWithPace = result.map((row) => ({
-    ...row.timeBlock,
-    paceOfPlay: row.paceOfPlay,
-    players: row.players || [],
-    numPlayers: row.numPlayers,
-    hasMissedTurn: !row.paceOfPlay.turn9Time,
-  }));
-
-  // If including missed turns, separate them into two groups
+  // Separate into regular and missed turns
   const regular = timeBlocksWithPace.filter((tb) => !tb.hasMissedTurn);
   const missedTurns = timeBlocksWithPace.filter((tb) => tb.hasMissedTurn);
 
@@ -228,6 +258,34 @@ export async function getMemberPaceOfPlayHistory(memberId: number) {
       eq(timeBlocks.id, timeBlockMembers.timeBlockId),
     )
     .where(eq(timeBlockMembers.memberId, memberId))
+    .orderBy(desc(teesheets.date), asc(timeBlocks.startTime));
+
+  return result;
+}
+
+// Get pace of play history for a specific guest
+export async function getGuestPaceOfPlayHistory(guestId: number) {
+  const result = await db
+    .select({
+      id: paceOfPlay.id,
+      timeBlockId: timeBlocks.id,
+      date: teesheets.date,
+      startTime: timeBlocks.startTime,
+      actualStartTime: paceOfPlay.startTime,
+      turn9Time: paceOfPlay.turn9Time,
+      finishTime: paceOfPlay.finishTime,
+      expectedStartTime: paceOfPlay.expectedStartTime,
+      expectedTurn9Time: paceOfPlay.expectedTurn9Time,
+      expectedFinishTime: paceOfPlay.expectedFinishTime,
+      status: paceOfPlay.status,
+      notes: paceOfPlay.notes,
+      createdAt: paceOfPlay.createdAt,
+    })
+    .from(paceOfPlay)
+    .innerJoin(timeBlocks, eq(paceOfPlay.timeBlockId, timeBlocks.id))
+    .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
+    .innerJoin(timeBlockGuests, eq(timeBlocks.id, timeBlockGuests.timeBlockId))
+    .where(eq(timeBlockGuests.guestId, guestId))
     .orderBy(desc(teesheets.date), asc(timeBlocks.startTime));
 
   return result;

@@ -146,8 +146,9 @@ export function ProshopTeesheetDisplay({
           <div className="grid gap-3">
             {timeBlocks.map((block, index) => {
               const members = block.members || [];
+              const guests = block.guests || [];
               const fills = block.fills || [];
-              const totalPlayers = members.length;
+              const totalPlayers = members.length + guests.length;
               const maxMembers = block.maxMembers || 4;
               const isFull = totalPlayers >= maxMembers;
               const isEmpty = totalPlayers === 0 && fills.length === 0;
@@ -194,44 +195,73 @@ export function ProshopTeesheetDisplay({
                       {isEmpty ? (
                         <p className="text-lg text-gray-400">Available</p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="flex flex-wrap gap-3">
                           {/* Member names */}
-                          {members.length > 0 && (
-                            <div className="flex flex-wrap gap-3">
-                              {members.map((member: any, idx: number) => (
-                                <div
-                                  key={idx}
-                                  className={cn(
-                                    "rounded-lg border px-3 py-1.5 text-base font-medium",
-                                    member.checkedIn
-                                      ? "border-green-500 bg-green-50 text-green-700"
-                                      : "border-org-primary/30 text-org-primary bg-white",
-                                  )}
-                                >
-                                  {member.firstName} {member.lastName}
-                                  {member.checkedIn && (
-                                    <span className="ml-2 text-xs text-green-500">
-                                      ✓
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
+                          {members.map((member: any, idx: number) => (
+                            <div
+                              key={`member-${idx}`}
+                              className={cn(
+                                "rounded-lg border px-3 py-1.5 text-base font-medium",
+                                member.checkedIn
+                                  ? "border-green-500 bg-green-50 text-green-700"
+                                  : "border-org-primary/30 text-org-primary bg-white",
+                              )}
+                            >
+                              {member.firstName} {member.lastName}
+                              {member.checkedIn && (
+                                <span className="ml-2 text-xs text-green-500">
+                                  ✓
+                                </span>
+                              )}
                             </div>
-                          )}
+                          ))}
+
+                          {/* Guest names */}
+                          {guests.map((guest: any, idx: number) => (
+                            <div
+                              key={`guest-${idx}`}
+                              className={cn(
+                                "rounded-lg border px-3 py-1.5 text-base font-medium",
+                                guest.checkedIn
+                                  ? "border-green-500 bg-green-50 text-green-700"
+                                  : "border-purple-300 bg-purple-50 text-purple-700",
+                              )}
+                            >
+                              {guest.firstName} {guest.lastName}
+                              <span className="ml-1 text-xs opacity-70">G</span>
+                              {guest.checkedIn && (
+                                <span className="ml-2 text-xs text-green-500">
+                                  ✓
+                                </span>
+                              )}
+                            </div>
+                          ))}
 
                           {/* Fills */}
-                          {fills.length > 0 && (
-                            <div className="flex flex-wrap gap-2">
-                              {fills.map((fill: any, idx: number) => (
-                                <span
-                                  key={idx}
-                                  className="rounded border border-amber-400 bg-amber-50 px-2 py-1 text-sm text-amber-700"
-                                >
-                                  {fill.label || "Fill"}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                          {fills.map((fill: any, idx: number) => {
+                            // Format fill label based on type
+                            const getFillLabel = () => {
+                              if (fill.customName) return fill.customName;
+                              switch (fill.fillType) {
+                                case "guest_fill":
+                                  return "Guest Fill";
+                                case "reciprocal_fill":
+                                  return "Reciprocal";
+                                case "custom_fill":
+                                  return fill.customName || "Custom Fill";
+                                default:
+                                  return fill.fillType || "Fill";
+                              }
+                            };
+                            return (
+                              <span
+                                key={`fill-${idx}`}
+                                className="rounded-lg border border-amber-400 bg-amber-50 px-3 py-1.5 text-base font-medium text-amber-700"
+                              >
+                                {getFillLabel()}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

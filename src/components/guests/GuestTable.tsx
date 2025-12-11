@@ -2,7 +2,7 @@
 
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { UserMinus, Pencil, Trash, History } from "lucide-react";
+import { UserMinus, Pencil, Trash, History, Activity } from "lucide-react";
 import { useState } from "react";
 import {
   BaseDataTable,
@@ -12,6 +12,8 @@ import {
 import { type BaseGuest, type TimeBlockGuest } from "~/app/types/GuestTypes";
 import { getGuestBookingHistoryAction } from "~/server/guests/actions";
 import { BookingHistoryDialog } from "~/components/booking/BookingHistoryDialog";
+import { PaceOfPlayHistoryDialog } from "~/components/pace-of-play/PaceOfPlayHistoryDialog";
+import { getGuestPaceOfPlayHistoryAction } from "~/server/pace-of-play/actions";
 
 interface GuestTableProps {
   guests: BaseGuest[] | TimeBlockGuest[];
@@ -44,15 +46,28 @@ export function GuestTable({
 }: GuestTableProps) {
   const [selectedGuest, setSelectedGuest] = useState<BaseGuest | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [paceOfPlayHistoryDialogOpen, setPaceOfPlayHistoryDialogOpen] =
+    useState(false);
 
   const handleViewHistory = (guest: BaseGuest) => {
     setSelectedGuest(guest);
     setHistoryDialogOpen(true);
   };
 
+  const handleViewPaceOfPlayHistory = (guest: BaseGuest) => {
+    setSelectedGuest(guest);
+    setPaceOfPlayHistoryDialogOpen(true);
+  };
+
   const fetchGuestHistory = async (year?: number, month?: number) => {
     if (!selectedGuest) return [];
     return await getGuestBookingHistoryAction(selectedGuest.id, year, month);
+  };
+
+  const fetchGuestPaceOfPlayHistory = async () => {
+    if (!selectedGuest)
+      return { success: false, data: [], error: "No guest selected" };
+    return await getGuestPaceOfPlayHistoryAction(selectedGuest.id);
   };
 
   if (variant === "timeblock") {
@@ -160,6 +175,12 @@ export function GuestTable({
     onClick: handleViewHistory,
   });
 
+  actions.push({
+    label: "Pace of Play History",
+    icon: <Activity className="mr-2 h-4 w-4" />,
+    onClick: handleViewPaceOfPlayHistory,
+  });
+
   if (onEdit) {
     actions.push({
       label: "Edit",
@@ -204,13 +225,23 @@ export function GuestTable({
       />
 
       {selectedGuest && (
-        <BookingHistoryDialog
-          isOpen={historyDialogOpen}
-          onClose={() => setHistoryDialogOpen(false)}
-          title="Guest Booking History"
-          fetchHistory={fetchGuestHistory}
-          entityName={`${selectedGuest.firstName} ${selectedGuest.lastName}`}
-        />
+        <>
+          <BookingHistoryDialog
+            isOpen={historyDialogOpen}
+            onClose={() => setHistoryDialogOpen(false)}
+            title="Guest Booking History"
+            fetchHistory={fetchGuestHistory}
+            entityName={`${selectedGuest.firstName} ${selectedGuest.lastName}`}
+          />
+
+          <PaceOfPlayHistoryDialog
+            isOpen={paceOfPlayHistoryDialogOpen}
+            onClose={() => setPaceOfPlayHistoryDialogOpen(false)}
+            title="Guest Pace of Play History"
+            fetchHistory={fetchGuestPaceOfPlayHistory}
+            entityName={`${selectedGuest.firstName} ${selectedGuest.lastName}`}
+          />
+        </>
       )}
     </>
   );

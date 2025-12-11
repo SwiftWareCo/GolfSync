@@ -4,6 +4,11 @@ import { PageHeader } from "~/components/ui/page-header";
 import { getEvents } from "~/server/events/data";
 import { getActiveMemberClasses } from "~/server/member-classes/data";
 import { EventDialog } from "~/components/events/admin/EventDialog";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Events",
+};
 
 export default async function EventsPage() {
   const [events, memberClasses] = await Promise.all([

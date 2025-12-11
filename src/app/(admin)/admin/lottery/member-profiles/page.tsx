@@ -4,6 +4,11 @@ import { ControlPanel } from "~/components/lottery/member-profiles/ControlPanel"
 import { MemberProfilesTable } from "~/components/lottery/member-profiles/MemberProfilesTable";
 import { getMemberProfilesWithFairness } from "~/server/lottery/member-profiles-data";
 import { Card, CardContent } from "~/components/ui/card";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Member Profiles",
+};
 
 export const dynamic = "force-dynamic";
 

@@ -16,7 +16,7 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const logoUrl = '/quilchena_logo.png';
+  const logoUrl = "/quilchena_logo.png";
   const organizationName = "Quilchena Golf Club";
   const homeUrl = "/admin";
 
@@ -24,7 +24,12 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
     { name: "Teesheet", href: `/admin` },
     { name: "Members", href: "/admin/members" },
     { name: "Events", href: "/admin/events" },
-    { name: "Charges", href: "/admin/charges", count: chargesCount > 0 ? chargesCount : undefined },
+    {
+      name: "Charges",
+      href: "/admin/charges",
+      count: chargesCount > 0 ? chargesCount : undefined,
+    },
+    { name: "Proshop Display", href: "/proshop/display" },
     { name: "Settings", href: "/admin/settings" },
   ];
 
@@ -41,7 +46,7 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
               className="flex-shrink-0 transition-transform hover:scale-105"
             >
               {logoUrl ? (
-                <div className="relative h-7 sm:h-8 md:h-10 w-auto">
+                <div className="relative h-7 w-auto sm:h-8 md:h-10">
                   <Image
                     src={logoUrl}
                     alt={`${organizationName} Logo`}
@@ -53,15 +58,18 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
                   />
                 </div>
               ) : (
-                <div className="h-7 sm:h-8 md:h-10 w-7 sm:w-8 md:w-10 rounded-full bg-white/20 shadow-sm" />
+                <div className="h-7 w-7 rounded-full bg-white/20 shadow-sm sm:h-8 sm:w-8 md:h-10 md:w-10" />
               )}
             </Link>
 
             {/* Desktop Navigation */}
-            <div className="hidden flex-1 items-center justify-center md:flex">
+            <div className="hidden flex-1 items-center justify-center lg:flex">
               <div className="flex space-x-1 rounded-full bg-white/10 p-1.5">
                 {navItems.map((item) => {
-                  const isActive = item.name === "Teesheet" ? isTeesheetActive : pathname === item.href;
+                  const isActive =
+                    item.name === "Teesheet"
+                      ? isTeesheetActive
+                      : pathname === item.href;
                   return (
                     <Link
                       key={item.name}
@@ -93,7 +101,10 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
 
             {/* User Button */}
             <div className="flex items-center gap-4">
-              <MobileMenuButton isOpen={isMobileMenuOpen} onToggle={setIsMobileMenuOpen} />
+              <MobileMenuButton
+                isOpen={isMobileMenuOpen}
+                onToggle={setIsMobileMenuOpen}
+              />
               <UserButtonComponent />
             </div>
           </div>
@@ -102,7 +113,7 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
 
       {/* Mobile Navigation */}
       <div
-        className={`absolute inset-x-0 top-full transform px-4 transition-all duration-300 md:hidden ${
+        className={`absolute inset-x-0 top-full transform px-4 transition-all duration-300 lg:hidden ${
           isMobileMenuOpen
             ? "pointer-events-auto translate-y-2 opacity-100"
             : "pointer-events-none -translate-y-2 opacity-0"
@@ -112,7 +123,10 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
           <div className="bg-org-primary/95 pointer-events-auto rounded-3xl border border-white/10 shadow-xl backdrop-blur-sm">
             <div className="space-y-1 p-6">
               {navItems.map((item) => {
-                const isActive = item.name === "Teesheet" ? isTeesheetActive : pathname === item.href;
+                const isActive =
+                  item.name === "Teesheet"
+                    ? isTeesheetActive
+                    : pathname === item.href;
                 return (
                   <Link
                     key={item.name}

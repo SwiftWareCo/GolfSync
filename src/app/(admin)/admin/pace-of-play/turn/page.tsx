@@ -1,14 +1,20 @@
 import { TurnPageClient } from "~/components/pace-of-play/TurnPageClient";
 import { getBCToday, parseDate } from "~/lib/dates";
 import { getTimeBlocksAtTurn } from "~/server/pace-of-play/data";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Record Turn Time",
+};
 
 interface PageProps {
-  searchParams: Promise<{ teesheetDate?: string }>;
+  searchParams: Promise<{ date?: string }>;
 }
 
 export default async function TurnPage({ searchParams }: PageProps) {
   const params = await searchParams;
-  const dateString = params?.teesheetDate || getBCToday();
+  const dateString = params?.date || getBCToday();
+
   const timeBlocks = await getTimeBlocksAtTurn(parseDate(dateString));
 
   return (

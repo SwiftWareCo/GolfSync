@@ -4,18 +4,14 @@ import { revalidatePath } from "next/cache";
 
 import {
   getPaceOfPlayByTimeBlockId,
-
   upsertPaceOfPlay,
   type PaceOfPlayInsert,
   getMemberPaceOfPlayHistory,
+  getGuestPaceOfPlayHistory,
 } from "./data";
 import { db } from "../db";
-import {  eq } from "drizzle-orm";
-import {
-  timeBlocks,
-
-  memberSpeedProfiles,
-} from "../db/schema";
+import { eq } from "drizzle-orm";
+import { timeBlocks, memberSpeedProfiles } from "../db/schema";
 import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
 import {
   calculatePaceStatus,
@@ -54,21 +50,6 @@ function calculateExpectedTimes(startTime: Date) {
   };
 }
 
-// Define pace status type based on schema varchar field
-type PaceStatus =
-  | "pending"
-  | "on_time"
-  | "behind"
-  | "ahead"
-  | "completed"
-  | "completed_on_time"
-  | "completed_early"
-  | "completed_late";
-
-// Helper to determine pace of play status
-// DEPRECATED: Use calculatePaceStatus and mapPaceStatusToDbStatus instead
-// Keeping for reference if needed during refactor, but should be removed
-// function determinePaceStatus(...)
 
 // Initialize pace of play when a group starts
 export async function initializePaceOfPlay(
@@ -134,8 +115,8 @@ export async function updateTurnTime(
     return { success: false, error: "Start time not recorded" };
   }
 
-  // Validate turn time is realistic
-  const startTime = new Date(currentPace.startTime);
+  // Validate turn time is realistic - use expected start time (scheduled tee time)
+  const startTime = new Date(currentPace.expectedStartTime);
   const turnDurationMinutes = Math.floor(
     (turn9Time.getTime() - startTime.getTime()) / (1000 * 60),
   );
@@ -188,8 +169,8 @@ export async function updateFinishTime(
     return { success: false, error: "Start time not recorded" };
   }
 
-  // Validate finish time is realistic
-  const startTime = new Date(currentPace.startTime);
+  // Validate finish time is realistic - use expected start time (scheduled tee time)
+  const startTime = new Date(currentPace.expectedStartTime);
   const roundDurationMinutes = Math.floor(
     (finishTime.getTime() - startTime.getTime()) / (1000 * 60),
   );
@@ -398,6 +379,21 @@ export async function getMemberPaceOfPlayHistoryAction(memberId: number) {
     return { success: true, data: history };
   } catch (error) {
     console.error("Error fetching member pace of play history:", error);
+    return {
+      success: false,
+      data: [],
+      error: "Failed to fetch pace of play history",
+    };
+  }
+}
+
+// Get pace of play history for a specific guest
+export async function getGuestPaceOfPlayHistoryAction(guestId: number) {
+  try {
+    const history = await getGuestPaceOfPlayHistory(guestId);
+    return { success: true, data: history };
+  } catch (error) {
+    console.error("Error fetching guest pace of play history:", error);
     return {
       success: false,
       data: [],

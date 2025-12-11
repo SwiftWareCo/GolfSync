@@ -2,6 +2,11 @@ import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { ArrangeContainer } from "~/components/teesheet/arrange/ArrangeContainer";
 import { notFound } from "next/navigation";
 import { parseDate, getDateForDB } from "~/lib/dates";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Arrange Teesheet",
+};
 
 export default async function ArrangePage({
   params,

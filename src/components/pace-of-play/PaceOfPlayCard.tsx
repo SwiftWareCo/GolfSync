@@ -136,9 +136,16 @@ export function PaceOfPlayCard({
               players.map((player, idx) => (
                 <span
                   key={idx}
-                  className="border-org-primary/30 bg-org-secondary text-org-primary inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-medium"
+                  className={`inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-medium ${
+                    player.isGuest
+                      ? "border-purple-200 bg-purple-50 text-purple-700"
+                      : "border-org-primary/30 bg-org-secondary text-org-primary"
+                  }`}
                 >
                   {player.name}
+                  {player.isGuest && (
+                    <span className="ml-1 text-xs opacity-70">G</span>
+                  )}
                   {player.checkedIn && (
                     <CheckCircle className="ml-1.5 h-3.5 w-3.5 text-green-500" />
                   )}

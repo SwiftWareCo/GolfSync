@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 
 interface MobileMenuButtonProps {
   isOpen: boolean;
@@ -11,7 +10,7 @@ const MobileMenuButton = ({ isOpen, onToggle }: MobileMenuButtonProps) => {
   return (
     <button
       onClick={() => onToggle(!isOpen)}
-      className="rounded-full p-2.5 text-white transition-colors hover:bg-white/10 md:hidden"
+      className="rounded-full p-2.5 text-white transition-colors hover:bg-white/10 lg:hidden"
     >
       <div className="space-y-1.5">
         <div

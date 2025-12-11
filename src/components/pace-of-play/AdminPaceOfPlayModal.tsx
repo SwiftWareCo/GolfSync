@@ -80,11 +80,26 @@ export function AdminPaceOfPlayModal({
       const now = getBCNow();
 
       if (mode === "turn" || mode === "both") {
-        await updateTurnTime(timeBlock.id, now, userName, notes);
+        const result = await updateTurnTime(timeBlock.id, now, userName, notes);
+        if (!result.success) {
+          toast.error(result.error || "Failed to record turn time");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       if (mode === "finish" || mode === "both") {
-        await updateFinishTime(timeBlock.id, now, userName, notes);
+        const result = await updateFinishTime(
+          timeBlock.id,
+          now,
+          userName,
+          notes,
+        );
+        if (!result.success) {
+          toast.error(result.error || "Failed to record finish time");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       const actionText =
@@ -142,11 +157,31 @@ export function AdminPaceOfPlayModal({
 
       // Update the times
       if (turnDateTime) {
-        await updateTurnTime(timeBlock.id, turnDateTime, userName, notes);
+        const result = await updateTurnTime(
+          timeBlock.id,
+          turnDateTime,
+          userName,
+          notes,
+        );
+        if (!result.success) {
+          toast.error(result.error || "Failed to record turn time");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       if (finishDateTime) {
-        await updateFinishTime(timeBlock.id, finishDateTime, userName, notes);
+        const result = await updateFinishTime(
+          timeBlock.id,
+          finishDateTime,
+          userName,
+          notes,
+        );
+        if (!result.success) {
+          toast.error(result.error || "Failed to record finish time");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       const actionText =

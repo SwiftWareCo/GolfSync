@@ -59,12 +59,25 @@ export function PaceOfPlayUpdateModal({
       const now = getBCNow();
 
       if (mode === "turn") {
-        await updateTurnTime(timeBlock.id, now, userName, notes);
+        const result = await updateTurnTime(timeBlock.id, now, userName, notes);
+        if (!result.success) {
+          toast.error(result.error || "Failed to record turn time");
+          return;
+        }
         toast.success(
           `Turn time for ${formatTime12Hour(timeBlock.startTime)} group has been updated.`,
         );
       } else {
-        await updateFinishTime(timeBlock.id, now, userName, notes);
+        const result = await updateFinishTime(
+          timeBlock.id,
+          now,
+          userName,
+          notes,
+        );
+        if (!result.success) {
+          toast.error(result.error || "Failed to record finish time");
+          return;
+        }
         toast.success(
           `Finish time for ${formatTime12Hour(timeBlock.startTime)} group has been updated.`,
         );
@@ -112,9 +125,12 @@ export function PaceOfPlayUpdateModal({
 
           <div>
             <p className="mb-1 text-sm font-medium">Players</p>
-            <p className="text-sm">    {timeBlock?.players && timeBlock.players.length > 0
-                  ? timeBlock.players.map((p) => p.name).join(", ")
-                  : "No players"}</p>
+            <p className="text-sm">
+              {" "}
+              {timeBlock?.players && timeBlock.players.length > 0
+                ? timeBlock.players.map((p) => p.name).join(", ")
+                : "No players"}
+            </p>
           </div>
 
           <div>

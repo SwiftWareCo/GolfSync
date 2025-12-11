@@ -29,6 +29,11 @@ import {
   NotificationsSkeleton,
   CourseInfoSkeleton,
 } from "~/components/settings/skeletons";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Settings",
+};
 
 async function ConfigurationsTab() {
   const teesheetConfigs = await getTeesheetConfigs();

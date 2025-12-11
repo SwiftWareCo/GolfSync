@@ -9,6 +9,11 @@ import { getLotteryDataForDate } from "~/server/lottery/data";
 import { checkAndRunMonthlyMaintenance } from "~/server/lottery/maintenance-actions";
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Lottery Management",
+};
 
 interface PageProps {
   params: {

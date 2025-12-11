@@ -20,6 +20,13 @@ export function calculatePaceStatus(
 
   const now = getBCNow();
   const scheduledStart = new Date(paceOfPlay.expectedStartTime);
+
+  // If current time is before scheduled tee time, show "not-started"
+  // This prevents showing "Early" before the round should have started
+  if (now < scheduledStart) {
+    return "not-started";
+  }
+
   const expectedTurn = new Date(paceOfPlay.expectedTurn9Time);
   const expectedFinish = new Date(paceOfPlay.expectedFinishTime);
 
@@ -190,8 +197,11 @@ export function calculateExpectedHole(
   const floatHole = elapsedMinutes / minutesPerHole;
   const currentHole = Math.min(Math.max(Math.ceil(floatHole), 1), 18);
 
-  // Calculate percentage complete
-  const percentComplete = Math.min((elapsedMinutes / 240) * 100, 100);
+  // Calculate percentage complete (clamp to 0-100)
+  const percentComplete = Math.max(
+    0,
+    Math.min((elapsedMinutes / 240) * 100, 100),
+  );
 
   return {
     currentHole,

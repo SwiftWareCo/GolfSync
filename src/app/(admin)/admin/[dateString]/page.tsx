@@ -7,6 +7,11 @@ import { HydrationBoundary, dehydrate } from "@tanstack/react-query";
 
 import { notFound } from "next/navigation";
 import { parseDate, getDateForDB } from "~/lib/dates";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Teesheet",
+};
 
 export default async function AdminPage({
   params,

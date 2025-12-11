@@ -173,6 +173,35 @@ export async function removeTimeBlockMember(
       };
     }
 
+    // Check if any checked-in players remain in the timeblock
+    const remainingMembers = await db
+      .select({ id: timeBlockMembers.memberId })
+      .from(timeBlockMembers)
+      .where(
+        and(
+          eq(timeBlockMembers.timeBlockId, timeBlockId),
+          eq(timeBlockMembers.checkedIn, true),
+        ),
+      );
+
+    const remainingGuests = await db
+      .select({ id: timeBlockGuests.guestId })
+      .from(timeBlockGuests)
+      .where(
+        and(
+          eq(timeBlockGuests.timeBlockId, timeBlockId),
+          eq(timeBlockGuests.checkedIn, true),
+        ),
+      );
+
+    // If no checked-in players remain, uninitialize pace of play
+    if (remainingMembers.length === 0 && remainingGuests.length === 0) {
+      await db
+        .update(paceOfPlay)
+        .set({ startTime: null })
+        .where(eq(paceOfPlay.timeBlockId, timeBlockId));
+    }
+
     revalidatePath(`/admin`);
     revalidatePath(`/members/teesheet`);
     return { success: true };
@@ -208,6 +237,35 @@ export async function removeTimeBlockGuest(
         success: false,
         error: "Guest not found in time block",
       };
+    }
+
+    // Check if any checked-in players remain in the timeblock
+    const remainingMembers = await db
+      .select({ id: timeBlockMembers.memberId })
+      .from(timeBlockMembers)
+      .where(
+        and(
+          eq(timeBlockMembers.timeBlockId, timeBlockId),
+          eq(timeBlockMembers.checkedIn, true),
+        ),
+      );
+
+    const remainingGuests = await db
+      .select({ id: timeBlockGuests.guestId })
+      .from(timeBlockGuests)
+      .where(
+        and(
+          eq(timeBlockGuests.timeBlockId, timeBlockId),
+          eq(timeBlockGuests.checkedIn, true),
+        ),
+      );
+
+    // If no checked-in players remain, uninitialize pace of play
+    if (remainingMembers.length === 0 && remainingGuests.length === 0) {
+      await db
+        .update(paceOfPlay)
+        .set({ startTime: null })
+        .where(eq(paceOfPlay.timeBlockId, timeBlockId));
     }
 
     revalidatePath(`/admin`);
@@ -338,6 +396,19 @@ export async function checkInGuest(
         charged: false,
         staffInitials: "AUTO", // Auto-generated charge
       });
+    }
+
+    // If checking in, initialize pace of play (same as member check-in)
+    if (isCheckedIn) {
+      const existingPaceOfPlay = await db.query.paceOfPlay.findFirst({
+        where: eq(paceOfPlay.timeBlockId, timeBlockId),
+      });
+
+      // Only initialize pace of play if it hasn't been initialized yet
+      if (!existingPaceOfPlay?.startTime) {
+        const currentTime = new Date();
+        await initializePaceOfPlay(timeBlockId, currentTime);
+      }
     }
 
     revalidatePath(`/teesheet`);

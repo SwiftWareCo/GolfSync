@@ -3,6 +3,11 @@ import { getGuests } from "~/server/guests/data";
 import { getActiveMemberClasses } from "~/server/member-classes/data";
 import { MembersGuestsHandler } from "~/components/members/MembersGuestsHandler";
 import { PageHeader } from "~/components/ui/page-header";
+import { type Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Members & Guests",
+};
 
 export default async function MembersPage() {
   const [members, guests, memberClasses] = await Promise.all([
@@ -10,7 +15,6 @@ export default async function MembersPage() {
     getGuests(),
     getActiveMemberClasses(),
   ]);
-
 
   return (
     <div className="container space-y-6">

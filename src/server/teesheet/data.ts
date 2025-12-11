@@ -26,6 +26,8 @@ function flattenTimeBlock(rawTimeBlock: any): TimeBlockWithRelations {
         ...tbg.guest,
         invitedByMemberId: tbg.invitedByMemberId,
         invitedByMember: tbg.invitedByMember,
+        checkedIn: tbg.checkedIn,
+        checkedInAt: tbg.checkedInAt,
       })) ?? [],
   };
 }
