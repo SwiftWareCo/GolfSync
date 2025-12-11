@@ -9,10 +9,7 @@ interface PageProps {
 export default async function FinishPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const dateString = params?.teesheetDate || getBCToday();
-  const timeBlocksData = await getTimeBlocksAtFinish(
-    parseDate(dateString),
-    true,
-  );
+  const timeBlocksData = await getTimeBlocksAtFinish(parseDate(dateString));
 
   return (
     <div className="container mx-auto max-w-7xl py-6">

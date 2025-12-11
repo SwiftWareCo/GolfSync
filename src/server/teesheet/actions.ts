@@ -9,12 +9,11 @@ import {
   teesheets,
   fills,
   generalCharges,
-  timeblockRestrictions,
   lotteryEntries,
   configBlocks,
   type TeesheetConfig,
 } from "~/server/db/schema";
-import { and, eq, sql, gte, lte, asc } from "drizzle-orm";
+import { and, eq, sql, asc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "~/lib/auth-server";
 import { initializePaceOfPlay } from "~/server/pace-of-play/actions";
@@ -24,7 +23,7 @@ import { getTimeBlocksForTeesheet } from "~/server/teesheet/data";
 type ActionResult = {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: Record<string, unknown>;
 };
 
 /**
@@ -133,7 +132,7 @@ export async function replaceTimeBlocks(
     } catch (error) {
       return {
         success: false,
-        error: "Failed to create time blocks from configuration",
+        error: `Failed to create time blocks from configuration: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
 
@@ -847,6 +846,7 @@ export async function insertTimeBlock(
 
     revalidatePath("/admin");
     revalidatePath("/admin/lottery");
+    revalidatePath("/admin/arrange");
     return { success: true, data: newBlock };
   } catch (error) {
     console.error("Error inserting timeblock:", error);
@@ -949,5 +949,204 @@ export async function getArrangeResultsData(
   } catch (error) {
     console.error("Error getting arrange results data:", error);
     return { success: false, error: "Failed to get arrange results data" };
+  }
+}
+
+/**
+ * Helper function to add minutes to a time string (HH:MM format)
+ */
+function addMinutesToTime(time: string, minutes: number): string {
+  const [hours, mins] = time.split(":").map(Number);
+  const totalMinutes = (hours || 0) * 60 + (mins || 0) + minutes;
+  const newHours = Math.floor(totalMinutes / 60);
+  const newMins = totalMinutes % 60;
+  return `${newHours.toString().padStart(2, "0")}:${newMins.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Apply a frost delay to all timeblocks in a teesheet
+ * Shifts all start/end times forward by the specified minutes
+ */
+export async function applyFrostDelay(
+  teesheetId: number,
+  delayMinutes: number,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  try {
+    // Validate delay is positive and reasonable (max 3 hours)
+    if (delayMinutes <= 0 || delayMinutes > 180) {
+      return {
+        success: false,
+        error: "Delay must be between 1 and 180 minutes",
+      };
+    }
+
+    // Get all timeblocks for this teesheet ordered by sortOrder
+    const allBlocks = await db.query.timeBlocks.findMany({
+      where: eq(timeBlocks.teesheetId, teesheetId),
+      orderBy: [asc(timeBlocks.sortOrder)],
+    });
+
+    if (allBlocks.length === 0) {
+      return { success: false, error: "No timeblocks found for this teesheet" };
+    }
+
+    // Check if delay would push last timeblock past 8 PM (20:00)
+    const MAX_END_TIME_MINUTES = 20 * 60; // 8 PM in minutes
+    const lastBlock = allBlocks[allBlocks.length - 1];
+    if (lastBlock) {
+      const [lastHours, lastMins] = lastBlock.startTime.split(":").map(Number);
+      const lastTimeMinutes = (lastHours || 0) * 60 + (lastMins || 0);
+      const newLastTimeMinutes = lastTimeMinutes + delayMinutes;
+
+      if (newLastTimeMinutes > MAX_END_TIME_MINUTES) {
+        return {
+          success: false,
+          error: `Cannot apply ${delayMinutes} minute delay - would push last tee time past 8:00 PM`,
+        };
+      }
+    }
+
+    // Update all timeblocks with shifted times
+    for (const block of allBlocks) {
+      const newStartTime = addMinutesToTime(block.startTime, delayMinutes);
+      const newEndTime = addMinutesToTime(block.endTime, delayMinutes);
+
+      await db
+        .update(timeBlocks)
+        .set({ startTime: newStartTime, endTime: newEndTime })
+        .where(eq(timeBlocks.id, block.id));
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/arrange");
+    return {
+      success: true,
+      data: { blocksUpdated: allBlocks.length, delayMinutes },
+    };
+  } catch (error) {
+    console.error("Error applying frost delay:", error);
+    return { success: false, error: "Failed to apply frost delay" };
+  }
+}
+
+/**
+ * Batch move/swap players between timeblocks
+ * Used by the arrange page to save all pending changes at once
+ */
+export async function batchMoveChanges(
+  teesheetId: number,
+  changes: Array<{
+    playerId: number;
+    playerType: "member" | "guest";
+    sourceTimeBlockId: number;
+    targetTimeBlockId: number;
+    invitedByMemberId?: number; // Required for guests
+  }>,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  try {
+    // Verify teesheet exists
+    const teesheet = await db.query.teesheets.findFirst({
+      where: eq(teesheets.id, teesheetId),
+    });
+
+    if (!teesheet) {
+      return { success: false, error: "Teesheet not found" };
+    }
+
+    const bookingDate = formatDateToYYYYMMDD(teesheet.date);
+    let successCount = 0;
+
+    for (const change of changes) {
+      try {
+        if (change.playerType === "member") {
+          // Remove from source timeblock
+          await db
+            .delete(timeBlockMembers)
+            .where(
+              and(
+                eq(timeBlockMembers.timeBlockId, change.sourceTimeBlockId),
+                eq(timeBlockMembers.memberId, change.playerId),
+              ),
+            );
+
+          // Get target timeblock for booking time
+          const targetBlock = await db.query.timeBlocks.findFirst({
+            where: eq(timeBlocks.id, change.targetTimeBlockId),
+          });
+
+          if (targetBlock) {
+            // Add to target timeblock
+            await db.insert(timeBlockMembers).values({
+              timeBlockId: change.targetTimeBlockId,
+              memberId: change.playerId,
+              bookingDate,
+              bookingTime: targetBlock.startTime,
+            });
+            successCount++;
+          }
+        } else if (change.playerType === "guest") {
+          // Get invitedByMemberId from existing record if not provided
+          let invitedByMemberId = change.invitedByMemberId;
+          if (!invitedByMemberId) {
+            const existingGuest = await db.query.timeBlockGuests.findFirst({
+              where: and(
+                eq(timeBlockGuests.timeBlockId, change.sourceTimeBlockId),
+                eq(timeBlockGuests.guestId, change.playerId),
+              ),
+            });
+            invitedByMemberId = existingGuest?.invitedByMemberId ?? -1;
+          }
+
+          // Remove from source timeblock
+          await db
+            .delete(timeBlockGuests)
+            .where(
+              and(
+                eq(timeBlockGuests.timeBlockId, change.sourceTimeBlockId),
+                eq(timeBlockGuests.guestId, change.playerId),
+              ),
+            );
+
+          // Get target timeblock for booking time
+          const targetBlock = await db.query.timeBlocks.findFirst({
+            where: eq(timeBlocks.id, change.targetTimeBlockId),
+          });
+
+          if (targetBlock) {
+            // Add to target timeblock
+            await db.insert(timeBlockGuests).values({
+              timeBlockId: change.targetTimeBlockId,
+              guestId: change.playerId,
+              invitedByMemberId,
+              bookingDate,
+              bookingTime: targetBlock.startTime,
+            });
+            successCount++;
+          }
+        }
+      } catch (changeError) {
+        console.error(
+          `Error processing change for ${change.playerType} ${change.playerId}:`,
+          changeError,
+        );
+        // Continue processing other changes even if one fails
+      }
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/arrange");
+    revalidatePath("/members/teesheet");
+
+    return {
+      success: true,
+      data: { successCount, totalChanges: changes.length },
+    };
+  } catch (error) {
+    console.error("Error in batch move changes:", error);
+    return { success: false, error: "Failed to save changes" };
   }
 }

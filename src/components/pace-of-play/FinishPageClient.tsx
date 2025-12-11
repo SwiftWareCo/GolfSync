@@ -7,7 +7,6 @@ import { Button } from "~/components/ui/button";
 import { ShieldAlert } from "lucide-react";
 import { PaceOfPlayCard } from "~/components/pace-of-play/PaceOfPlayCard";
 import { PaceOfPlayUpdateModal } from "~/components/pace-of-play/PaceOfPlayUpdateModal";
-import { CombinedTurnFinishModal } from "~/components/pace-of-play/CombinedTurnFinishModal";
 import { AdminPaceOfPlayModal } from "~/components/pace-of-play/AdminPaceOfPlayModal";
 import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
 import { formatTime12Hour } from "~/lib/dates";
@@ -36,7 +35,6 @@ export function FinishPageClient({
   const [selectedTimeBlock, setSelectedTimeBlock] =
     useState<TimeBlockWithPaceOfPlay | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isCombinedModalOpen, setIsCombinedModalOpen] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminModalMode, setAdminModalMode] = useState<
     "turn" | "finish" | "both"
@@ -45,11 +43,6 @@ export function FinishPageClient({
   const handleUpdateFinish = (timeBlock: TimeBlockWithPaceOfPlay) => {
     setSelectedTimeBlock(timeBlock);
     setIsModalOpen(true);
-  };
-
-  const handleCombinedUpdate = (timeBlock: TimeBlockWithPaceOfPlay) => {
-    setSelectedTimeBlock(timeBlock);
-    setIsCombinedModalOpen(true);
   };
 
   const handleAdminUpdate = (
@@ -63,7 +56,6 @@ export function FinishPageClient({
 
   const closeModal = () => {
     setIsModalOpen(false);
-    setIsCombinedModalOpen(false);
     setIsAdminModalOpen(false);
     setSelectedTimeBlock(null);
   };
@@ -220,16 +212,6 @@ export function FinishPageClient({
         isOpen={isModalOpen}
         onClose={closeModal}
         mode="finish"
-        userName={
-          user?.fullName || user?.username || (isAdmin ? "Admin" : "Member")
-        }
-      />
-
-      {/* Combined Turn & Finish Modal */}
-      <CombinedTurnFinishModal
-        timeBlock={selectedTimeBlock}
-        isOpen={isCombinedModalOpen}
-        onClose={closeModal}
         userName={
           user?.fullName || user?.username || (isAdmin ? "Admin" : "Member")
         }

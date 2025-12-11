@@ -38,7 +38,7 @@ export function CombinedTurnFinishModal({
     if (isOpen && timeBlock) {
       setNotes(timeBlock.paceOfPlay?.notes || "");
       // Set default turn time to halfway between start and now
-      const startTime = new Date(timeBlock.paceOfPlay?.startTime!);
+      const startTime = new Date(timeBlock.paceOfPlay?.startTime || "");
       const now = getBCNow();
       const halfwayTime = new Date((startTime.getTime() + now.getTime()) / 2);
       setTurnTime(formatTimeForInput(halfwayTime));
@@ -123,7 +123,11 @@ export function CombinedTurnFinishModal({
 
           <div>
             <p className="mb-1 text-sm font-medium">Players</p>
-            <p className="text-sm">{timeBlock?.playerNames || "No players"}</p>
+            <p className="text-sm">
+              {timeBlock?.players && timeBlock.players.length > 0
+                ? timeBlock.players.map((p) => p.name).join(", ")
+                : "No players"}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

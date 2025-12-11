@@ -112,7 +112,9 @@ export function PaceOfPlayUpdateModal({
 
           <div>
             <p className="mb-1 text-sm font-medium">Players</p>
-            <p className="text-sm">{timeBlock?.playerNames || "No players"}</p>
+            <p className="text-sm">    {timeBlock?.players && timeBlock.players.length > 0
+                  ? timeBlock.players.map((p) => p.name).join(", ")
+                  : "No players"}</p>
           </div>
 
           <div>

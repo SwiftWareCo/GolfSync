@@ -22,7 +22,6 @@ import {
   formatTime12Hour,
   getBCNow,
   getBCToday,
-  formatTime,
   parseDateTime,
 } from "~/lib/dates";
 import { Clock, Save, RotateCcw } from "lucide-react";
@@ -45,9 +44,6 @@ export function AdminPaceOfPlayModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("quick");
-
-  // Quick record state (current time)
-  const [useCurrentTime, setUseCurrentTime] = useState(true);
 
   // Manual time state
   const [customTurnTime, setCustomTurnTime] = useState("");
@@ -225,7 +221,9 @@ export function AdminPaceOfPlayModal({
             <div>
               <p className="mb-1 text-sm font-medium">Players</p>
               <p className="text-sm">
-                {timeBlock?.playerNames || "No players"}
+                {timeBlock?.players && timeBlock.players.length > 0
+                  ? timeBlock.players.map((p) => p.name).join(", ")
+                  : "No players"}
               </p>
             </div>
           </div>

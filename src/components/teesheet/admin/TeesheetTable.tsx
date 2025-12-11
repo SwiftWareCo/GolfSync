@@ -643,6 +643,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   key={`row-${block.id}`}
                   timeBlockId={block.id}
                   startTime={block.startTime}
+                  displayName={block.displayName}
                   members={block.members || []}
                   guests={block.guests || []}
                   fills={block.fills || []}

@@ -110,35 +110,6 @@ export async function getPaceOfPlayByDate(
   }));
 }
 
-// Get ongoing pace of play records (for turn and finish pages)
-export async function getOngoingPaceOfPlay(date: Date) {
-  const formattedDate = date.toISOString().split("T")[0];
-
-  return db
-    .select({
-      timeBlock: timeBlocks,
-      paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT ${timeBlockMembers.memberId}) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      playerNames: sql<string>`string_agg(DISTINCT CONCAT(${members.firstName}, ' ', ${members.lastName}), ', ')`,
-    })
-    .from(timeBlocks)
-    .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
-    .innerJoin(paceOfPlay, eq(timeBlocks.id, paceOfPlay.timeBlockId))
-    .leftJoin(timeBlockMembers, eq(timeBlocks.id, timeBlockMembers.timeBlockId))
-    .leftJoin(members, eq(timeBlockMembers.memberId, members.id))
-    .leftJoin(timeBlockGuests, eq(timeBlocks.id, timeBlockGuests.timeBlockId))
-    .leftJoin(guests, eq(timeBlockGuests.guestId, guests.id))
-    .where(
-      and(
-        sql`${teesheets.date} = ${formattedDate}`,
-        sql`${paceOfPlay.startTime} IS NOT NULL`,
-        sql`${paceOfPlay.finishTime} IS NULL`,
-      ),
-    )
-    .groupBy(timeBlocks.id, paceOfPlay.id)
-    .orderBy(asc(timeBlocks.startTime));
-}
-
 // Get active time blocks at the turn (have started but not recorded turn time)
 export async function getTimeBlocksAtTurn(
   date: Date,
@@ -180,10 +151,7 @@ export async function getTimeBlocksAtTurn(
 }
 
 // Get active time blocks at the finish (have started, recorded turn time, but not finished)
-export async function getTimeBlocksAtFinish(
-  date: Date,
-  includeMissedTurns = false,
-): Promise<{
+export async function getTimeBlocksAtFinish(date: Date): Promise<{
   regular: TimeBlockWithPaceOfPlay[];
   missedTurns: TimeBlockWithPaceOfPlay[];
 }> {

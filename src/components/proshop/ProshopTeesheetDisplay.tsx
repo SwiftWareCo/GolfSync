@@ -177,6 +177,11 @@ export function ProshopTeesheetDisplay({
                       >
                         {formatTime(block.startTime)}
                       </div>
+                      {block.displayName && (
+                        <div className="bg-org-primary/10 text-org-primary mt-1 rounded px-2 py-0.5 text-sm font-semibold">
+                          {block.displayName}
+                        </div>
+                      )}
                       {isCurrentSlot && (
                         <span className="bg-org-primary mt-1 inline-block rounded px-2 py-0.5 text-xs font-medium text-white">
                           NOW

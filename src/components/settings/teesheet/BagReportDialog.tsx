@@ -16,7 +16,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { Label } from "~/components/ui/label";
-import { TimeBlockWithRelations } from "~/server/db/schema";
+import { type Member, type TimeBlockWithRelations } from "~/server/db/schema";
 
 interface BagReportDialogProps {
   timeBlocks: TimeBlockWithRelations[];
@@ -63,8 +63,8 @@ export function BagReportDialog({
     // Extract bag numbers from all members in those blocks
     const bagNumbers = blocksInRange.flatMap((block) =>
       block.members
-        .filter((member: any) => member.bagNumber) // Only include members with bag numbers
-        .map((member: any) => member.bagNumber!),
+        .filter((member: Member) => member.bagNumber) // Only include members with bag numbers
+        .map((member: Member) => member.bagNumber!),
     );
 
     // Sort alphabetically
@@ -259,7 +259,7 @@ ${formattedBagReport}</pre>
                     </p>
                   ) : (
                     <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                      {block.members.map((member: any) => (
+                      {block.members.map((member: Member) => (
                         <div
                           key={member.id}
                           className="flex items-center justify-between rounded bg-gray-50 px-2 py-1"

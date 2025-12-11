@@ -42,6 +42,7 @@ export type TimeBlockGuestFull = Guest & {
 interface TimeBlockRowProps {
   timeBlockId: number;
   startTime: string;
+  displayName?: string | null;
   members: TimeBlockMemberFull[];
   guests: TimeBlockGuestFull[];
   fills: Fill[];
@@ -61,6 +62,7 @@ interface TimeBlockRowProps {
 export function TimeBlockRow({
   timeBlockId,
   startTime,
+  displayName,
   members,
   guests,
   fills,
@@ -97,8 +99,13 @@ export function TimeBlockRow({
             >
               {formatTime12Hour(startTime)}
             </span>
+            {displayName && (
+              <span className="rounded bg-blue-100 px-1.5 py-0.5 text-xs font-semibold text-blue-700">
+                {displayName}
+              </span>
+            )}
             <span
-              className={`inline-flex justify-center cursor-pointer items-center rounded border px-2 py-0.5 text-xs font-medium transition-all hover:scale-105 ${badgeClasses}`}
+              className={`inline-flex cursor-pointer items-center justify-center rounded border px-2 py-0.5 text-xs font-medium transition-all hover:scale-105 ${badgeClasses}`}
               onClick={(e) => {
                 e.stopPropagation();
                 modalRef.current?.open();

@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   CalendarDays,
   Zap,
+  ArrowUpDown,
   BaggageClaim,
   Settings,
 } from "lucide-react";
@@ -31,12 +32,13 @@ import { TeesheetSettingsModal } from "../TeesheetSettingsModal";
 import type { Teesheet } from "~/server/db/schema";
 import { AdminLotteryEntryModal } from "~/components/lottery/AdminLotteryEntryModal";
 import { usePopulateTeesheet } from "~/services/teesheet/hooks";
+import { type TimeBlockWithRelations } from "~/server/db/schema";
 
 interface SidebarActionsProps {
   teesheet: Teesheet;
   dateString: string;
   config: TeesheetConfigWithBlocks | null;
-  timeBlocks: any[];
+  timeBlocks: TimeBlockWithRelations[];
   availableConfigs: TeesheetConfig[];
   isTwoDayViewOpen: boolean;
   onTwoDayViewToggle: (open: boolean) => void;
@@ -87,6 +89,10 @@ export function SidebarActions({
 
   const handleAutoPopulate = async () => {
     populateMutation.mutate({ teesheetId: teesheet.id, date: dateString });
+  };
+
+  const handleArrange = () => {
+    router.push(`/admin/arrange/${dateString}`);
   };
 
   const handleSettings = () => {
@@ -176,9 +182,7 @@ export function SidebarActions({
                 <span className={buttonLabelClasses}>Two Days</span>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
-              Desktop only
-            </TooltipContent>
+            <TooltipContent side="right">Desktop only</TooltipContent>
           </Tooltip>
         </TooltipProvider>
 
@@ -194,6 +198,17 @@ export function SidebarActions({
           <span className={buttonLabelClasses}>
             {populateMutation.isPending ? "Populating..." : "Auto"}
           </span>
+        </Button>
+
+        {/* Arrange Teesheet */}
+        <Button
+          variant="ghost"
+          onClick={handleArrange}
+          title="Arrange Teesheet"
+          className={sidebarButtonClasses}
+        >
+          <ArrowUpDown className="h-5 w-5 shrink-0" />
+          <span className={buttonLabelClasses}>Arrange</span>
         </Button>
 
         {/* Bag Report */}

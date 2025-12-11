@@ -28,17 +28,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Settings, Eye, Dice1, AlertCircle } from "lucide-react";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type {
-  Teesheet,
-  TeesheetConfig,
-  TimeBlock,
-} from "~/server/db/schema";
+import type { Teesheet, TeesheetConfig } from "~/server/db/schema";
 import {
   updateTeesheetVisibility,
   updateLotterySettings,
 } from "~/server/settings/actions";
 import { replaceTimeBlocks } from "~/server/teesheet/actions";
 import { queryKeys } from "~/server/query-options/query-keys";
+import { type TimeBlockWithRelations } from "~/server/db/schema";
 
 // Form validation schema
 const teesheetSettingsSchema = z.object({
@@ -56,7 +53,7 @@ interface TeesheetSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   teesheet: Teesheet;
-  timeBlocks: TimeBlock[];
+  timeBlocks: TimeBlockWithRelations[];
   availableConfigs: TeesheetConfig[];
 }
 
@@ -75,8 +72,7 @@ export function TeesheetSettingsModal({
     handleSubmit,
     watch,
     setValue,
-    reset,
-    formState: { errors, dirtyFields },
+    formState: { errors },
   } = useForm<TeesheetSettingsFormInput>({
     resolver: zodResolver(teesheetSettingsSchema),
     mode: "onChange",
@@ -198,10 +194,6 @@ export function TeesheetSettingsModal({
     }
 
     const promises = [];
-
-    const lotteryChanged =
-      data.lotteryEnabled !== teesheet.lotteryEnabled ||
-      data.lotteryDisabledMessage !== teesheet.lotteryDisabledMessage;
 
     const visibilityChanged =
       data.isPublic !== teesheet.isPublic ||
