@@ -2,8 +2,14 @@ import { TurnPageClient } from "~/components/pace-of-play/TurnPageClient";
 import { getTimeBlocksAtTurn } from "~/server/pace-of-play/data";
 import { getBCToday, parseDate } from "~/lib/dates";
 
-export default async function TurnPage() {
-  const timeBlocks = await getTimeBlocksAtTurn(parseDate(getBCToday()));
+interface PageProps {
+  searchParams: Promise<{ teesheetDate?: string }>;
+}
+
+export default async function TurnPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const dateString = params?.teesheetDate || getBCToday();
+  const timeBlocks = await getTimeBlocksAtTurn(parseDate(dateString));
 
   return (
     <div className="container mx-auto max-w-7xl py-6">

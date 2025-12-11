@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useUser } from "@clerk/nextjs";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
 
 import { PaceOfPlayCard } from "~/components/pace-of-play/PaceOfPlayCard";
 import { PaceOfPlayUpdateModal } from "~/components/pace-of-play/PaceOfPlayUpdateModal";
@@ -67,25 +66,16 @@ export function TurnPageClient({
           </div>
         ) : (
           initialTimeBlocks.map((timeBlock) => (
-            <div key={timeBlock.id} className="space-y-2">
-              <PaceOfPlayCard
-                timeBlock={timeBlock}
-                onUpdateTurn={() => handleUpdateTurn(timeBlock)}
-                showTurnButton={true}
-              />
-              {isAdmin && (
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleAdminUpdateTurn(timeBlock)}
-                    className="border-amber-300 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
-                  >
-                    Set Custom Turn Time
-                  </Button>
-                </div>
-              )}
-            </div>
+            <PaceOfPlayCard
+              key={timeBlock.id}
+              timeBlock={timeBlock}
+              onUpdateTurn={() => handleUpdateTurn(timeBlock)}
+              onAdminUpdate={
+                isAdmin ? () => handleAdminUpdateTurn(timeBlock) : undefined
+              }
+              showTurnButton={true}
+              isAdmin={isAdmin}
+            />
           ))
         )}
       </div>

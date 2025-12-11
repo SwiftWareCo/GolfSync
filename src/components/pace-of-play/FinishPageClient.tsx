@@ -104,25 +104,18 @@ export function FinishPageClient({
               </div>
             ) : (
               timeBlocks.regular.map((timeBlock) => (
-                <div key={timeBlock.id} className="space-y-2">
-                  <PaceOfPlayCard
-                    timeBlock={timeBlock}
-                    onUpdateFinish={() => handleUpdateFinish(timeBlock)}
-                    showFinishButton={true}
-                  />
-                  {isAdmin && (
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleAdminUpdate(timeBlock, "finish")}
-                        className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
-                      >
-                        Set Custom Finish Time
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                <PaceOfPlayCard
+                  key={timeBlock.id}
+                  timeBlock={timeBlock}
+                  onUpdateFinish={() => handleUpdateFinish(timeBlock)}
+                  onAdminUpdate={
+                    isAdmin
+                      ? () => handleAdminUpdate(timeBlock, "finish")
+                      : undefined
+                  }
+                  showFinishButton={true}
+                  isAdmin={isAdmin}
+                />
               ))
             )}
           </div>
@@ -166,8 +159,12 @@ export function FinishPageClient({
                               {formatTime12Hour(timeBlock.startTime)} Group
                             </p>
                             <p className="text-xs text-gray-600">
-                              {timeBlock.playerNames || "No players"} (
-                              {timeBlock.numPlayers})
+                              {timeBlock.players && timeBlock.players.length > 0
+                                ? timeBlock.players
+                                    .map((p) => p.name)
+                                    .join(", ")
+                                : "No players"}{" "}
+                              ({timeBlock.numPlayers})
                             </p>
                           </div>
                         </div>

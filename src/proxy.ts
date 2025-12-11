@@ -2,7 +2,11 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getBCToday } from "./lib/dates";
 
-const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/api/cron/update-weather"]);
+const isPublicRoute = createRouteMatcher([
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/cron/update-weather",
+]);
 const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
 const isMemberRoute = createRouteMatcher(["/members(.*)"]);
 const isPaceOfPlayRoute = createRouteMatcher(["/members/pace-of-play(.*)"]);

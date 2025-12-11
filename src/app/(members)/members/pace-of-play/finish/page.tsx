@@ -2,9 +2,15 @@ import { FinishPageClient } from "~/components/pace-of-play/FinishPageClient";
 import { getTimeBlocksAtFinish } from "~/server/pace-of-play/data";
 import { getBCToday, parseDate } from "~/lib/dates";
 
-export default async function FinishPage() {
+interface PageProps {
+  searchParams: Promise<{ teesheetDate?: string }>;
+}
+
+export default async function FinishPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const dateString = params?.teesheetDate || getBCToday();
   const timeBlocksData = await getTimeBlocksAtFinish(
-    parseDate(getBCToday()),
+    parseDate(dateString),
     true,
   );
 

@@ -1,9 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { PaceOfPlayStatus, getStatusColor } from "./PaceOfPlayStatus";
 import { type TimeBlockWithPaceOfPlay } from "~/server/pace-of-play/data";
 import { Button } from "~/components/ui/button";
@@ -14,6 +9,7 @@ import {
   PlayCircle,
   Flag,
   CheckCircle,
+  Settings,
 } from "lucide-react";
 import { formatTime12Hour } from "~/lib/dates";
 
@@ -22,10 +18,12 @@ interface PaceOfPlayCardProps {
   onUpdateStart?: () => void;
   onUpdateTurn?: () => void;
   onUpdateFinish?: () => void;
+  onAdminUpdate?: () => void;
   showStartButton?: boolean;
   showTurnButton?: boolean;
   showFinishButton?: boolean;
   isMissedTurn?: boolean;
+  isAdmin?: boolean;
 }
 
 export function PaceOfPlayCard({
@@ -33,12 +31,14 @@ export function PaceOfPlayCard({
   onUpdateStart,
   onUpdateTurn,
   onUpdateFinish,
+  onAdminUpdate,
   showStartButton = false,
   showTurnButton = false,
   showFinishButton = false,
   isMissedTurn = false,
+  isAdmin = false,
 }: PaceOfPlayCardProps) {
-  const { paceOfPlay, playerNames, numPlayers, startTime } = timeBlock;
+  const { paceOfPlay, players, numPlayers, startTime } = timeBlock;
 
   // Format the tee time using our utility function
   const displayStartTime = startTime ? formatTime12Hour(startTime) : "—";
@@ -73,8 +73,8 @@ export function PaceOfPlayCard({
           <CardTitle className="text-lg font-bold">
             {displayStartTime} Tee Time
           </CardTitle>
-          {paceOfPlay && <PaceOfPlayStatus status={paceOfPlay.status} />}
           <div className="flex items-center gap-2">
+            {paceOfPlay && <PaceOfPlayStatus status={paceOfPlay.status} />}
             {showStartButton && !timeBlock.paceOfPlay?.startTime && (
               <Button
                 variant="outline"
@@ -112,18 +112,50 @@ export function PaceOfPlayCard({
                   {isMissedTurn ? "Record Turn & Finish" : "Record Finish"}
                 </Button>
               )}
+            {/* Admin custom time button - moved inside card */}
+            {isAdmin && onAdminUpdate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onAdminUpdate}
+                className="h-8 border-amber-300 px-2 py-1 text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+              >
+                <Settings className="mr-1 h-4 w-4" />
+                Custom Time
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
-      <CardContent className="pb-2">
-        <div className="grid gap-2">
-          <div className="flex items-center gap-2">
-            <Users className="text-muted-foreground h-4 w-4" />
-            <span className="text-sm">
-              {playerNames || "No players"} ({numPlayers})
+      <CardContent className="pb-3">
+        <div className="grid gap-3">
+          {/* Players as individual badges */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Users className="text-muted-foreground h-4 w-4 shrink-0" />
+            {players && players.length > 0 ? (
+              players.map((player, idx) => (
+                <span
+                  key={idx}
+                  className="border-org-primary/30 bg-org-secondary text-org-primary inline-flex items-center rounded-md border px-2.5 py-1 text-sm font-medium"
+                >
+                  {player.name}
+                  {player.checkedIn && (
+                    <CheckCircle className="ml-1.5 h-3.5 w-3.5 text-green-500" />
+                  )}
+                </span>
+              ))
+            ) : (
+              <span className="text-muted-foreground text-sm">
+                No checked-in players
+              </span>
+            )}
+            <span className="text-muted-foreground ml-1 text-sm">
+              ({numPlayers})
             </span>
           </div>
-          <div className="mt-2 grid grid-cols-3 gap-4">
+
+          {/* Time info grid */}
+          <div className="mt-1 grid grid-cols-3 gap-4">
             <div className="flex flex-col">
               <span className="text-muted-foreground flex items-center gap-1 text-xs">
                 <Clock className="h-3 w-3" /> Start

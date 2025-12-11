@@ -18,10 +18,16 @@ import {
 // Re-export schema types for convenience
 export type { PaceOfPlay, PaceOfPlayInsert };
 
+// Player info for pace of play display
+export type PaceOfPlayPlayer = {
+  name: string;
+  checkedIn: boolean;
+};
+
 // Composed type for time blocks with pace of play data
 export type TimeBlockWithPaceOfPlay = TimeBlock & {
   paceOfPlay: PaceOfPlay | null;
-  playerNames: string;
+  players: PaceOfPlayPlayer[];
   numPlayers: number;
 };
 
@@ -71,15 +77,19 @@ export async function getPaceOfPlayByTimeBlockId(timeBlockId: number) {
 }
 
 // Get all pace of play records for a specific date
-export async function getPaceOfPlayByDate(date: Date) {
+export async function getPaceOfPlayByDate(
+  date: Date,
+): Promise<TimeBlockWithPaceOfPlay[]> {
   const formattedDate = date.toISOString().split("T")[0];
 
   const result = await db
     .select({
       timeBlock: timeBlocks,
       paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT ${timeBlockMembers.memberId}) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      playerNames: sql<string>`string_agg(DISTINCT CONCAT(${members.firstName}, ' ', ${members.lastName}), ', ')`,
+      numPlayers: sql<number>`COUNT(DISTINCT CASE WHEN ${timeBlockMembers.checkedIn} = true THEN ${timeBlockMembers.memberId} END) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
+      players: sql<
+        PaceOfPlayPlayer[]
+      >`COALESCE(json_agg(DISTINCT jsonb_build_object('name', CONCAT(${members.firstName}, ' ', ${members.lastName}), 'checkedIn', COALESCE(${timeBlockMembers.checkedIn}, false))) FILTER (WHERE ${members.id} IS NOT NULL AND ${timeBlockMembers.checkedIn} = true), '[]')`,
     })
     .from(timeBlocks)
     .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
@@ -93,13 +103,11 @@ export async function getPaceOfPlayByDate(date: Date) {
     .orderBy(asc(timeBlocks.startTime));
 
   return result.map((row) => ({
-    id: row.timeBlock.id,
-    startTime: row.timeBlock.startTime,
-    teesheetId: row.timeBlock.teesheetId,
+    ...row.timeBlock,
     paceOfPlay: row.paceOfPlay,
-    playerNames: row.playerNames || "",
+    players: row.players || [],
     numPlayers: row.numPlayers,
-  })) as TimeBlockWithPaceOfPlay[];
+  }));
 }
 
 // Get ongoing pace of play records (for turn and finish pages)
@@ -132,15 +140,19 @@ export async function getOngoingPaceOfPlay(date: Date) {
 }
 
 // Get active time blocks at the turn (have started but not recorded turn time)
-export async function getTimeBlocksAtTurn(date: Date) {
+export async function getTimeBlocksAtTurn(
+  date: Date,
+): Promise<TimeBlockWithPaceOfPlay[]> {
   const formattedDate = date.toISOString().split("T")[0];
 
   const result = await db
     .select({
       timeBlock: timeBlocks,
       paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT ${timeBlockMembers.memberId}) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      playerNames: sql<string>`string_agg(DISTINCT CONCAT(${members.firstName}, ' ', ${members.lastName}), ', ')`,
+      numPlayers: sql<number>`COUNT(DISTINCT CASE WHEN ${timeBlockMembers.checkedIn} = true THEN ${timeBlockMembers.memberId} END) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
+      players: sql<
+        PaceOfPlayPlayer[]
+      >`COALESCE(json_agg(DISTINCT jsonb_build_object('name', CONCAT(${members.firstName}, ' ', ${members.lastName}), 'checkedIn', COALESCE(${timeBlockMembers.checkedIn}, false))) FILTER (WHERE ${members.id} IS NOT NULL AND ${timeBlockMembers.checkedIn} = true), '[]')`,
     })
     .from(timeBlocks)
     .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
@@ -160,13 +172,11 @@ export async function getTimeBlocksAtTurn(date: Date) {
     .orderBy(asc(timeBlocks.startTime));
 
   return result.map((row) => ({
-    id: row.timeBlock.id,
-    startTime: row.timeBlock.startTime,
-    teesheetId: row.timeBlock.teesheetId,
+    ...row.timeBlock,
     paceOfPlay: row.paceOfPlay,
-    playerNames: row.playerNames || "",
+    players: row.players || [],
     numPlayers: row.numPlayers,
-  })) as TimeBlockWithPaceOfPlay[];
+  }));
 }
 
 // Get active time blocks at the finish (have started, recorded turn time, but not finished)
@@ -190,8 +200,10 @@ export async function getTimeBlocksAtFinish(
     .select({
       timeBlock: timeBlocks,
       paceOfPlay: paceOfPlay,
-      numPlayers: sql<number>`COUNT(DISTINCT ${timeBlockMembers.memberId}) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
-      playerNames: sql<string>`string_agg(DISTINCT CONCAT(${members.firstName}, ' ', ${members.lastName}), ', ')`,
+      numPlayers: sql<number>`COUNT(DISTINCT CASE WHEN ${timeBlockMembers.checkedIn} = true THEN ${timeBlockMembers.memberId} END) + COUNT(DISTINCT ${timeBlockGuests.guestId})`,
+      players: sql<
+        PaceOfPlayPlayer[]
+      >`COALESCE(json_agg(DISTINCT jsonb_build_object('name', CONCAT(${members.firstName}, ' ', ${members.lastName}), 'checkedIn', COALESCE(${timeBlockMembers.checkedIn}, false))) FILTER (WHERE ${members.id} IS NOT NULL AND ${timeBlockMembers.checkedIn} = true), '[]')`,
     })
     .from(timeBlocks)
     .innerJoin(teesheets, eq(timeBlocks.teesheetId, teesheets.id))
@@ -205,14 +217,12 @@ export async function getTimeBlocksAtFinish(
     .orderBy(asc(timeBlocks.startTime));
 
   const timeBlocksWithPace = result.map((row) => ({
-    id: row.timeBlock.id,
-    startTime: row.timeBlock.startTime,
-    teesheetId: row.timeBlock.teesheetId,
+    ...row.timeBlock,
     paceOfPlay: row.paceOfPlay,
-    playerNames: row.playerNames || "",
+    players: row.players || [],
     numPlayers: row.numPlayers,
     hasMissedTurn: !row.paceOfPlay.turn9Time,
-  })) as (TimeBlockWithPaceOfPlay & { hasMissedTurn: boolean })[];
+  }));
 
   // If including missed turns, separate them into two groups
   const regular = timeBlocksWithPace.filter((tb) => !tb.hasMissedTurn);

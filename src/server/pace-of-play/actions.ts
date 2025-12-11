@@ -4,18 +4,16 @@ import { revalidatePath } from "next/cache";
 
 import {
   getPaceOfPlayByTimeBlockId,
-  getPaceOfPlayByDate,
+
   upsertPaceOfPlay,
   type PaceOfPlayInsert,
-  type PaceOfPlay,
   getMemberPaceOfPlayHistory,
 } from "./data";
 import { db } from "../db";
-import { and, eq, sql } from "drizzle-orm";
+import {  eq } from "drizzle-orm";
 import {
   timeBlocks,
-  timeBlockMembers,
-  paceOfPlay,
+
   memberSpeedProfiles,
 } from "../db/schema";
 import { getAlgorithmConfig } from "~/server/lottery/algorithm-config-data";
@@ -27,6 +25,10 @@ import {
 // Constants for round validation
 const MIN_ROUND_MINUTES = 180; // 3 hours
 const MAX_ROUND_MINUTES = 360; // 6 hours
+
+// Constants for turn time validation
+const MIN_TURN_MINUTES = 60; // 1 hour minimum to reach turn
+const MAX_TURN_MINUTES = 240; // 4 hours maximum to reach turn
 
 // Constants for expected pace durations in minutes
 const EXPECTED_TURN_DURATION = 120; // 2 hours to reach the turn
@@ -131,24 +133,35 @@ export async function updateTurnTime(
   turn9Time: Date,
   updatedBy: string,
   notes?: string,
-) {
+): Promise<{ success: boolean; error?: string }> {
   const currentPace = await getPaceOfPlayByTimeBlockId(timeBlockId);
   if (!currentPace) {
-    throw new Error("Pace of play record not found");
+    return { success: false, error: "Pace of play record not found" };
   }
 
-  // Get the actual tee time for reference
-  const timeBlockRes = await db
-    .select({
-      startTime: timeBlocks.startTime,
-    })
-    .from(timeBlocks)
-    .where(eq(timeBlocks.id, timeBlockId));
+  if (!currentPace.startTime) {
+    return { success: false, error: "Start time not recorded" };
+  }
 
-  // Ensure we're using the correct expected time
-  const expectedTurn9Time = currentPace.expectedTurn9Time
-    ? new Date(currentPace.expectedTurn9Time)
-    : new Date(); // fallback shouldn't happen
+  // Validate turn time is realistic
+  const startTime = new Date(currentPace.startTime);
+  const turnDurationMinutes = Math.floor(
+    (turn9Time.getTime() - startTime.getTime()) / (1000 * 60),
+  );
+
+  if (turnDurationMinutes < MIN_TURN_MINUTES) {
+    return {
+      success: false,
+      error: `Turn time too early (${turnDurationMinutes} min from start). Minimum is ${MIN_TURN_MINUTES} minutes.`,
+    };
+  }
+
+  if (turnDurationMinutes > MAX_TURN_MINUTES) {
+    return {
+      success: false,
+      error: `Turn time too late (${turnDurationMinutes} min from start). Maximum is ${MAX_TURN_MINUTES} minutes.`,
+    };
+  }
 
   // Calculate status using unified logic
   const tempPace = { ...currentPace, turn9Time };
@@ -174,10 +187,34 @@ export async function updateFinishTime(
   finishTime: Date,
   updatedBy: string,
   notes?: string,
-) {
+): Promise<{ success: boolean; error?: string }> {
   const currentPace = await getPaceOfPlayByTimeBlockId(timeBlockId);
   if (!currentPace) {
-    throw new Error("Pace of play record not found");
+    return { success: false, error: "Pace of play record not found" };
+  }
+
+  if (!currentPace.startTime) {
+    return { success: false, error: "Start time not recorded" };
+  }
+
+  // Validate finish time is realistic
+  const startTime = new Date(currentPace.startTime);
+  const roundDurationMinutes = Math.floor(
+    (finishTime.getTime() - startTime.getTime()) / (1000 * 60),
+  );
+
+  if (roundDurationMinutes < MIN_ROUND_MINUTES) {
+    return {
+      success: false,
+      error: `Finish time too early (${roundDurationMinutes} min from start). Minimum is ${MIN_ROUND_MINUTES} minutes (3 hours).`,
+    };
+  }
+
+  if (roundDurationMinutes > MAX_ROUND_MINUTES) {
+    return {
+      success: false,
+      error: `Finish time too late (${roundDurationMinutes} min from start). Maximum is ${MAX_ROUND_MINUTES} minutes (6 hours).`,
+    };
   }
 
   // Calculate status using unified logic
@@ -199,12 +236,8 @@ export async function updateFinishTime(
 
   await upsertPaceOfPlay(timeBlockId, paceData);
 
-  // Update member speed profiles after completing a round
-  await updateMemberSpeedProfiles(
-    timeBlockId,
-    currentPace.startTime!,
-    finishTime,
-  );
+  // Update member speed profiles after completing a round (already validated above)
+  await updateMemberSpeedProfiles(timeBlockId, startTime, finishTime);
 
   revalidatePath("/admin/pace-of-play");
   revalidatePath("/admin/pace-of-play/finish");
