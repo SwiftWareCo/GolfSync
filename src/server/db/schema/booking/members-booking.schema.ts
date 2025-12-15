@@ -31,6 +31,10 @@ export const timeBlockMembers = createTable(
     memberId: integer("member_id")
       .references(() => members.id, { onDelete: "cascade" })
       .notNull(),
+    // Who booked this member - NULL if added by admin
+    bookedByMemberId: integer("booked_by_member_id").references(
+      () => members.id,
+    ),
     bookingDate: date("booking_date").notNull(),
     bookingTime: varchar("booking_time", { length: 5 }).notNull(),
     checkedIn: boolean("checked_in").default(false),

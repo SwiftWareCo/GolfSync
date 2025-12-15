@@ -52,10 +52,12 @@ interface TeesheetGridProps {
   selectedDate: string | Date;
   onBook: (timeBlockId: number) => void;
   onCancel: (timeBlockId: number) => void;
+  onEdit: (timeBlockId: number) => void;
   onShowDetails: (timeBlock: ClientTimeBlock) => void;
   isTimeBlockBooked: (timeBlock: ClientTimeBlock) => boolean;
   isTimeBlockAvailable: (timeBlock: ClientTimeBlock) => boolean;
   isTimeBlockInPast: (timeBlock: ClientTimeBlock) => boolean;
+  hasExistingBookingOnDay?: boolean;
 }
 
 export function TeesheetGrid({
@@ -67,10 +69,12 @@ export function TeesheetGrid({
   selectedDate,
   onBook,
   onCancel,
+  onEdit,
   onShowDetails,
   isTimeBlockBooked,
   isTimeBlockAvailable,
   isTimeBlockInPast,
+  hasExistingBookingOnDay = false,
 }: TeesheetGridProps) {
   const timeBlocksContainerRef = useRef<HTMLDivElement>(null);
 
@@ -89,76 +93,74 @@ export function TeesheetGrid({
 
   // Simple utility to scroll to a time block on today's date
   const scrollToClosestTime = useCallback(
-    (
-      now: Date,
-      selectedDate: Date | string,
-      timeBlocks: ClientTimeBlock[],
-    ) => {
-    // Parse the date properly
-    let parsedSelectedDate: Date;
-    if (typeof selectedDate === "string") {
-      const parts = selectedDate.split("-");
-      if (parts.length === 3) {
-        const year = parseInt(parts[0] || "0");
-        const month = parseInt(parts[1] || "0") - 1;
-        const day = parseInt(parts[2] || "0");
-        parsedSelectedDate = new Date(year, month, day);
+    (now: Date, selectedDate: Date | string, timeBlocks: ClientTimeBlock[]) => {
+      // Parse the date properly
+      let parsedSelectedDate: Date;
+      if (typeof selectedDate === "string") {
+        const parts = selectedDate.split("-");
+        if (parts.length === 3) {
+          const year = parseInt(parts[0] || "0");
+          const month = parseInt(parts[1] || "0") - 1;
+          const day = parseInt(parts[2] || "0");
+          parsedSelectedDate = new Date(year, month, day);
+        } else {
+          parsedSelectedDate = new Date(selectedDate);
+        }
       } else {
-        parsedSelectedDate = new Date(selectedDate);
+        parsedSelectedDate = selectedDate;
       }
-    } else {
-      parsedSelectedDate = selectedDate;
-    }
 
-    // Only proceed if we're on today's date
-    if (
-      now.getDate() !== parsedSelectedDate.getDate() ||
-      now.getMonth() !== parsedSelectedDate.getMonth() ||
-      now.getFullYear() !== parsedSelectedDate.getFullYear()
-    ) {
-      return;
-    }
-
-    // Get current time
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-
-    // Skip if no timeblocks
-    if (!timeBlocks.length) return;
-
-    // Find timeblock closest to current time
-    const currentTimeMinutes = currentHour * 60 + currentMinute;
-
-    let bestBlock = timeBlocks[0];
-    let bestDiff = Infinity;
-
-    for (let i = 0; i < timeBlocks.length; i++) {
-      const block = timeBlocks[i];
-      if (!block?.startTime) continue;
-
-      // Parse time from HH:MM format
-      const timeParts = block.startTime.split(":");
-      if (timeParts.length !== 2) continue;
-
-      const blockHour = parseInt(timeParts[0] || "0", 10);
-      const blockMinute = parseInt(timeParts[1] || "0", 10);
-      const blockMinutes = blockHour * 60 + blockMinute;
-      const diff = Math.abs(blockMinutes - currentTimeMinutes);
-
-      if (diff < bestDiff) {
-        bestDiff = diff;
-        bestBlock = block;
+      // Only proceed if we're on today's date
+      if (
+        now.getDate() !== parsedSelectedDate.getDate() ||
+        now.getMonth() !== parsedSelectedDate.getMonth() ||
+        now.getFullYear() !== parsedSelectedDate.getFullYear()
+      ) {
+        return;
       }
-    }
 
-    // Scroll to element with a small delay to ensure DOM is ready
-    setTimeout(() => {
-      const element = document.getElementById(`time-block-${bestBlock?.id}`);
-      if (element) {
-        element.scrollIntoView({ behavior: "auto", block: "center" });
+      // Get current time
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+
+      // Skip if no timeblocks
+      if (!timeBlocks.length) return;
+
+      // Find timeblock closest to current time
+      const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+      let bestBlock = timeBlocks[0];
+      let bestDiff = Infinity;
+
+      for (let i = 0; i < timeBlocks.length; i++) {
+        const block = timeBlocks[i];
+        if (!block?.startTime) continue;
+
+        // Parse time from HH:MM format
+        const timeParts = block.startTime.split(":");
+        if (timeParts.length !== 2) continue;
+
+        const blockHour = parseInt(timeParts[0] || "0", 10);
+        const blockMinute = parseInt(timeParts[1] || "0", 10);
+        const blockMinutes = blockHour * 60 + blockMinute;
+        const diff = Math.abs(blockMinutes - currentTimeMinutes);
+
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          bestBlock = block;
+        }
       }
-    }, 100);
-  }, []);
+
+      // Scroll to element with a small delay to ensure DOM is ready
+      setTimeout(() => {
+        const element = document.getElementById(`time-block-${bestBlock?.id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: "auto", block: "center" });
+        }
+      }, 100);
+    },
+    [],
+  );
 
   // Auto-scroll to current time once when time blocks load
   useEffect(() => {
@@ -202,11 +204,13 @@ export function TeesheetGrid({
                 isPast={isTimeBlockInPast(timeBlock)}
                 onBook={() => onBook(timeBlock.id)}
                 onCancel={() => onCancel(timeBlock.id)}
+                onEdit={() => onEdit(timeBlock.id)}
                 onShowDetails={() => onShowDetails(timeBlock)}
                 disabled={loading || config?.disallowMemberBooking}
                 member={member}
                 id={`time-block-${timeBlock.id}`}
                 isRestricted={timeBlock.restriction?.isRestricted || false}
+                hasExistingBookingOnDay={hasExistingBookingOnDay}
               />
             ))}
           </div>

@@ -309,7 +309,7 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
 // Hydrated types with relations
 export type TimeBlockWithRelations = TimeBlockInsert & {
   members: (Member &
-    Pick<TimeBlockMember, "checkedIn" | "checkedInAt"> & {
+    Pick<TimeBlockMember, "checkedIn" | "checkedInAt" | "bookedByMemberId"> & {
       memberClass?: { label: string } | null;
     })[];
   guests: (Guest & { invitedByMemberId: number; invitedByMember?: Member })[];

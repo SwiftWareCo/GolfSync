@@ -24,6 +24,7 @@ type TimeBlockMemberView = {
   checkedIn: boolean | null;
   checkedInAt?: Date | null;
   memberClass?: { label: string } | null;
+  bookedByMemberId?: number | null; // Who booked this member (null = admin)
   [key: string]: any;
 };
 
@@ -45,11 +46,13 @@ export interface TimeBlockItemProps {
   isPast?: boolean;
   onBook: () => void;
   onCancel: () => void;
+  onEdit?: () => void; // New: for editing party
   onShowDetails?: () => void;
   disabled?: boolean;
   member?: ClientMember;
   id?: string;
   isRestricted?: boolean;
+  hasExistingBookingOnDay?: boolean; // Disable Book button if user already has a booking
 }
 
 export function TimeBlockItem({
@@ -59,17 +62,22 @@ export function TimeBlockItem({
   isPast = false,
   onBook,
   onCancel,
+  onEdit,
   onShowDetails,
   disabled = false,
   member,
   id,
   isRestricted = false,
+  hasExistingBookingOnDay = false,
 }: TimeBlockItemProps) {
   // Format the start time for display using our proper date utility function
   const startTimeDisplay = formatTime12Hour(timeBlock.startTime);
 
-  // Calculate total people including fills
-  const totalPeople = timeBlock.members.length + (timeBlock.fills?.length || 0);
+  // Calculate total people including members, guests, and fills
+  const totalPeople =
+    timeBlock.members.length +
+    ((timeBlock as any).guests?.length || 0) +
+    (timeBlock.fills?.length || 0);
   const maxPlayers = timeBlock.maxMembers || 4;
 
   // Check for different types of restrictions
@@ -102,6 +110,24 @@ export function TimeBlockItem({
   // Check if all members are checked in
   const allMembersCheckedIn =
     timeBlock.members.length > 0 && timeBlock.members.every((m) => m.checkedIn);
+
+  // Determine booking ownership
+  // Find current member's booking record if they're in this timeblock
+  const currentMemberBooking = member
+    ? timeBlock.members.find((m) => m.id === member.id)
+    : null;
+
+  // Check if current member was booked by admin (bookedByMemberId is null)
+  const wasAddedByAdmin = currentMemberBooking?.bookedByMemberId === null;
+
+  // Determine what action to show
+  // NEW LOGIC: Always show "edit" for booked members (they can manage their party in modal)
+  // Show "none" only if admin-added
+  const bookingAction: "cancel" | "edit" | "none" = isBooked
+    ? wasAddedByAdmin
+      ? "none"
+      : "edit"
+    : "cancel"; // Not used anymore but keeping for type safety
 
   // Determine cell status and styling
   const getStatusInfo = () => {
@@ -223,6 +249,45 @@ export function TimeBlockItem({
           <AlertCircle className="h-4 w-4 text-yellow-500" />
         )}
         {isPast && <ClockIcon className="h-4 w-4 text-gray-400" />}
+
+        {/* Desktop: Show player badges - BIGGER */}
+        {totalPeople > 0 && (
+          <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2.5 md:overflow-hidden">
+            {/* Member badges */}
+            {timeBlock.members.map((m) => (
+              <span
+                key={`member-${m.id}`}
+                className="inline-flex items-center rounded-md bg-blue-100 px-3 py-1.5 text-base font-medium text-blue-700"
+              >
+                {m.firstName} {m.lastName}
+              </span>
+            ))}
+            {/* Guest badges */}
+            {(timeBlock.guests || []).map((g: any) => (
+              <span
+                key={`guest-${g.id}`}
+                className="inline-flex items-center rounded-md bg-green-100 px-3 py-1.5 text-base font-medium text-green-700"
+              >
+                {g.firstName} {g.lastName} (G)
+              </span>
+            ))}
+            {/* Fill badges */}
+            {timeBlock.fills &&
+              timeBlock.fills.length > 0 &&
+              timeBlock.fills.map((fill, idx) => (
+                <span
+                  key={`fill-${idx}`}
+                  className="inline-flex items-center rounded-md bg-gray-100 px-3 py-1.5 text-base font-medium text-gray-600"
+                >
+                  {fill.fillType === "custom_fill"
+                    ? fill.customName || "Fill"
+                    : fill.fillType === "guest_fill"
+                      ? "Guest Fill"
+                      : "Reciprocal"}
+                </span>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* Right Section: Capacity and Actions */}
@@ -248,16 +313,20 @@ export function TimeBlockItem({
           className="flex items-center gap-1.5"
           onClick={(e) => e.stopPropagation()}
         >
-          {isBooked ? (
+          {isBooked && bookingAction === "edit" ? (
             <Button
-              variant="destructive"
+              variant="outline"
               size="sm"
-              onClick={onCancel}
+              onClick={onEdit}
               disabled={isButtonDisabled}
               className="flex h-8 items-center justify-center px-3 text-xs font-medium"
             >
-              Cancel
+              Edit
             </Button>
+          ) : isBooked && bookingAction === "none" ? (
+            <span className="px-2 text-xs text-gray-500">
+              Added by Pro Shop
+            </span>
           ) : isAvailabilityRestricted ? (
             <Button
               variant="outline"
@@ -287,7 +356,7 @@ export function TimeBlockItem({
             >
               Past
             </Button>
-          ) : !isAvailable ? (
+          ) : totalPeople >= maxPlayers ? (
             <Button
               variant="outline"
               size="sm"
@@ -295,6 +364,15 @@ export function TimeBlockItem({
               className="flex h-8 items-center justify-center border-orange-300 bg-orange-50 px-3 text-xs text-orange-600"
             >
               Full
+            </Button>
+          ) : hasExistingBookingOnDay ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled
+              className="flex h-8 items-center justify-center border-blue-300 bg-blue-50 px-3 text-xs text-blue-600"
+            >
+              Book
             </Button>
           ) : (
             <Button

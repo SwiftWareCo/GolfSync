@@ -1,8 +1,14 @@
 "use client";
 
-import { UserMinus } from "lucide-react";
+import { UserMinus, ChevronDown } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { getMemberClassStyling } from "~/lib/utils";
 import type { Member, Guest } from "~/server/db/schema";
 
@@ -18,12 +24,21 @@ interface TimeBlockPersonItemProps {
   type: PersonType;
   person: Member | TimeBlockGuest;
   onRemove: (id: number, type: PersonType) => Promise<void>;
+  bookedByMemberId?: number | null; // For members only - who booked this member
+  allMembers?: Member[]; // All members in timeblock for dropdown
+  onUpdateBookedBy?: (
+    memberId: number,
+    bookedByMemberId: number | null,
+  ) => Promise<void>;
 }
 
 export const TimeBlockPersonItem = ({
   type,
   person,
   onRemove,
+  bookedByMemberId,
+  allMembers = [],
+  onUpdateBookedBy,
 }: TimeBlockPersonItemProps) => {
   const handleRemove = () => {
     if (type === "member") {
@@ -43,7 +58,9 @@ export const TimeBlockPersonItem = ({
   let personStyle = getMemberClassStyling(type === "guest" ? "GUEST" : null);
 
   if (type === "member") {
-    const member = person as Member & { memberClass?: { label: string } | null };
+    const member = person as Member & {
+      memberClass?: { label: string } | null;
+    };
     firstName = member.firstName;
     lastName = member.lastName;
     subtitle = `#${member.memberNumber}`;
@@ -78,6 +95,11 @@ export const TimeBlockPersonItem = ({
     }
   }
 
+  // Check if we should show the booked-by dropdown
+  // Show for all members for consistency (admin can always reassign who booked them)
+  const showBookedByDropdown =
+    type === "member" && onUpdateBookedBy && allMembers.length > 0;
+
   return (
     <div
       className={`flex items-center justify-between rounded-lg border ${personStyle.border} p-3 transition-colors hover:${personStyle.bg}`}
@@ -98,6 +120,44 @@ export const TimeBlockPersonItem = ({
             </Badge>
           </div>
           <p className="text-sm text-gray-500">{subtitle}</p>
+
+          {/* Booked By Dropdown - only for members who didn't book themselves */}
+          {showBookedByDropdown && (
+            <div className="mt-2 flex items-center gap-2">
+              <label className="text-xs text-gray-500">Booked by:</label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-7 text-xs">
+                    {bookedByMemberId === null
+                      ? "Pro Shop"
+                      : allMembers.find((m) => m.id === bookedByMemberId)
+                        ? `${allMembers.find((m) => m.id === bookedByMemberId)!.firstName} ${allMembers.find((m) => m.id === bookedByMemberId)!.lastName}`
+                        : "Select..."}
+                    <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onClick={() =>
+                      onUpdateBookedBy((person as Member).id, null)
+                    }
+                  >
+                    Pro Shop
+                  </DropdownMenuItem>
+                  {allMembers.map((m) => (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onClick={() =>
+                        onUpdateBookedBy((person as Member).id, m.id)
+                      }
+                    >
+                      {m.firstName} {m.lastName}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
         {memberInfo}
       </div>

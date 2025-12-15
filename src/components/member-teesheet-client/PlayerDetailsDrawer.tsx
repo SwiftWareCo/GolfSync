@@ -18,11 +18,20 @@ type TimeBlockMemberView = {
   [key: string]: any;
 };
 
+type TimeBlockGuestView = {
+  id: number;
+  firstName: string;
+  lastName: string;
+  invitedByMemberId?: number;
+  [key: string]: any;
+};
+
 type ClientTimeBlock = {
   id: number;
   startTime: string;
   endTime: string;
   members: TimeBlockMemberView[];
+  guests?: TimeBlockGuestView[];
   fills: Fill[];
   maxMembers?: number;
   [key: string]: any;
@@ -59,7 +68,10 @@ export function PlayerDetailsDrawer({
 
   if (!isOpen || !timeBlock) return null;
 
-  const totalPeople = timeBlock.members.length + (timeBlock.fills?.length || 0);
+  const totalPeople =
+    timeBlock.members.length +
+    (timeBlock.guests?.length || 0) +
+    (timeBlock.fills?.length || 0);
   const maxPlayers = timeBlock.maxMembers || 4;
   const startTimeDisplay = formatTimeString(timeBlock.startTime);
 
@@ -151,6 +163,37 @@ export function PlayerDetailsDrawer({
                           Checked In
                         </Badge>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Guests Section */}
+            {timeBlock.guests && timeBlock.guests.length > 0 && (
+              <div>
+                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <UserIcon className="h-4 w-4" />
+                  Guests ({timeBlock.guests.length})
+                </h4>
+                <div className="space-y-2">
+                  {timeBlock.guests.map((guest, idx) => (
+                    <div
+                      key={`guest-${idx}`}
+                      className="flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <UserIcon className="h-5 w-5 text-green-500" />
+                        <div>
+                          <p className="font-medium text-green-700">
+                            {guest.firstName} {guest.lastName}
+                          </p>
+                          <p className="text-xs text-green-600">Guest</p>
+                        </div>
+                      </div>
+                      <Badge className="bg-green-500 text-xs hover:bg-green-600">
+                        Guest
+                      </Badge>
                     </div>
                   ))}
                 </div>

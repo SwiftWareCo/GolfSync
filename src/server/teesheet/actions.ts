@@ -155,6 +155,27 @@ export async function removeTimeBlockMember(
   await requireAdmin();
 
   try {
+    // First, check if this member booked anyone else in the timeblock
+    const membersBookedByThisMember = await db.query.timeBlockMembers.findMany({
+      where: and(
+        eq(timeBlockMembers.timeBlockId, timeBlockId),
+        eq(timeBlockMembers.bookedByMemberId, memberId),
+      ),
+    });
+
+    // If this member booked others, set their bookedByMemberId to null (admin)
+    if (membersBookedByThisMember.length > 0) {
+      await db
+        .update(timeBlockMembers)
+        .set({ bookedByMemberId: null })
+        .where(
+          and(
+            eq(timeBlockMembers.timeBlockId, timeBlockId),
+            eq(timeBlockMembers.bookedByMemberId, memberId),
+          ),
+        );
+    }
+
     // Delete the time block member
     const result = await db
       .delete(timeBlockMembers)
@@ -1219,5 +1240,70 @@ export async function batchMoveChanges(
   } catch (error) {
     console.error("Error in batch move changes:", error);
     return { success: false, error: "Failed to save changes" };
+  }
+}
+
+/**
+ * Update who booked a member in a timeblock (admin only)
+ */
+export async function updateMemberBookedBy(
+  timeBlockId: number,
+  memberId: number,
+  bookedByMemberId: number | null,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  try {
+    const result = await db
+      .update(timeBlockMembers)
+      .set({ bookedByMemberId })
+      .where(
+        and(
+          eq(timeBlockMembers.timeBlockId, timeBlockId),
+          eq(timeBlockMembers.memberId, memberId),
+        ),
+      )
+      .returning();
+
+    if (!result || result.length === 0) {
+      return {
+        success: false,
+        error: "Booking not found",
+      };
+    }
+
+    revalidatePath("/admin/teesheet");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating booked by:", error);
+    return {
+      success: false,
+      error: "Failed to update booked by",
+    };
+  }
+}
+
+/**
+ * Set all members' bookedByMemberId to null (admin) in a timeblock
+ * Used when the original booker removes themselves from the party
+ */
+export async function updateAllBookedByToAdmin(
+  timeBlockId: number,
+): Promise<ActionResult> {
+  try {
+    // Update all members in this timeblock to have null bookedByMemberId
+    await db
+      .update(timeBlockMembers)
+      .set({ bookedByMemberId: null })
+      .where(eq(timeBlockMembers.timeBlockId, timeBlockId));
+
+    revalidatePath("/members/teesheet");
+    return { success: true };
+  } catch (error) {
+    console.error("Error updating all booked by to admin:", error);
+    return {
+      success: false,
+      error: "Failed to update bookings",
+    };
   }
 }

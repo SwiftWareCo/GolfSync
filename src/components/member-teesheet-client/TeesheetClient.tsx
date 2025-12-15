@@ -1,6 +1,11 @@
 "use client";
 
-import React, { useMemo, useCallback, useReducer, useRef } from "react";
+import React, {
+  useMemo,
+  useCallback,
+  useReducer,
+  useRef,
+} from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { addDays } from "date-fns";
 import { useDebounce } from "use-debounce";
@@ -11,7 +16,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import {
-  bookTeeTime,
+  bookMultiplePlayersAction,
   cancelTeeTime,
 } from "~/server/members-teesheet-client/actions";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
@@ -20,6 +25,7 @@ import { PlayerDetailsDrawer } from "./PlayerDetailsDrawer";
 import { DateNavigationHeader } from "./DateNavigationHeader";
 import { TeesheetGrid } from "./TeesheetGrid";
 import { BookingDialogs } from "./BookingDialogs";
+import { BookingPartyModal } from "./BookingPartyModal";
 import { LotteryView } from "../lottery/MemberLotteryView";
 import toast from "react-hot-toast";
 import { isPast, getDateForDB } from "~/lib/dates";
@@ -73,6 +79,9 @@ type BookingState = {
   showPlayerDetails: boolean;
   selectedTimeBlock: ClientTimeBlock | null;
   swipeLoading: boolean;
+  showBookingModal: boolean;
+  editingTimeBlockId: number | null;
+  isEditMode: boolean;
 };
 
 type BookingAction =
@@ -84,7 +93,11 @@ type BookingAction =
   | { type: "TOGGLE_DATE_PICKER"; payload?: boolean }
   | { type: "SHOW_PLAYER_DETAILS"; payload: ClientTimeBlock }
   | { type: "HIDE_PLAYER_DETAILS" }
-  | { type: "SET_SWIPE_LOADING"; payload: boolean };
+  | { type: "SET_SWIPE_LOADING"; payload: boolean }
+  | { type: "SHOW_BOOKING_MODAL"; payload: number }
+  | { type: "HIDE_BOOKING_MODAL" }
+  | { type: "SHOW_EDIT_MODAL"; payload: number }
+  | { type: "HIDE_EDIT_MODAL" };
 
 const initialState: BookingState = {
   loading: false,
@@ -94,6 +107,9 @@ const initialState: BookingState = {
   showPlayerDetails: false,
   selectedTimeBlock: null,
   swipeLoading: false,
+  showBookingModal: false,
+  editingTimeBlockId: null,
+  isEditMode: false,
 };
 
 function bookingReducer(
@@ -130,6 +146,37 @@ function bookingReducer(
       };
     case "SET_SWIPE_LOADING":
       return { ...state, swipeLoading: action.payload };
+    case "SHOW_BOOKING_MODAL":
+      return {
+        ...state,
+        showBookingModal: true,
+        bookingTimeBlockId: action.payload,
+        isEditMode: false,
+      };
+    case "HIDE_BOOKING_MODAL":
+      return {
+        ...state,
+        showBookingModal: false,
+        bookingTimeBlockId: null,
+        editingTimeBlockId: null,
+        isEditMode: false,
+      };
+    case "SHOW_EDIT_MODAL":
+      return {
+        ...state,
+        showBookingModal: true,
+        editingTimeBlockId: action.payload,
+        bookingTimeBlockId: action.payload,
+        isEditMode: true,
+      };
+    case "HIDE_EDIT_MODAL":
+      return {
+        ...state,
+        showBookingModal: false,
+        editingTimeBlockId: null,
+        bookingTimeBlockId: null,
+        isEditMode: false,
+      };
     default:
       return state;
   }
@@ -164,6 +211,9 @@ export default function TeesheetClient({
     showPlayerDetails,
     selectedTimeBlock,
     swipeLoading,
+    showBookingModal,
+    editingTimeBlockId,
+    isEditMode,
   } = state;
 
   // Use sorted timeBlocks from server
@@ -290,41 +340,50 @@ export default function TeesheetClient({
     [goToPreviousDay, goToNextDay],
   );
 
-  // Debounced booking handlers with cleanup
-  const [debouncedBooking] = useDebounce(
-    useCallback(
-      async (timeBlockId: number) => {
-        if (!timeBlockId) return;
+  // Multi-player booking handler for modal
+  const handleBookingConfirm = useCallback(
+    async (
+      players: Array<{
+        type: string;
+        id: number;
+        firstName: string;
+        lastName: string;
+      }>,
+    ) => {
+      if (!bookingTimeBlockId) return;
 
-        dispatch({ type: "SET_LOADING", payload: true });
-        try {
-          const result = await bookTeeTime(timeBlockId, member);
+      dispatch({ type: "SET_LOADING", payload: true });
+      try {
+        const result = await bookMultiplePlayersAction(
+          bookingTimeBlockId,
+          players as any,
+          member.id,
+        );
 
-          if (result.success) {
-            toast.success("Tee time booked successfully!", {
-              icon: <CheckCircle className="h-5 w-5 text-green-500" />,
-              id: `book-${timeBlockId}`,
-              duration: 3000,
-            });
-          } else {
-            toast.error(result.error || "Failed to book tee time", {
-              icon: <X className="h-5 w-5 text-red-500" />,
-              id: `book-error-${timeBlockId}`,
-            });
-          }
-        } catch (error) {
-          console.error("Error booking tee time", error);
-          toast.error("An unexpected error occurred", {
-            icon: <AlertCircle className="h-5 w-5 text-red-500" />,
-            id: `book-error-unexpected-${timeBlockId}`,
+        if (result.success) {
+          toast.success("Tee time booked successfully!", {
+            icon: <CheckCircle className="h-5 w-5 text-green-500" />,
+            id: `book-${bookingTimeBlockId}`,
+            duration: 3000,
           });
-        } finally {
-          dispatch({ type: "CLEAR_BOOKING" });
+          dispatch({ type: "HIDE_BOOKING_MODAL" });
+        } else {
+          toast.error(result.error || "Failed to book tee time", {
+            icon: <X className="h-5 w-5 text-red-500" />,
+            id: `book-error-${bookingTimeBlockId}`,
+          });
         }
-      },
-      [member],
-    ),
-    300,
+      } catch (error) {
+        console.error("Error booking tee time", error);
+        toast.error("An unexpected error occurred", {
+          icon: <AlertCircle className="h-5 w-5 text-red-500" />,
+          id: `book-error-unexpected-${bookingTimeBlockId}`,
+        });
+      } finally {
+        dispatch({ type: "SET_LOADING", payload: false });
+      }
+    },
+    [bookingTimeBlockId, member.id],
   );
 
   const [debouncedCancelling] = useDebounce(
@@ -363,13 +422,7 @@ export default function TeesheetClient({
     300,
   );
 
-  // Booking handlers
-  const handleBookTeeTime = useCallback(() => {
-    if (bookingTimeBlockId) {
-      debouncedBooking(bookingTimeBlockId);
-    }
-  }, [bookingTimeBlockId, debouncedBooking]);
-
+  // Cancel handler
   const handleCancelTeeTime = useCallback(() => {
     if (cancelTimeBlockId) {
       debouncedCancelling(cancelTimeBlockId);
@@ -379,6 +432,11 @@ export default function TeesheetClient({
   // Show player details handler
   const handleShowPlayerDetails = useCallback((timeBlock: ClientTimeBlock) => {
     dispatch({ type: "SHOW_PLAYER_DETAILS", payload: timeBlock });
+  }, []);
+
+  // Edit booking handler
+  const handleEditBooking = useCallback((timeBlockId: number) => {
+    dispatch({ type: "SHOW_EDIT_MODAL", payload: timeBlockId });
   }, []);
 
   // Check for booking restrictions
@@ -461,7 +519,7 @@ export default function TeesheetClient({
             );
           }
           // Proceed with booking despite frequency limit
-          dispatch({ type: "START_BOOKING", payload: timeBlockId });
+          dispatch({ type: "SHOW_BOOKING_MODAL", payload: timeBlockId });
         } else {
           // For other restrictions, block the booking
           toast.error(
@@ -475,8 +533,8 @@ export default function TeesheetClient({
           return;
         }
       } else {
-        // No restrictions, proceed with booking
-        dispatch({ type: "START_BOOKING", payload: timeBlockId });
+        // No restrictions, proceed with booking modal
+        dispatch({ type: "SHOW_BOOKING_MODAL", payload: timeBlockId });
       }
     },
     [timeBlocks],
@@ -490,6 +548,12 @@ export default function TeesheetClient({
     },
     [member],
   );
+
+  // Check if member has any booking on this day (used to disable Book buttons)
+  const hasExistingBookingOnDay = useMemo(() => {
+    if (!member || !timeBlocks) return false;
+    return timeBlocks.some((tb) => tb.members?.some((m) => m.id === member.id));
+  }, [member, timeBlocks]);
 
   const isTimeBlockAvailable = useCallback((timeBlock: ClientTimeBlock) => {
     if (!timeBlock?.members) return true;
@@ -680,10 +744,12 @@ export default function TeesheetClient({
               onCancel={(timeBlockId) =>
                 dispatch({ type: "START_CANCELLING", payload: timeBlockId })
               }
+              onEdit={handleEditBooking}
               onShowDetails={handleShowPlayerDetails}
               isTimeBlockBooked={isTimeBlockBooked}
               isTimeBlockAvailable={isTimeBlockAvailable}
               isTimeBlockInPast={isTimeBlockInPast}
+              hasExistingBookingOnDay={hasExistingBookingOnDay}
             />
           )}
 
@@ -709,14 +775,92 @@ export default function TeesheetClient({
             timeBlock={selectedTimeBlock}
           />
 
-          {/* Booking Dialogs */}
+          {/* Booking Party Modal */}
+          <BookingPartyModal
+            open={showBookingModal}
+            onOpenChange={(open) => {
+              if (!open) dispatch({ type: "HIDE_BOOKING_MODAL" });
+            }}
+            currentMember={{
+              id: member.id,
+              firstName: member.firstName,
+              lastName: member.lastName,
+              memberNumber: (member as any).memberNumber,
+            }}
+            maxPlayers={4}
+            timeBlockCurrentCapacity={(() => {
+              const timeBlockId = isEditMode
+                ? editingTimeBlockId
+                : bookingTimeBlockId;
+              const timeBlock = timeBlocks.find((tb) => tb.id === timeBlockId);
+              if (!timeBlock) return 0;
+              return (
+                timeBlock.members.length +
+                ((timeBlock as any).guests?.length || 0) +
+                (timeBlock.fills?.length || 0)
+              );
+            })()}
+            onConfirm={handleBookingConfirm}
+            mode={isEditMode ? "edit" : "create"}
+            timeBlockId={editingTimeBlockId ?? undefined}
+            existingParty={
+              isEditMode && editingTimeBlockId
+                ? (() => {
+                    const timeBlock = timeBlocks.find(
+                      (tb) => tb.id === editingTimeBlockId,
+                    );
+                    if (!timeBlock) return undefined;
+
+                    // Find current member's booking record
+                    const currentMemberRecord = timeBlock.members.find(
+                      (m) => m.id === member.id,
+                    );
+                    if (!currentMemberRecord) return undefined;
+
+                    // Determine the organizer ID (who booked this party)
+                    const organizerId =
+                      currentMemberRecord.bookedByMemberId ?? member.id;
+
+                    // Show ALL members in the same party
+                    const yourMembers = timeBlock.members
+                      .filter((m) => {
+                        // Handle admin-booked (null bookedByMemberId)
+                        if (m.bookedByMemberId === null) {
+                          return m.id === member.id; // Only show self
+                        }
+                        // Include all members with same organizer
+                        return m.bookedByMemberId === organizerId;
+                      })
+                      .map((m) => ({
+                        id: m.id,
+                        firstName: m.firstName,
+                        lastName: m.lastName,
+                        memberNumber: (m as any).memberNumber,
+                        bookedByMemberId: (m as any).bookedByMemberId,
+                      }));
+
+                    // Show guests invited by the organizer
+                    const yourGuests = ((timeBlock as any).guests || []).filter(
+                      (g: any) => g.invitedByMemberId === organizerId,
+                    );
+
+                    return {
+                      members: yourMembers,
+                      guests: yourGuests,
+                    };
+                  })()
+                : undefined
+            }
+          />
+
+          {/* Cancel Confirmation */}
           <BookingDialogs
-            bookingTimeBlockId={bookingTimeBlockId}
+            bookingTimeBlockId={null}
             cancelTimeBlockId={cancelTimeBlockId}
             loading={loading}
-            onBookConfirm={handleBookTeeTime}
+            onBookConfirm={() => {}}
             onCancelConfirm={handleCancelTeeTime}
-            onBookingClose={() => dispatch({ type: "CLEAR_BOOKING" })}
+            onBookingClose={() => {}}
             onCancelClose={() => dispatch({ type: "CLEAR_CANCELLING" })}
           />
         </div>

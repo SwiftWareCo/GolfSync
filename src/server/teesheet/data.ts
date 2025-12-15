@@ -12,17 +12,28 @@ import { getConfigForDate } from "~/server/settings/data";
 
 // Helper function to flatten nested timeBlockMembers and timeBlockGuests to members and guests
 function flattenTimeBlock(rawTimeBlock: any): TimeBlockWithRelations {
+  // Sort members and guests by createdAt to maintain stable insertion order
+  const sortedMembers = [...(rawTimeBlock.timeBlockMembers ?? [])].sort(
+    (a: any, b: any) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+  const sortedGuests = [...(rawTimeBlock.timeBlockGuests ?? [])].sort(
+    (a: any, b: any) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+
   return {
     ...rawTimeBlock,
     members:
-      rawTimeBlock.timeBlockMembers?.map((tbm: any) => ({
+      sortedMembers.map((tbm: any) => ({
         ...tbm.member,
         bagNumber: tbm.member.bagNumber,
         checkedIn: tbm.checkedIn,
         checkedInAt: tbm.checkedInAt,
+        bookedByMemberId: tbm.bookedByMemberId, // Track who booked this member
       })) ?? [],
     guests:
-      rawTimeBlock.timeBlockGuests?.map((tbg: any) => ({
+      sortedGuests.map((tbg: any) => ({
         ...tbg.guest,
         invitedByMemberId: tbg.invitedByMemberId,
         invitedByMember: tbg.invitedByMember,

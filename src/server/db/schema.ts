@@ -5,6 +5,7 @@
 export * from "./schema/teesheetConfigs.schema";
 export * from "./schema/lottery";
 export * from "./schema/fills.schema";
+export * from "./schema/fills-saved.schema";
 export * from "./schema/core/members.schema";
 export * from "./schema/core/guests.schema";
 export * from "./schema/booking/timeblocks.schema";

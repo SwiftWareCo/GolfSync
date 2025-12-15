@@ -407,6 +407,16 @@ export function UnifiedChargesList({
                           <>
                             {charge.splitWithMember.firstName}{" "}
                             {charge.splitWithMember.lastName}
+                            {charge.splitWithMember.memberNumber && (
+                              <>
+                                {" "}
+                                (
+                                <strong>
+                                  {charge.splitWithMember.memberNumber}
+                                </strong>
+                                )
+                              </>
+                            )}
                           </>
                         ) : (
                           "-"

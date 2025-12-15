@@ -30,6 +30,7 @@ import {
   removeTimeBlockGuest,
   addFillToTimeBlock,
   removeFillFromTimeBlock,
+  updateMemberBookedBy,
 } from "~/server/teesheet/actions";
 import { addMemberToTimeBlock } from "~/server/members/actions";
 import { addGuestToTimeBlock } from "~/server/guests/actions";
@@ -406,6 +407,70 @@ export function TimeBlockMemberManager({
     },
   });
 
+  // Mutation for updating bookedByMemberId with cache optimism
+  const updateBookedByMutation = useMutation({
+    mutationFn: ({
+      memberId,
+      bookedByMemberId,
+    }: {
+      memberId: number;
+      bookedByMemberId: number | null;
+    }) => updateMemberBookedBy(timeBlock.id as number, memberId, bookedByMemberId),
+
+    onMutate: async ({
+      memberId,
+      bookedByMemberId,
+    }: {
+      memberId: number;
+      bookedByMemberId: number | null;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      const previous = queryClient.getQueryData(
+        teesheetKeys.detail(dateString),
+      );
+
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          timeBlocks: old.timeBlocks.map((block: any) =>
+            block.id === timeBlock.id
+              ? {
+                  ...block,
+                  members: (block.members || []).map((m: any) =>
+                    m.id === memberId
+                      ? { ...m, bookedByMemberId }
+                      : m,
+                  ),
+                }
+              : block,
+          ),
+        };
+      });
+
+      return { previous };
+    },
+
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          teesheetKeys.detail(dateString),
+          context.previous,
+        );
+      }
+      toast.error("Failed to update booked by");
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+      toast.success("Booked by updated");
+    },
+  });
+
   // Extract members and guests from flattened structure
   const members = timeBlock.members || [];
   const guests = timeBlock.guests || [];
@@ -667,6 +732,13 @@ export function TimeBlockMemberManager({
     removeFillMutation.mutate(fillId);
   };
 
+  const handleUpdateBookedBy = async (
+    memberId: number,
+    bookedByMemberId: number | null,
+  ) => {
+    updateBookedByMutation.mutate({ memberId, bookedByMemberId });
+  };
+
   return (
     <div className="space-y-6">
       <TimeBlockHeader
@@ -684,6 +756,7 @@ export function TimeBlockMemberManager({
         onRemoveMember={handleRemoveMember}
         onRemoveGuest={handleRemoveGuest}
         onRemoveFill={handleRemoveFill}
+        onUpdateBookedBy={handleUpdateBookedBy}
         maxPeople={MAX_PEOPLE}
       />
 

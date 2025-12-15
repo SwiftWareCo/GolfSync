@@ -15,14 +15,20 @@ type TimeBlockGuest = Guest & {
   invitedByMember?: Member;
 };
 
+// Member with bookedByMemberId for admin features
+type MemberWithBookedBy = Member & {
+  bookedByMemberId?: number | null;
+};
+
 // Update the props interface to include fills
 interface TimeBlockPeopleListProps {
-  members: Member[];
+  members: MemberWithBookedBy[];
   guests: TimeBlockGuest[];
   fills: Fill[];
   onRemoveMember: (memberId: number) => Promise<void>;
   onRemoveGuest: (guestId: number) => Promise<void>;
   onRemoveFill: (fillId: number) => Promise<void>;
+  onUpdateBookedBy?: (memberId: number, bookedByMemberId: number | null) => Promise<void>;
   title?: string;
   maxPeople?: number;
 }
@@ -34,6 +40,7 @@ export function TimeBlockPeopleList({
   onRemoveMember,
   onRemoveGuest,
   onRemoveFill,
+  onUpdateBookedBy,
   title = "People",
   maxPeople = 4,
 }: TimeBlockPeopleListProps) {
@@ -93,6 +100,13 @@ export function TimeBlockPeopleList({
               type={person.type}
               person={person.data}
               onRemove={handleRemove}
+              bookedByMemberId={
+                person.type === "member"
+                  ? (person.data as MemberWithBookedBy).bookedByMemberId
+                  : undefined
+              }
+              allMembers={members as Member[]}
+              onUpdateBookedBy={onUpdateBookedBy}
             />
           ))}
           {/* Render fills separately */}
