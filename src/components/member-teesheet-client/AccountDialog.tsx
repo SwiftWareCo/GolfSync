@@ -87,7 +87,7 @@ export function AccountDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="m-0 mx-4 max-w-sm sm:max-w-lg">
+      <DialogContent className="max-w-sm sm:max-w-lg">
         <DialogHeader className="space-y-2 pb-2">
           <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
             {isGuestAccount ? (
