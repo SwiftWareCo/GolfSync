@@ -4,17 +4,16 @@ import { TeesheetConfigs } from "~/components/settings/teesheet/TeesheetConfigs"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   getTimeblockRestrictions,
-  getTimeblockOverrides,
 } from "~/server/timeblock-restrictions/data";
 import {
   getActiveMemberClasses,
   getAllMemberClasses,
 } from "~/server/member-classes/data";
 import { TimeblockRestrictionsSettings } from "~/components/settings/timeblock-restrictions/TimeblockRestrictionsSettings";
+import { getLotterySettings } from "~/server/lottery/lottery-settings-data";
 import { CourseInfoSettings } from "~/components/settings/course-info/CourseInfoSettings";
 import { getCourseInfo } from "~/server/settings/data";
 import { PageHeader } from "~/components/ui/page-header";
-import { OverridesSettings } from "~/components/settings/overrides/OverridesSettings";
 import { MemberClassesSettings } from "~/components/settings/member-classes/MemberClassesSettings";
 import { NotificationsPanel } from "~/components/admin/notifications/NotificationsPanel";
 import {
@@ -25,7 +24,6 @@ import {
   ConfigurationsSkeleton,
   RestrictionsSkeleton,
   MemberClassesSkeleton,
-  OverridesSkeleton,
   NotificationsSkeleton,
   CourseInfoSkeleton,
 } from "~/components/settings/skeletons";
@@ -42,10 +40,12 @@ async function ConfigurationsTab() {
 }
 
 async function RestrictionsTab() {
-  const [timeblockRestrictionsResult, allMemberClasses] = await Promise.all([
-    getTimeblockRestrictions(),
-    getAllMemberClasses(),
-  ]);
+  const [timeblockRestrictionsResult, allMemberClasses, lotterySettings] =
+    await Promise.all([
+      getTimeblockRestrictions(),
+      getAllMemberClasses(),
+      getLotterySettings(),
+    ]);
 
   const timeblockRestrictions =
     "success" in timeblockRestrictionsResult ? [] : timeblockRestrictionsResult;
@@ -54,6 +54,10 @@ async function RestrictionsTab() {
     <TimeblockRestrictionsSettings
       restrictions={timeblockRestrictions}
       allMemberClasses={allMemberClasses}
+      lotterySettings={{
+        lotteryAdvanceDays: lotterySettings.lotteryAdvanceDays,
+        lotteryMaxDaysAhead: lotterySettings.lotteryMaxDaysAhead,
+      }}
     />
   );
 }
@@ -63,13 +67,6 @@ async function MemberClassesTab() {
   return <MemberClassesSettings MemberClasses={allMemberClasses} />;
 }
 
-async function OverridesTab() {
-  const timeblockOverridesResult = await getTimeblockOverrides();
-  const timeblockOverrides =
-    "success" in timeblockOverridesResult ? [] : timeblockOverridesResult;
-
-  return <OverridesSettings initialOverrides={timeblockOverrides} />;
-}
 
 async function NotificationsTab() {
   const [memberClasses, stats, classCounts] = await Promise.all([
@@ -115,13 +112,10 @@ export default function SettingsPage() {
               Configurations
             </TabsTrigger>
             <TabsTrigger value="restrictions" className="flex-1">
-              Timeblock Restrictions
+              Restrictions
             </TabsTrigger>
             <TabsTrigger value="memberClasses" className="flex-1">
               Member Classes
-            </TabsTrigger>
-            <TabsTrigger value="overrides" className="flex-1">
-              Override Records
             </TabsTrigger>
             <TabsTrigger value="notifications" className="flex-1">
               Notifications
@@ -150,11 +144,6 @@ export default function SettingsPage() {
           </Suspense>
         </TabsContent>
 
-        <TabsContent value="overrides" className="mt-4">
-          <Suspense fallback={<OverridesSkeleton />}>
-            <OverridesTab />
-          </Suspense>
-        </TabsContent>
 
         <TabsContent value="notifications" className="mt-4">
           <Suspense fallback={<NotificationsSkeleton />}>

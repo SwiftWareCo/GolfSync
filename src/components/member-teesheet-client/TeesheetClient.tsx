@@ -1,11 +1,6 @@
 "use client";
 
-import React, {
-  useMemo,
-  useCallback,
-  useReducer,
-  useRef,
-} from "react";
+import React, { useMemo, useCallback, useReducer, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { addDays } from "date-fns";
 import { useDebounce } from "use-debounce";
@@ -192,6 +187,7 @@ export default function TeesheetClient({
   lotteryEntry = null,
   isLotteryEligible = false,
   lotterySettings = null,
+  lotteryRestrictionViolation = null,
 }: {
   teesheet: any;
   config: any;
@@ -201,6 +197,11 @@ export default function TeesheetClient({
   lotteryEntry?: LotteryEntryData;
   isLotteryEligible?: boolean;
   lotterySettings?: any;
+  lotteryRestrictionViolation?: {
+    hasViolation: boolean;
+    message: string;
+    violations: any[];
+  } | null;
 }) {
   const [state, dispatch] = useReducer(bookingReducer, initialState);
   const {
@@ -460,23 +461,7 @@ export default function TeesheetClient({
       if (timeBlock.restriction?.isRestricted) {
         const violations = timeBlock.restriction.violations || [];
 
-        // Check for AVAILABILITY restrictions first (highest priority)
-        const availabilityViolation = violations.find(
-          (v: any) => v.type === "AVAILABILITY",
-        );
-
-        if (availabilityViolation) {
-          // AVAILABILITY restrictions block booking completely
-          toast.error(
-            timeBlock.restriction.reason ||
-              "Course is not available during this time",
-            {
-              icon: <AlertCircle className="h-5 w-5 text-red-500" />,
-              id: `availability-restriction-${timeBlockId}`,
-            },
-          );
-          return;
-        }
+        // AVAILABILITY restrictions are no longer used
 
         // Check for TIME restrictions second (high priority)
         const timeViolation = violations.find((v: any) => v.type === "TIME");
@@ -572,33 +557,7 @@ export default function TeesheetClient({
     [selectedDate],
   );
 
-  // Check for COURSE AVAILABILITY restrictions that should hide the entire teesheet
-  const hasFullDayRestriction = useMemo(() => {
-    return timeBlocks.some((timeBlock) => {
-      if (!timeBlock.restriction?.isRestricted) return false;
-
-      const violations = timeBlock.restriction.violations || [];
-      // Any AVAILABILITY violation should hide the teesheet
-      return violations.some((v: any) => v.type === "AVAILABILITY");
-    });
-  }, [timeBlocks]);
-
-  // Get course availability restriction message
-  const fullDayRestrictionMessage = useMemo(() => {
-    if (!hasFullDayRestriction) return "";
-
-    const restrictedTimeBlock = timeBlocks.find((timeBlock) => {
-      if (!timeBlock.restriction?.isRestricted) return false;
-
-      const violations = timeBlock.restriction.violations || [];
-      return violations.some((v: any) => v.type === "AVAILABILITY");
-    });
-
-    return (
-      restrictedTimeBlock?.restriction?.reason ||
-      "Course is not available today"
-    );
-  }, [hasFullDayRestriction, timeBlocks]);
+  // Course availability restrictions are no longer used
 
   // Determine what to show based on visibility and lottery settings
   const isTeesheetPublic = teesheet?.isPublic || false;
@@ -611,11 +570,16 @@ export default function TeesheetClient({
     "This teesheet is not yet available for booking.";
 
   // Determine which view to render based on settings
+  // Allow showing lottery if:
+  // 1. Teesheet is not public AND
+  // 2. Date is lottery eligible AND
+  // 3. Lottery is enabled AND
+  // 4. Either no restriction violation OR member has an existing entry (can edit even if limit reached)
   const shouldShowLottery =
     !isTeesheetPublic &&
     isLotteryEligible &&
     isLotteryEnabled &&
-    !hasFullDayRestriction;
+    (!lotteryRestrictionViolation?.hasViolation || !!lotteryEntry);
 
   const shouldShowNotAvailable = !isTeesheetPublic && !shouldShowLottery;
 
@@ -640,6 +604,7 @@ export default function TeesheetClient({
           onDatePickerToggle={() => dispatch({ type: "TOGGLE_DATE_PICKER" })}
           onDataChange={handleDataChange}
           onDateChange={handleDateChange}
+          lotteryRestrictionViolation={lotteryRestrictionViolation}
         />
       )}
 
@@ -659,14 +624,18 @@ export default function TeesheetClient({
             <div className="border-b border-orange-200 bg-orange-50 p-4">
               <h3 className="flex items-center gap-2 text-lg font-bold text-orange-900">
                 <AlertCircle className="h-5 w-5 text-orange-600" />
-                Not Available
+                {lotteryRestrictionViolation?.hasViolation
+                  ? "Lottery Entry Limit Reached"
+                  : "Not Available"}
               </h3>
             </div>
             <div className="p-4">
               <div className="border-l-4 border-orange-500 pl-4 text-sm leading-relaxed text-orange-700">
-                {isLotteryEligible && !isLotteryEnabled
-                  ? lotteryDisabledMessage
-                  : privateMessage}
+                {lotteryRestrictionViolation?.hasViolation
+                  ? lotteryRestrictionViolation.message
+                  : isLotteryEligible && !isLotteryEnabled
+                    ? lotteryDisabledMessage
+                    : privateMessage}
               </div>
             </div>
           </div>
@@ -717,41 +686,25 @@ export default function TeesheetClient({
             </div>
           )}
 
-          {/* Full Day Restriction Alert or Tee Sheet Grid */}
-          {hasFullDayRestriction ? (
-            <div className="overflow-hidden rounded-xl border border-red-200 bg-white shadow-sm">
-              <div className="border-b border-red-200 bg-red-50 p-4">
-                <h3 className="flex items-center gap-2 text-lg font-bold text-red-900">
-                  <AlertCircle className="h-5 w-5 text-red-600" />
-                  Course Not Available
-                </h3>
-              </div>
-              <div className="p-4">
-                <div className="border-l-4 border-red-500 pl-4 text-sm leading-relaxed text-red-700">
-                  {fullDayRestrictionMessage}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <TeesheetGrid
-              date={date}
-              timeBlocks={timeBlocks}
-              config={config}
-              member={member}
-              loading={loading}
-              selectedDate={selectedDate}
-              onBook={checkBookingRestrictions}
-              onCancel={(timeBlockId) =>
-                dispatch({ type: "START_CANCELLING", payload: timeBlockId })
-              }
-              onEdit={handleEditBooking}
-              onShowDetails={handleShowPlayerDetails}
-              isTimeBlockBooked={isTimeBlockBooked}
-              isTimeBlockAvailable={isTimeBlockAvailable}
-              isTimeBlockInPast={isTimeBlockInPast}
-              hasExistingBookingOnDay={hasExistingBookingOnDay}
-            />
-          )}
+          {/* Tee Sheet Grid */}
+          <TeesheetGrid
+            date={date}
+            timeBlocks={timeBlocks}
+            config={config}
+            member={member}
+            loading={loading}
+            selectedDate={selectedDate}
+            onBook={checkBookingRestrictions}
+            onCancel={(timeBlockId) =>
+              dispatch({ type: "START_CANCELLING", payload: timeBlockId })
+            }
+            onEdit={handleEditBooking}
+            onShowDetails={handleShowPlayerDetails}
+            isTimeBlockBooked={isTimeBlockBooked}
+            isTimeBlockAvailable={isTimeBlockAvailable}
+            isTimeBlockInPast={isTimeBlockInPast}
+            hasExistingBookingOnDay={hasExistingBookingOnDay}
+          />
 
           {/* Date Picker Dialog */}
           {showDatePicker && (

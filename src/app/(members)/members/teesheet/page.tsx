@@ -1,5 +1,6 @@
 import { getMemberTeesheetDataWithRestrictions } from "~/server/members-teesheet-client/data";
 import { getLotteryEntryData } from "~/server/lottery/data";
+import { getLotterySettings } from "~/server/lottery/lottery-settings-data";
 import TeesheetClient from "../../../../components/member-teesheet-client/TeesheetClient";
 import { auth } from "@clerk/nextjs/server";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
@@ -29,9 +30,18 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
   // Create a Date object from the date string
   const date = parseDate(dateString);
 
-  // Check if this is a lottery-eligible date (3+ days from now)
-  const threeDaysFromNow = formatDateToYYYYMMDD(addDays(today, 3));
-  const isLotteryEligible = dateString >= threeDaysFromNow;
+  // Get lottery settings to determine eligibility window
+  const globalLotterySettings = await getLotterySettings();
+  const advanceDaysDate = formatDateToYYYYMMDD(
+    addDays(today, globalLotterySettings.lotteryAdvanceDays),
+  );
+  const maxDaysAheadDate = formatDateToYYYYMMDD(
+    addDays(today, globalLotterySettings.lotteryMaxDaysAhead),
+  );
+
+  // Check if this is a lottery-eligible date (within advanceDays and maxDaysAhead)
+  const isLotteryEligible =
+    dateString >= advanceDaysDate && dateString <= maxDaysAheadDate;
 
   // Fetch lottery data if this is a lottery-eligible date
   let lotteryEntry: LotteryEntryData = null;
@@ -54,6 +64,7 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
     timeBlocks = [],
     member,
     lotterySettings,
+    lotteryRestrictionViolation,
   } = await getMemberTeesheetDataWithRestrictions(date, userId as string);
 
   return (
@@ -66,6 +77,7 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
       lotteryEntry={lotteryEntry}
       isLotteryEligible={isLotteryEligible}
       lotterySettings={lotterySettings}
+      lotteryRestrictionViolation={lotteryRestrictionViolation}
     />
   );
 }

@@ -79,9 +79,7 @@ export function TimeblockRestrictionsSearch({
               <SelectItem value="all">All Categories</SelectItem>
               <SelectItem value="MEMBER_CLASS">Member Class</SelectItem>
               <SelectItem value="GUEST">Guest</SelectItem>
-              <SelectItem value="COURSE_AVAILABILITY">
-                Course Availability
-              </SelectItem>
+              <SelectItem value="LOTTERY">Lottery</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -96,7 +94,6 @@ export function TimeblockRestrictionsSearch({
               <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="TIME">Time</SelectItem>
               <SelectItem value="FREQUENCY">Frequency</SelectItem>
-              <SelectItem value="AVAILABILITY">Availability</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -168,8 +165,8 @@ function getCategoryDisplayName(category: string): string {
       return "Member Class";
     case "GUEST":
       return "Guest";
-    case "COURSE_AVAILABILITY":
-      return "Course Availability";
+    case "LOTTERY":
+      return "Lottery";
     default:
       return category;
   }
@@ -181,8 +178,6 @@ function getTypeDisplayName(type: string): string {
       return "Time";
     case "FREQUENCY":
       return "Frequency";
-    case "AVAILABILITY":
-      return "Availability";
     default:
       return type;
   }

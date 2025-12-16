@@ -18,6 +18,7 @@ interface FrequencyRestrictionFieldsProps {
   watch: UseFormWatch<TimeblockRestrictionInsert>;
   register: UseFormRegister<TimeblockRestrictionInsert>;
   errors: FieldErrors<TimeblockRestrictionInsert>;
+  restrictionCategory?: "MEMBER_CLASS" | "GUEST" | "LOTTERY";
 }
 
 export function FrequencyRestrictionFields({
@@ -26,7 +27,9 @@ export function FrequencyRestrictionFields({
   watch,
   register,
   errors,
+  restrictionCategory,
 }: FrequencyRestrictionFieldsProps) {
+  const applyCharge = watch("applyCharge");
   return (
     <div className="space-y-4 rounded-md border p-4">
       <h3 className="text-lg font-medium">Frequency Settings</h3>
@@ -67,34 +70,46 @@ export function FrequencyRestrictionFields({
         )}
       </div>
 
-      {/* Apply Charge */}
-      <div className="flex flex-row items-start space-y-0 space-x-3 rounded-md border p-4">
-        <Checkbox
-          checked={watch("applyCharge") || false}
-          onCheckedChange={(checked) =>
-            setValue("applyCharge", checked as boolean)
-          }
-        />
-        <div className="space-y-1 leading-none">
-          <Label>Apply Charge for Exceeding Limit</Label>
-        </div>
-      </div>
+      {/* Apply Charge - Only show for MEMBER_CLASS restrictions, not LOTTERY */}
+      {restrictionCategory === "MEMBER_CLASS" && (
+        <>
+          <div className="flex flex-row items-start space-y-0 space-x-3 rounded-md border p-4">
+            <Checkbox
+              id="applyCharge"
+              checked={applyCharge || false}
+              onCheckedChange={(checked) => {
+                setValue("applyCharge", checked === true, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }}
+            />
+            <div className="space-y-1 leading-none">
+              <Label htmlFor="applyCharge" className="cursor-pointer">
+                Apply Charge for Exceeding Limit
+              </Label>
+            </div>
+          </div>
 
-      {/* Charge Amount */}
-      <div className="space-y-2">
-        <Label htmlFor="chargeAmount">Charge Amount</Label>
-        <Input
-          id="chargeAmount"
-          type="text"
-          placeholder="e.g. 25.00 or 30% of green fee"
-          {...register("chargeAmount")}
-        />
-        {errors.chargeAmount && (
-          <span className="text-xs text-red-500">
-            {errors.chargeAmount.message as string}
-          </span>
-        )}
-      </div>
+          {/* Charge Amount */}
+          {applyCharge && (
+            <div className="space-y-2">
+              <Label htmlFor="chargeAmount">Charge Amount</Label>
+              <Input
+                id="chargeAmount"
+                type="text"
+                placeholder="e.g. 25.00 or 30% of green fee"
+                {...register("chargeAmount")}
+              />
+              {errors.chargeAmount && (
+                <span className="text-xs text-red-500">
+                  {errors.chargeAmount.message as string}
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

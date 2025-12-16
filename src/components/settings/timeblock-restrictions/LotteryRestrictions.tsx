@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useActionState, startTransition } from "react";
-import { Ban, Plus } from "lucide-react";
+import { Ban, Plus, Settings } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { LotterySettingsDialog } from "./LotterySettingsDialog";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { useState, useActionState, startTransition } from "react";
 import { RestrictionCard } from "./RestrictionCard";
 import { TimeblockRestrictionDialog } from "./TimeblockRestrictionDialog";
 import type { MemberClass, TimeblockRestriction } from "~/server/db/schema";
@@ -16,16 +17,22 @@ import toast from "react-hot-toast";
 import { DeleteConfirmationDialog } from "~/components/ui/delete-confirmation-dialog";
 import { deleteTimeblockRestriction } from "~/server/timeblock-restrictions/actions";
 
-interface CourseAvailabilityProps {
+interface LotteryRestrictionsProps {
   restrictions: TimeblockRestriction[];
-  memberClasses?: MemberClass[];
+  allMemberClasses?: MemberClass[];
+  lotterySettings: {
+    lotteryAdvanceDays: number;
+    lotteryMaxDaysAhead: number;
+  };
 }
 
-export function CourseAvailability({
+export function LotteryRestrictions({
   restrictions,
-  memberClasses = [],
-}: CourseAvailabilityProps) {
+  allMemberClasses = [],
+  lotterySettings,
+}: LotteryRestrictionsProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [editorMode, setEditorMode] = useState<"create" | "edit">("create");
   const [selectedRestriction, setSelectedRestriction] = useState<
     TimeblockRestriction | undefined
@@ -43,7 +50,7 @@ export function CourseAvailability({
         toast.error(result.error || "Failed to delete restriction");
         return { success: false, error: result.error };
       }
-      toast.success("Course availability restriction deleted successfully");
+      toast.success("Lottery restriction deleted successfully");
       setIsDeleteDialogOpen(false);
       setRestrictionToDelete(undefined);
       return { success: true };
@@ -87,25 +94,27 @@ export function CourseAvailability({
   return (
     <>
       <div className="mb-4 flex flex-row items-center justify-between">
-        <h3 className="text-lg font-medium">
-          Course Availability Restrictions
-        </h3>
-        <Button onClick={() => handleOpenDialog()} variant="default">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Restriction
-        </Button>
+        <h3 className="text-lg font-medium">Lottery Restrictions</h3>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setIsSettingsDialogOpen(true)}
+            variant="outline"
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Settings
+          </Button>
+          <Button onClick={() => handleOpenDialog()} variant="default">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Restriction
+          </Button>
+        </div>
       </div>
 
       {restrictions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-center">
           <Ban className="mb-2 h-10 w-10" />
-          <h3 className="text-lg font-medium">
-            No course availability restrictions
-          </h3>
-          <p>
-            Add restrictions for weather conditions, maintenance, or special
-            events
-          </p>
+          <h3 className="text-lg font-medium">No lottery restrictions</h3>
+          <p>Add restrictions to limit lottery entries per member class</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -115,6 +124,7 @@ export function CourseAvailability({
               restriction={restriction}
               onEdit={() => handleOpenDialog(restriction)}
               onDelete={() => handleDeleteClick(restriction)}
+              memberClasses={allMemberClasses}
             />
           ))}
         </div>
@@ -122,21 +132,24 @@ export function CourseAvailability({
 
       {/* Add/Edit Dialog */}
       {isDialogOpen && (
-        <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleCloseDialog()}>
+        <Dialog
+          open={isDialogOpen}
+          onOpenChange={(open) => !open && handleCloseDialog()}
+        >
           <DialogContent className="flex max-h-[90vh] min-h-[600px] max-w-4xl flex-col p-0">
             <DialogHeader className="px-6 pt-6">
               <DialogTitle>
                 {editorMode === "create"
-                  ? "Create Course Availability Restriction"
-                  : "Edit Course Availability Restriction"}
+                  ? "Create Lottery Restriction"
+                  : "Edit Lottery Restriction"}
               </DialogTitle>
             </DialogHeader>
             <TimeblockRestrictionDialog
               key={selectedRestriction?.id || "new"}
               mode={editorMode}
               existingRestriction={selectedRestriction}
-              memberClasses={memberClasses}
-              restrictionCategory="COURSE_AVAILABILITY"
+              memberClasses={allMemberClasses}
+              restrictionCategory="LOTTERY"
               onSuccess={handleSuccess}
               onCancel={handleCloseDialog}
             />
@@ -149,9 +162,16 @@ export function CourseAvailability({
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
         onConfirm={handleDeleteConfirm}
-        title="Delete Course Restriction"
+        title="Delete Lottery Restriction"
         description="This action cannot be undone and will permanently delete this restriction."
         itemName={restrictionToDelete?.name}
+      />
+
+      {/* Lottery Settings Dialog */}
+      <LotterySettingsDialog
+        open={isSettingsDialogOpen}
+        onOpenChange={setIsSettingsDialogOpen}
+        initialSettings={lotterySettings}
       />
     </>
   );

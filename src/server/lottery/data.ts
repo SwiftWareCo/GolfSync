@@ -7,9 +7,8 @@ import {
   teesheets,
   timeBlocks,
   timeblockRestrictions,
-  fills,
 } from "~/server/db/schema";
-import { eq, and, sql, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
 
 /**

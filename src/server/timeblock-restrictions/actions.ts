@@ -187,7 +187,7 @@ export async function deleteTimeblockRestriction(id: number) {
 // Add a restriction override feature
 export async function recordTimeblockRestrictionOverride(params: {
   restrictionId: number;
-  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
+  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "LOTTERY";
   entityId?: string | null;
   reason: string;
 }) {
@@ -302,63 +302,6 @@ export async function getTimeblockOverrides(params?: {
     console.error("Error getting timeblock overrides:", error);
     return { error: "Failed to get overrides" };
   }
-}
-
-/**
- * Internal helper: Check course availability restrictions
- */
-async function checkCourseAvailabilityRestrictions(
-  bookingDateStr: string,
-): Promise<any[]> {
-  const violations: any[] = [];
-
-  const courseRestrictions = await db.query.timeblockRestrictions.findMany({
-    where: and(
-      eq(timeblockRestrictions.restrictionCategory, "COURSE_AVAILABILITY"),
-      eq(timeblockRestrictions.isActive, true),
-    ),
-  });
-
-  for (const restriction of courseRestrictions) {
-    if (restriction.startDate && restriction.endDate) {
-      const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
-      const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
-
-      const bookingDate = new Date(bookingDateStr);
-      const restrictionStart = new Date(startDateStr);
-      const restrictionEnd = new Date(endDateStr);
-
-      if (bookingDate >= restrictionStart && bookingDate <= restrictionEnd) {
-        // Format dates for display
-        const startYear = parseInt(startDateStr.substring(0, 4));
-        const startMonth = parseInt(startDateStr.substring(5, 7)) - 1;
-        const startDay = parseInt(startDateStr.substring(8, 10));
-
-        const endYear = parseInt(endDateStr.substring(0, 4));
-        const endMonth = parseInt(endDateStr.substring(5, 7)) - 1;
-        const endDay = parseInt(endDateStr.substring(8, 10));
-
-        const displayStartDate = new Date(startYear, startMonth, startDay);
-        const displayEndDate = new Date(endYear, endMonth, endDay);
-
-        const startDateFormatted = format(displayStartDate, "MMMM do, yyyy");
-        const endDateFormatted = format(displayEndDate, "MMMM do, yyyy");
-
-        violations.push({
-          restrictionId: restriction.id,
-          restrictionName: restriction.name,
-          restrictionDescription: restriction.description,
-          restrictionCategory: "COURSE_AVAILABILITY",
-          entityId: null,
-          type: "AVAILABILITY",
-          message: `Course is restricted (${restriction.name}) from ${startDateFormatted} to ${endDateFormatted}`,
-          canOverride: restriction.canOverride,
-        });
-      }
-    }
-  }
-
-  return violations;
 }
 
 /**
@@ -584,10 +527,7 @@ export async function checkTimeblockRestrictionsAction(params: {
     // Collect all violations
     let violations: any[] = [];
 
-    // Check course availability restrictions
-    const courseViolations =
-      await checkCourseAvailabilityRestrictions(bookingDateString);
-    violations = violations.concat(courseViolations);
+    // Course availability restrictions are no longer used
 
     // Check member class restrictions
     if (memberId && memberClassId) {
@@ -612,33 +552,22 @@ export async function checkTimeblockRestrictionsAction(params: {
       violations = violations.concat(guestViolations);
     }
 
-    // Determine preferred reason: prioritize AVAILABILITY > TIME > FREQUENCY
+    // Determine preferred reason: prioritize TIME > FREQUENCY
     let preferredReason = "";
     if (violations.length > 0) {
-      const availabilityViolation = violations.find(
-        (v) => v.type === "AVAILABILITY",
-      );
-      if (availabilityViolation) {
+      const timeViolation = violations.find((v) => v.type === "TIME");
+      if (timeViolation) {
         preferredReason =
-          availabilityViolation.restrictionDescription &&
-          availabilityViolation.restrictionDescription.trim() !== ""
-            ? availabilityViolation.restrictionDescription
-            : availabilityViolation.message;
+          timeViolation.restrictionDescription &&
+          timeViolation.restrictionDescription.trim() !== ""
+            ? timeViolation.restrictionDescription
+            : timeViolation.message;
       } else {
-        const timeViolation = violations.find((v) => v.type === "TIME");
-        if (timeViolation) {
-          preferredReason =
-            timeViolation.restrictionDescription &&
-            timeViolation.restrictionDescription.trim() !== ""
-              ? timeViolation.restrictionDescription
-              : timeViolation.message;
-        } else {
-          preferredReason =
-            violations[0].restrictionDescription &&
-            violations[0].restrictionDescription.trim() !== ""
-              ? violations[0].restrictionDescription
-              : violations[0].message;
-        }
+        preferredReason =
+          violations[0].restrictionDescription &&
+          violations[0].restrictionDescription.trim() !== ""
+            ? violations[0].restrictionDescription
+            : violations[0].message;
       }
     }
 

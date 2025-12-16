@@ -32,7 +32,7 @@ export async function getTimeblockRestrictions(): Promise<ResultType<any[]>> {
 
 // Get timeblock restrictions by category
 export async function getTimeblockRestrictionsByCategory(
-  category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY",
+  category: "MEMBER_CLASS" | "GUEST" | "LOTTERY",
 ): Promise<ResultType<any[]>> {
   try {
     const restrictions = await db.query.timeblockRestrictions.findMany({
@@ -78,16 +78,7 @@ export async function checkBatchTimeblockRestrictions(params: {
       preferredReason: string;
     }> = [];
 
-    // Fetch all restrictions upfront to minimize database queries
-    const courseRestrictionsResult = await getTimeblockRestrictionsByCategory(
-      "COURSE_AVAILABILITY",
-    );
-    if ("error" in courseRestrictionsResult) {
-      return { success: false, error: courseRestrictionsResult.error };
-    }
-    const courseRestrictions = courseRestrictionsResult.filter(
-      (r) => r.isActive,
-    );
+    // Course availability restrictions are no longer used
 
     // Get member class restrictions if needed
     let memberRestrictions: any[] = [];
@@ -145,45 +136,7 @@ export async function checkBatchTimeblockRestrictions(params: {
       const bookingDate = new Date(year, month, day);
       const dayOfWeek = bookingDate.getDay(); // 0=Sunday, 1=Monday, etc.
 
-      // Check course availability restrictions
-      for (const restriction of courseRestrictions) {
-        if (restriction.startDate && restriction.endDate) {
-          // Convert restriction dates to YYYY-MM-DD format
-          const startDateStr = formatDateToYYYYMMDD(restriction.startDate);
-          const endDateStr = formatDateToYYYYMMDD(restriction.endDate);
-
-          // Check if the BOOKING date falls within the restriction period
-          if (bookingDateStr >= startDateStr && bookingDateStr <= endDateStr) {
-            // Format dates directly from the strings to avoid timezone issues
-            const startYear = parseInt(startDateStr.substring(0, 4));
-            const startMonth = parseInt(startDateStr.substring(5, 7)) - 1; // 0-indexed
-            const startDay = parseInt(startDateStr.substring(8, 10));
-
-            const endYear = parseInt(endDateStr.substring(0, 4));
-            const endMonth = parseInt(endDateStr.substring(5, 7)) - 1; // 0-indexed
-            const endDay = parseInt(endDateStr.substring(8, 10));
-
-            const displayStartDate = new Date(startYear, startMonth, startDay);
-            const displayEndDate = new Date(endYear, endMonth, endDay);
-
-            const startDateFormatted = format(
-              displayStartDate,
-              "MMMM do, yyyy",
-            );
-            const endDateFormatted = format(displayEndDate, "MMMM do, yyyy");
-
-            violations.push({
-              restrictionId: restriction.id,
-              restrictionName: restriction.name,
-              restrictionDescription: restriction.description,
-              restrictionCategory: "COURSE_AVAILABILITY",
-              type: "AVAILABILITY",
-              message: `Course is restricted (${restriction.name}) from ${startDateFormatted} to ${endDateFormatted}`,
-              canOverride: restriction.canOverride,
-            });
-          }
-        }
-      }
+      // Course availability restrictions are no longer checked here
 
       // Check member class restrictions
       if (memberId && memberClassId) {
@@ -330,36 +283,24 @@ export async function checkBatchTimeblockRestrictions(params: {
       // Add the prepared results for this timeblock
       const timeBlockViolations = violations.length > 0;
 
-      // Determine preferred reason: prioritize AVAILABILITY > TIME > FREQUENCY regardless of priority
+      // Determine preferred reason: prioritize TIME > FREQUENCY regardless of priority
       let preferredReason = "";
       if (timeBlockViolations) {
-        // Look for AVAILABILITY violation first (highest priority)
-        const availabilityViolation = violations.find(
-          (v) => v.type === "AVAILABILITY",
-        );
-        if (availabilityViolation) {
+        // Look for TIME violation first (highest priority)
+        const timeViolation = violations.find((v) => v.type === "TIME");
+        if (timeViolation) {
           preferredReason =
-            availabilityViolation.restrictionDescription &&
-            availabilityViolation.restrictionDescription.trim() !== ""
-              ? availabilityViolation.restrictionDescription
-              : availabilityViolation.message;
+            timeViolation.restrictionDescription &&
+            timeViolation.restrictionDescription.trim() !== ""
+              ? timeViolation.restrictionDescription
+              : timeViolation.message;
         } else {
-          // Look for TIME violation second
-          const timeViolation = violations.find((v) => v.type === "TIME");
-          if (timeViolation) {
-            preferredReason =
-              timeViolation.restrictionDescription &&
-              timeViolation.restrictionDescription.trim() !== ""
-                ? timeViolation.restrictionDescription
-                : timeViolation.message;
-          } else {
-            // Fall back to first violation if no AVAILABILITY or TIME violation
-            preferredReason =
-              violations[0].restrictionDescription &&
-              violations[0].restrictionDescription.trim() !== ""
-                ? violations[0].restrictionDescription
-                : violations[0].message;
-          }
+          // Fall back to first violation if no TIME violation
+          preferredReason =
+            violations[0].restrictionDescription &&
+            violations[0].restrictionDescription.trim() !== ""
+              ? violations[0].restrictionDescription
+              : violations[0].message;
         }
       }
 

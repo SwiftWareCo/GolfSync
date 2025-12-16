@@ -17,6 +17,7 @@ import type { TimeWindow, DynamicTimeWindowInfo } from "~/lib/lottery-utils";
 import type { LotteryFormInput } from "~/server/db/schema/lottery/lottery-entries.schema";
 import type { TimeblockRestriction } from "~/server/db/schema/restrictions/restrictions.schema";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
+import { checkLotteryRestrictions } from "~/server/timeblock-restrictions/lottery-restrictions";
 
 // Action result type for consistent return types
 type ActionResult = { success: boolean; error?: string; data?: unknown };
@@ -76,6 +77,20 @@ export async function submitLotteryEntry(
     return {
       success: false,
       error: "One or more members in the group do not exist",
+    };
+  }
+
+  // Check lottery restrictions before allowing submission
+  const restrictionCheck = await checkLotteryRestrictions(
+    member.id,
+    member.classId,
+    data.lotteryDate,
+  );
+
+  if (restrictionCheck.hasViolations) {
+    return {
+      success: false,
+      error: restrictionCheck.preferredReason || "Lottery entry limit exceeded",
     };
   }
 

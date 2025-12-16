@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { MemberLotteryEntryForm } from "./MemberLotteryEntryForm";
@@ -25,6 +25,11 @@ interface LotteryInterfaceProps {
   config: TeesheetConfigWithBlocks;
   error?: string | null;
   onDataChange?: () => void;
+  lotteryRestrictionViolation?: {
+    hasViolation: boolean;
+    message: string;
+    violations: any[];
+  } | null;
 }
 
 export function LotteryInterface({
@@ -34,13 +39,12 @@ export function LotteryInterface({
   config,
   error = null,
   onDataChange,
+  lotteryRestrictionViolation,
 }: LotteryInterfaceProps) {
-  const [showForm, setShowForm] = useState(false);
-
-  // Set initial form state based on lotteryEntry in useEffect
-  useEffect(() => {
-    setShowForm(!lotteryEntry);
-  }, [lotteryEntry]);
+  // Initialize showForm based on whether there's an existing entry
+  // If entry exists, start in view mode (showForm = false)
+  // If no entry, start in form mode (showForm = true)
+  const [showForm, setShowForm] = useState(!lotteryEntry);
 
   const handleFormSuccess = () => {
     setShowForm(false);
@@ -78,7 +82,23 @@ export function LotteryInterface({
     );
   }
 
-  // Show form (new entry or editing)
+  // Show existing entry view - allow viewing/editing even if restriction violation exists
+  // Only show view if not in edit mode (showForm is false)
+  if (lotteryEntry && !showForm) {
+    return (
+      <MemberLotteryEntryView
+        lotteryDate={lotteryDate}
+        entry={lotteryEntry.entry}
+        entryType={lotteryEntry.type}
+        member={member}
+        config={config}
+        onEdit={lotteryEntry.type !== "group_member" ? handleEdit : undefined}
+        onCancel={handleCancel}
+      />
+    );
+  }
+
+  // Show form (new entry or editing existing entry)
   if (showForm) {
     return (
       <div className="space-y-4">
@@ -102,17 +122,22 @@ export function LotteryInterface({
     );
   }
 
-  // Show existing entry
-  if (lotteryEntry) {
+  // Show restriction message if violation exists AND no existing entry
+  // (if they have an entry, they can edit it even if they've reached the limit)
+  if (lotteryRestrictionViolation?.hasViolation) {
     return (
-      <MemberLotteryEntryView
-        lotteryDate={lotteryDate}
-        entry={lotteryEntry.entry}
-        entryType={lotteryEntry.type}
-        member={member}
-        onEdit={lotteryEntry.type !== "group_member" ? handleEdit : undefined}
-        onCancel={handleCancel}
-      />
+      <Card className="mx-auto w-full max-w-2xl">
+        <CardContent className="py-12">
+          <div className="space-y-4 text-center">
+            <div className="text-lg font-medium text-orange-600">
+              Lottery Entry Limit Reached
+            </div>
+            <p className="text-gray-600">
+              {lotteryRestrictionViolation.message}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 

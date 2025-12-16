@@ -17,7 +17,7 @@ interface TimeRestrictionFieldsProps {
   control: Control<TimeblockRestrictionInsert>;
   setValue: UseFormSetValue<TimeblockRestrictionInsert>;
   daysOfWeek?: number[];
-  restrictionCategory?: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
+  restrictionCategory?: "MEMBER_CLASS" | "GUEST" | "LOTTERY";
   register: UseFormRegister<TimeblockRestrictionInsert>;
   errors: FieldErrors<TimeblockRestrictionInsert>;
 }
@@ -108,53 +108,6 @@ export function TimeRestrictionFields({
           </span>
         )}
       </div>
-
-      {/* Date Range - Only show for COURSE_AVAILABILITY */}
-      {restrictionCategory === "COURSE_AVAILABILITY" && (
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col space-y-2">
-            <Label>Start Date</Label>
-            <DatePicker
-              date={undefined}
-              setDate={(date?: Date) => {
-                if (date) {
-                  // Ensure selected date doesn't get timezone-shifted
-                  setValue("startDate", preserveDate(date) as any);
-                } else {
-                  setValue("startDate", null);
-                }
-              }}
-              placeholder="Select start date"
-            />
-            {errors.startDate && (
-              <span className="text-xs text-red-500">
-                {errors.startDate.message as string}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col space-y-2">
-            <Label>End Date</Label>
-            <DatePicker
-              date={undefined}
-              setDate={(date?: Date) => {
-                if (date) {
-                  // Ensure selected date doesn't get timezone-shifted
-                  setValue("endDate", preserveDate(date) as any);
-                } else {
-                  setValue("endDate", null);
-                }
-              }}
-              placeholder="Select end date"
-            />
-            {errors.endDate && (
-              <span className="text-xs text-red-500">
-                {errors.endDate.message as string}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

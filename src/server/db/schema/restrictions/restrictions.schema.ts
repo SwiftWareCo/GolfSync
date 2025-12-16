@@ -30,10 +30,10 @@ export const timeblockRestrictions = createTable(
     // Restriction Category
     restrictionCategory: varchar("restriction_category", {
       length: 20,
-    }).notNull(), // 'MEMBER_CLASS', 'GUEST', 'COURSE_AVAILABILITY'
+    }).notNull(), // 'MEMBER_CLASS', 'GUEST', 'LOTTERY'
 
     // Restriction Type
-    restrictionType: varchar("restriction_type", { length: 15 }).notNull(), // 'TIME', 'FREQUENCY', 'AVAILABILITY'
+    restrictionType: varchar("restriction_type", { length: 15 }).notNull(), // 'TIME', 'FREQUENCY'
 
     // Entity being restricted (for member class restrictions)
     memberClassIds: integer("member_class_ids").array(),
@@ -110,10 +110,10 @@ export const timeblockRestrictionsInsertSchema = createInsertSchema(
   .omit({ id: true, createdAt: true, updatedAt: true })
   .extend({
     name: z.string().min(1, "Name is required"),
-    restrictionCategory: z.enum(["MEMBER_CLASS", "GUEST", "COURSE_AVAILABILITY"], {
+    restrictionCategory: z.enum(["MEMBER_CLASS", "GUEST", "LOTTERY"], {
       message: "Restriction category is required",
     }),
-    restrictionType: z.enum(["TIME", "FREQUENCY", "AVAILABILITY"], {
+    restrictionType: z.enum(["TIME", "FREQUENCY"], {
       message: "Restriction type is required",
     }),
   })
@@ -137,20 +137,33 @@ export const timeblockRestrictionsInsertSchema = createInsertSchema(
       return true;
     },
     {
-      message: "Max count and period days are required for frequency restrictions",
+      message:
+        "Max count and period days are required for frequency restrictions",
       path: ["maxCount"],
     },
   )
   .refine(
     (data) => {
-      if (data.restrictionType === "AVAILABILITY") {
-        return data.startDate && data.endDate;
+      if (data.restrictionCategory === "LOTTERY") {
+        return data.restrictionType === "FREQUENCY";
       }
       return true;
     },
     {
-      message: "Start date and end date are required for availability restrictions",
-      path: ["startDate"],
+      message: "Lottery restrictions must use FREQUENCY type",
+      path: ["restrictionType"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (data.restrictionCategory === "LOTTERY") {
+        return data.memberClassIds && data.memberClassIds.length > 0;
+      }
+      return true;
+    },
+    {
+      message: "Lottery restrictions must specify at least one member class",
+      path: ["memberClassIds"],
     },
   );
 

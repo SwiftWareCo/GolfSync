@@ -2,11 +2,12 @@ import "server-only";
 import { getTeesheetWithTimeBlocks } from "~/server/teesheet/data";
 import { getTimeBlocksForTeesheet } from "~/server/teesheet/data";
 import { db } from "~/server/db";
-import { timeBlockMembers, members } from "~/server/db/schema";
-import { and, eq, or, gt, asc, gte } from "drizzle-orm";
+import { timeBlockMembers, members, lotteryEntries } from "~/server/db/schema";
+import { and, eq, or, gt, asc, gte, sql } from "drizzle-orm";
 import { auth } from "@clerk/nextjs/server";
 
 import { checkBatchTimeblockRestrictions } from "~/server/timeblock-restrictions/data";
+import { checkLotteryRestrictions } from "~/server/timeblock-restrictions/lottery-restrictions";
 import { formatCalendarDate } from "~/lib/utils";
 import { getBCToday, getBCNow } from "~/lib/dates";
 
@@ -150,6 +151,45 @@ export async function getMemberTeesheetDataWithRestrictions(
     disabledMessage: teesheet.lotteryDisabledMessage,
   };
 
+  // Check if member has an existing lottery entry for this date
+  // If they do, skip restriction check (they can edit their existing entry)
+  let hasExistingEntry = false;
+  try {
+    const existingEntry = await db.query.lotteryEntries.findFirst({
+      where: and(
+        eq(lotteryEntries.organizerId, member.id),
+        eq(lotteryEntries.lotteryDate, dateString),
+        sql`${lotteryEntries.status} != 'CANCELLED'`,
+      ),
+    });
+    hasExistingEntry = !!existingEntry;
+  } catch (error) {
+    console.error("Error checking existing lottery entry:", error);
+  }
+
+  // Check lottery restrictions for this member and date
+  // Only check if they don't have an existing entry (they can edit existing entries even if limit reached)
+  let lotteryRestrictionViolation = null;
+  if (!hasExistingEntry) {
+    try {
+      const restrictionCheck = await checkLotteryRestrictions(
+        member.id,
+        member.classId,
+        dateString,
+      );
+      if (restrictionCheck.hasViolations) {
+        lotteryRestrictionViolation = {
+          hasViolation: true,
+          message: restrictionCheck.preferredReason || "Lottery entry limit exceeded",
+          violations: restrictionCheck.violations,
+        };
+      }
+    } catch (error) {
+      // If restriction check fails, log but don't block
+      console.error("Error checking lottery restrictions:", error);
+    }
+  }
+
   // Check restrictions for each time block
   let timeBlocksWithRestrictions = timeBlocks;
   try {
@@ -224,6 +264,7 @@ export async function getMemberTeesheetDataWithRestrictions(
     timeBlocks: timeBlocksWithRestrictions,
     member,
     lotterySettings: lotterySettingsData,
+    lotteryRestrictionViolation,
   };
 }
 

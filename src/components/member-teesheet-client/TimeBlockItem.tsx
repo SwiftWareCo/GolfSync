@@ -81,9 +81,6 @@ export function TimeBlockItem({
   const maxPlayers = timeBlock.maxMembers || 4;
 
   // Check for different types of restrictions
-  const hasAvailabilityViolation = timeBlock.restriction?.violations?.some(
-    (v: any) => v.type === "AVAILABILITY",
-  );
   const hasTimeViolation = timeBlock.restriction?.violations?.some(
     (v: any) => v.type === "TIME",
   );
@@ -91,15 +88,12 @@ export function TimeBlockItem({
     (v: any) => v.type === "FREQUENCY",
   );
 
-  // AVAILABILITY and TIME restrictions completely block booking, FREQUENCY allows booking with warning
-  const isAvailabilityRestricted = hasAvailabilityViolation;
-  const isTimeRestricted = hasTimeViolation && !hasAvailabilityViolation;
-  const isFrequencyRestricted =
-    hasFrequencyViolation && !hasTimeViolation && !hasAvailabilityViolation;
+  // TIME restrictions completely block booking, FREQUENCY allows booking with warning
+  const isTimeRestricted = hasTimeViolation;
+  const isFrequencyRestricted = hasFrequencyViolation && !hasTimeViolation;
 
   // Determine if the button should be disabled
-  const isButtonDisabled =
-    disabled || isPast || isAvailabilityRestricted || isTimeRestricted;
+  const isButtonDisabled = disabled || isPast || isTimeRestricted;
 
   // Check if current member is checked in
   const isMemberCheckedIn =
@@ -139,15 +133,6 @@ export function TimeBlockItem({
         textColor: "text-gray-500",
         statusBgColor: "bg-gray-100",
         statusTextColor: "text-gray-600",
-      };
-    if (isAvailabilityRestricted)
-      return {
-        status: "UNAVAILABLE",
-        bgColor: "bg-red-50",
-        borderColor: "border-red-400",
-        textColor: "text-red-700",
-        statusBgColor: "bg-red-100",
-        statusTextColor: "text-red-700",
       };
     if (isTimeRestricted)
       return {
@@ -243,7 +228,6 @@ export function TimeBlockItem({
         {isMemberCheckedIn && (
           <CheckCircle className="h-4 w-4 text-green-500" />
         )}
-        {isAvailabilityRestricted && <Ban className="h-4 w-4 text-red-600" />}
         {isTimeRestricted && <Ban className="h-4 w-4 text-red-500" />}
         {isFrequencyRestricted && (
           <AlertCircle className="h-4 w-4 text-yellow-500" />
@@ -327,16 +311,6 @@ export function TimeBlockItem({
             <span className="px-2 text-xs text-gray-500">
               Added by Pro Shop
             </span>
-          ) : isAvailabilityRestricted ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              className="flex h-8 items-center justify-center border-red-300 bg-red-50 px-2 text-xs text-red-500 sm:px-2.5"
-            >
-              <Ban className="h-3 w-3 sm:mr-1" />
-              <span className="hidden sm:inline">Unavailable</span>
-            </Button>
           ) : isTimeRestricted ? (
             <Button
               variant="outline"

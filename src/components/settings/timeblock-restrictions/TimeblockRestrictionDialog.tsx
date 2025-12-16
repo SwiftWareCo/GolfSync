@@ -22,7 +22,6 @@ import {
 import { Switch } from "~/components/ui/switch";
 import { TimeRestrictionFields } from "./fields/TimeRestrictionFields";
 import { FrequencyRestrictionFields } from "./fields/FrequencyRestrictionFields";
-import { AvailabilityRestrictionFields } from "./fields/AvailabilityRestrictionFields";
 import {
   createTimeblockRestriction,
   updateTimeblockRestriction,
@@ -38,7 +37,7 @@ interface TimeblockRestrictionDialogProps {
   mode: "create" | "edit";
   existingRestriction?: TimeblockRestriction;
   memberClasses?: MemberClass[];
-  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
+  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "LOTTERY";
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -62,11 +61,10 @@ export function TimeblockRestrictionDialog({
         restrictionCategory: existingRestriction.restrictionCategory as
           | "MEMBER_CLASS"
           | "GUEST"
-          | "COURSE_AVAILABILITY",
+          | "LOTTERY",
         restrictionType: existingRestriction.restrictionType as
           | "TIME"
-          | "FREQUENCY"
-          | "AVAILABILITY",
+          | "FREQUENCY",
         memberClassIds: existingRestriction.memberClassIds || [],
         isActive: existingRestriction.isActive,
         priority: existingRestriction.priority,
@@ -88,7 +86,7 @@ export function TimeblockRestrictionDialog({
       description: "",
       restrictionCategory,
       restrictionType:
-        restrictionCategory === "COURSE_AVAILABILITY" ? "AVAILABILITY" : "TIME",
+        restrictionCategory === "LOTTERY" ? "FREQUENCY" : "TIME",
       memberClassIds: [],
       isActive: true,
       priority: 0,
@@ -171,7 +169,7 @@ export function TimeblockRestrictionDialog({
     {
       id: "members",
       label: "Member Classes",
-      show: restrictionCategory === "MEMBER_CLASS",
+      show: restrictionCategory === "MEMBER_CLASS" || restrictionCategory === "LOTTERY",
     },
   ];
 
@@ -243,14 +241,17 @@ export function TimeblockRestrictionDialog({
                     <SelectValue placeholder="Select restriction type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="TIME">Time Restriction</SelectItem>
-                    <SelectItem value="FREQUENCY">
-                      Frequency Restriction
-                    </SelectItem>
-                    {restrictionCategory === "COURSE_AVAILABILITY" && (
-                      <SelectItem value="AVAILABILITY">
-                        Course Availability
+                    {restrictionCategory === "LOTTERY" ? (
+                      <SelectItem value="FREQUENCY" disabled>
+                        Frequency Restriction (Required)
                       </SelectItem>
+                    ) : (
+                      <>
+                        <SelectItem value="TIME">Time Restriction</SelectItem>
+                        <SelectItem value="FREQUENCY">
+                          Frequency Restriction
+                        </SelectItem>
+                      </>
                     )}
                   </SelectContent>
                 </Select>
@@ -322,16 +323,6 @@ export function TimeblockRestrictionDialog({
             />
           )}
 
-          {activeTab === "schedule" &&
-            watchRestrictionType === "AVAILABILITY" && (
-              <AvailabilityRestrictionFields
-                control={control}
-                setValue={setValue}
-                watch={watch}
-                register={register}
-                errors={errors}
-              />
-            )}
 
           {/* Frequency Tab */}
           {activeTab === "frequency" &&
@@ -342,12 +333,13 @@ export function TimeblockRestrictionDialog({
                 watch={watch}
                 register={register}
                 errors={errors}
+                restrictionCategory={restrictionCategory}
               />
             )}
 
           {/* Member Classes Tab */}
           {activeTab === "members" &&
-            restrictionCategory === "MEMBER_CLASS" && (
+            (restrictionCategory === "MEMBER_CLASS" || restrictionCategory === "LOTTERY") && (
               <div className="space-y-4 rounded-md border p-4">
                 <Label>Member Classes</Label>
                 <MultiSelect

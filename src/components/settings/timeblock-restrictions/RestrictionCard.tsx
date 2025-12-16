@@ -30,14 +30,13 @@ export function RestrictionCard({
   isHighlighted = false,
   memberClasses = [],
 }: RestrictionCardProps) {
-
   const getEntityIcon = () => {
     switch (restriction.restrictionCategory) {
       case "MEMBER_CLASS":
         return <User className="h-5 w-5" />;
       case "GUEST":
         return <UserPlus className="h-5 w-5" />;
-      case "COURSE_AVAILABILITY":
+      case "LOTTERY":
         return <AlertCircle className="h-5 w-5" />;
       default:
         return <Ban className="h-5 w-5" />;
@@ -50,8 +49,6 @@ export function RestrictionCard({
         return <Clock className="h-5 w-5" />;
       case "FREQUENCY":
         return <Calendar className="h-5 w-5" />;
-      case "AVAILABILITY":
-        return <Ban className="h-5 w-5" />;
       default:
         return <Ban className="h-5 w-5" />;
     }
@@ -63,7 +60,8 @@ export function RestrictionCard({
         return (
           <>
             <p className="text-sm">
-              <strong>Time:</strong> {formatTime12Hour(restriction.startTime as string)} -{" "}
+              <strong>Time:</strong>{" "}
+              {formatTime12Hour(restriction.startTime as string)} -{" "}
               {formatTime12Hour(restriction.endTime as string)}
             </p>
             <p className="text-sm">
@@ -85,34 +83,22 @@ export function RestrictionCard({
         );
 
       case "FREQUENCY":
+        const isLottery = restriction.restrictionCategory === "LOTTERY";
         return (
           <>
             <p className="text-sm">
-              <strong>Max Bookings:</strong> {restriction.maxCount} per{" "}
-              {restriction.periodDays} days
+              <strong>
+                {isLottery ? "Max Lottery Entries:" : "Max Bookings:"}
+              </strong>{" "}
+              {restriction.maxCount} per {restriction.periodDays} days
             </p>
-            {restriction.applyCharge && restriction.chargeAmount && (
-              <p className="text-sm">
-                <strong>Charge:</strong> {restriction.chargeAmount} after limit
-              </p>
-            )}
-          </>
-        );
-
-      case "AVAILABILITY":
-        return (
-          <>
-            {restriction.startDate && restriction.endDate && (
-              <p className="text-sm">
-                <strong>Date Range:</strong>{" "}
-                {formatCalendarDate(
-                  restriction.startDate,
-                  "EEEE, MMMM d, yyyy",
-                )}{" "}
-                -{" "}
-                {formatCalendarDate(restriction.endDate, "EEEE, MMMM d, yyyy")}
-              </p>
-            )}
+            {restriction.applyCharge &&
+              restriction.chargeAmount &&
+              restriction.restrictionCategory === "MEMBER_CLASS" && (
+                <p className="text-sm">
+                  <strong>Charge:</strong> {restriction.chargeAmount} after limit
+                </p>
+              )}
           </>
         );
 
@@ -131,7 +117,7 @@ export function RestrictionCard({
         return "bg-org-primary/20 text-org-primary";
       case "GUEST":
         return "bg-org-secondary/20 text-org-secondary";
-      case "COURSE_AVAILABILITY":
+      case "LOTTERY":
         return "bg-org-tertiary/20 text-org-tertiary";
       default:
         return "bg-gray-100 text-gray-800";
@@ -162,7 +148,9 @@ export function RestrictionCard({
                   ? "Members"
                   : restriction.restrictionCategory === "GUEST"
                     ? "Guest"
-                    : "Course"}
+                    : restriction.restrictionCategory === "LOTTERY"
+                      ? "Lottery"
+                      : "Unknown"}
               </span>
             </div>
           </Badge>
@@ -180,7 +168,8 @@ export function RestrictionCard({
         </p>
 
         {/* Display member classes if applicable */}
-        {restriction.restrictionCategory === "MEMBER_CLASS" &&
+        {(restriction.restrictionCategory === "MEMBER_CLASS" ||
+          restriction.restrictionCategory === "LOTTERY") &&
           restriction.memberClassIds &&
           restriction.memberClassIds.length > 0 && (
             <div className="mb-3">

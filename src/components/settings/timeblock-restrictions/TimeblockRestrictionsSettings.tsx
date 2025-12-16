@@ -11,10 +11,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { MemberClassRestrictions } from "./MemberClassRestrictions";
 import { GuestRestrictions } from "./GuestRestrictions";
-import { CourseAvailability } from "./CourseAvailability";
+import { LotteryRestrictions } from "./LotteryRestrictions";
 import { Button } from "~/components/ui/button";
-import { Search } from "lucide-react";
+import { Search, FileText } from "lucide-react";
 import { TimeblockRestrictionsSearch } from "./TimeblockRestrictionsSearchDialog";
+import { OverridesSettings } from "~/components/settings/overrides/OverridesSettings";
+import { getTimeblockOverrides } from "~/server/timeblock-restrictions/actions";
 import {
   Dialog,
   DialogContent,
@@ -27,14 +29,21 @@ import type { MemberClass, TimeblockRestriction } from "~/server/db/schema";
 interface TimeblockRestrictionsSettingsProps {
   restrictions: TimeblockRestriction[];
   allMemberClasses?: MemberClass[];
+  lotterySettings: {
+    lotteryAdvanceDays: number;
+    lotteryMaxDaysAhead: number;
+  };
 }
 
 export function TimeblockRestrictionsSettings({
   restrictions,
   allMemberClasses = [],
+  lotterySettings,
 }: TimeblockRestrictionsSettingsProps) {
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [overridesDialogOpen, setOverridesDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("memberClass");
+  const [initialOverrides, setInitialOverrides] = useState<any[]>([]);
 
   const handleTabChange = (value: string) => {
     setSelectedTab(value);
@@ -49,8 +58,8 @@ export function TimeblockRestrictionsSettings({
     (r) => r.restrictionCategory === "GUEST",
   );
 
-  const courseAvailabilityRestrictions = restrictions.filter(
-    (r) => r.restrictionCategory === "COURSE_AVAILABILITY",
+  const lotteryRestrictions = restrictions.filter(
+    (r) => r.restrictionCategory === "LOTTERY",
   );
 
   const handleRestrictionsSearch = (restrictionId: number) => {
@@ -62,7 +71,7 @@ export function TimeblockRestrictionsSettings({
       const tabMapping: Record<string, string> = {
         MEMBER_CLASS: "memberClass",
         GUEST: "guest",
-        COURSE_AVAILABILITY: "courseAvailability",
+        LOTTERY: "lottery",
       };
 
       const tab =
@@ -72,36 +81,61 @@ export function TimeblockRestrictionsSettings({
     }
   };
 
+  const handleOpenOverridesDialog = async () => {
+    setOverridesDialogOpen(true);
+    // Fetch overrides when dialog opens
+    const result = await getTimeblockOverrides({});
+    if (!("error" in result)) {
+      setInitialOverrides(result as any[]);
+    }
+  };
+
   return (
     <Card className="rounded-lg">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-2xl font-bold">
-              Timeblock Restrictions
+              Restrictions
             </CardTitle>
             <CardDescription>
-              Manage time, frequency, and availability restrictions for members,
-              guests, and course
+              Manage time, frequency, and lottery restrictions for members,
+              guests, and lottery entries
             </CardDescription>
           </div>
-          <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Search className="h-4 w-4" />
-                Search Restrictions
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-3xl">
-              <DialogHeader>
-                <DialogTitle>Search Restrictions</DialogTitle>
-              </DialogHeader>
-              <TimeblockRestrictionsSearch
-                restrictions={restrictions}
-                onSelect={handleRestrictionsSearch}
-              />
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Dialog open={overridesDialogOpen} onOpenChange={setOverridesDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2" onClick={handleOpenOverridesDialog}>
+                  <FileText className="h-4 w-4" />
+                  Override Records
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Override Records</DialogTitle>
+                </DialogHeader>
+                <OverridesSettings initialOverrides={initialOverrides} />
+              </DialogContent>
+            </Dialog>
+            <Dialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Search className="h-4 w-4" />
+                  Search Restrictions
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>Search Restrictions</DialogTitle>
+                </DialogHeader>
+                <TimeblockRestrictionsSearch
+                  restrictions={restrictions}
+                  onSelect={handleRestrictionsSearch}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </CardHeader>
 
@@ -118,8 +152,8 @@ export function TimeblockRestrictionsSettings({
             <TabsTrigger value="guest" className="flex-1">
               Guests
             </TabsTrigger>
-            <TabsTrigger value="courseAvailability" className="flex-1">
-              Course Availability
+            <TabsTrigger value="lottery" className="flex-1">
+              Lottery
             </TabsTrigger>
           </TabsList>
 
@@ -137,10 +171,11 @@ export function TimeblockRestrictionsSettings({
             />
           </TabsContent>
 
-          <TabsContent value="courseAvailability">
-            <CourseAvailability
-              restrictions={courseAvailabilityRestrictions}
-              memberClasses={allMemberClasses}
+          <TabsContent value="lottery">
+            <LotteryRestrictions
+              restrictions={lotteryRestrictions}
+              allMemberClasses={allMemberClasses}
+              lotterySettings={lotterySettings}
             />
           </TabsContent>
         </Tabs>

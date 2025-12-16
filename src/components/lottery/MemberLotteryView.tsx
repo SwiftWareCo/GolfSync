@@ -36,6 +36,11 @@ interface LotteryViewProps {
   onDatePickerToggle: () => void;
   onDateChange: (date: Date) => void;
   onDataChange?: () => void;
+  lotteryRestrictionViolation?: {
+    hasViolation: boolean;
+    message: string;
+    violations: any[];
+  } | null;
 }
 
 export function LotteryView({
@@ -51,6 +56,7 @@ export function LotteryView({
   onDatePickerToggle,
   onDateChange,
   onDataChange,
+  lotteryRestrictionViolation,
 }: LotteryViewProps) {
   return (
     <div className="space-y-6 pb-6">
@@ -74,6 +80,7 @@ export function LotteryView({
         member={member}
         config={config}
         onDataChange={onDataChange}
+        lotteryRestrictionViolation={lotteryRestrictionViolation}
       />
 
       {/* Date Picker Dialog */}

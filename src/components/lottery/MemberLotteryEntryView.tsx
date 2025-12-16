@@ -32,7 +32,9 @@ import {
 } from "lucide-react";
 import { formatDate, formatTime12Hour } from "~/lib/dates";
 import { cancelLotteryEntry } from "~/server/lottery/actions";
+import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import type { LotteryEntry } from "~/server/db/schema/lottery/lottery-entries.schema";
+import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
 
 // Member type for client-side usage
 type ClientMember = {
@@ -51,16 +53,10 @@ interface LotteryEntryViewProps {
   entry: LotteryEntry;
   entryType: "individual" | "group" | "group_member";
   member: ClientMember;
+  config: TeesheetConfigWithBlocks;
   onEdit?: () => void;
   onCancel?: () => void;
 }
-
-const TIME_WINDOW_LABELS = {
-  EARLY_MORNING: "Early Morning (7:00 AM - 9:00 AM)",
-  MORNING: "Morning (9:00 AM - 12:00 PM)",
-  MIDDAY: "Midday (12:00 PM - 3:00 PM)",
-  AFTERNOON: "Afternoon (3:00 PM - 6:00 PM)",
-};
 
 // Helper functions for field access
 function getPreferredWindow(entry: LotteryEntry): string {
@@ -111,11 +107,25 @@ export function MemberLotteryEntryView({
   entry,
   entryType,
   member,
+  config,
   onEdit,
   onCancel,
 }: LotteryEntryViewProps) {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+
+  // Calculate dynamic time windows based on config
+  const timeWindows = calculateDynamicTimeWindows(config);
+
+  // Helper function to get window display text
+  const getWindowDisplayText = (windowValue: string): string => {
+    const window = timeWindows.find((w) => w.value === windowValue);
+    if (window) {
+      return `${window.label} (${window.timeRange})`;
+    }
+    // Fallback to window value if config is missing or window not found
+    return windowValue;
+  };
 
   const statusConfig =
     STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG];
@@ -193,13 +203,7 @@ export function MemberLotteryEntryView({
                 </label>
                 <div className="bg-org-primary/5 border-org-primary/20 mt-1 rounded-lg border p-3">
                   <span className="font-medium">
-                    {
-                      TIME_WINDOW_LABELS[
-                        getPreferredWindow(
-                          entry,
-                        ) as keyof typeof TIME_WINDOW_LABELS
-                      ]
-                    }
+                    {getWindowDisplayText(getPreferredWindow(entry))}
                   </span>
                 </div>
               </div>
@@ -211,13 +215,7 @@ export function MemberLotteryEntryView({
                   </label>
                   <div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-3">
                     <span className="font-medium">
-                      {
-                        TIME_WINDOW_LABELS[
-                          getAlternateWindow(
-                            entry,
-                          ) as keyof typeof TIME_WINDOW_LABELS
-                        ]
-                      }
+                      {getWindowDisplayText(getAlternateWindow(entry)!)}
                     </span>
                   </div>
                 </div>

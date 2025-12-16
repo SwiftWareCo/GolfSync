@@ -71,7 +71,7 @@ export interface RestrictionViolation {
   restrictionId: number;
   restrictionName: string;
   restrictionDescription: string;
-  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
+  restrictionCategory: "MEMBER_CLASS" | "GUEST" | "LOTTERY";
   entityType: RestrictedEntityType;
   entityId: string | null;
   violationType: RestrictionType;

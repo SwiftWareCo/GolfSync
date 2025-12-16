@@ -1,13 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import {
@@ -36,7 +29,7 @@ export type TimeblockOverrideWithRelations = {
   restriction: {
     id: number;
     name: string;
-    restrictionCategory: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY";
+    restrictionCategory: "MEMBER_CLASS" | "GUEST" | "LOTTERY";
   };
   timeBlock?: {
     id: number;
@@ -123,15 +116,15 @@ export function OverridesSettings({
   }, [searchTerm]);
 
   const getCategoryDisplayName = (
-    category: "MEMBER_CLASS" | "GUEST" | "COURSE_AVAILABILITY",
+    category: "MEMBER_CLASS" | "GUEST" | "LOTTERY",
   ) => {
     switch (category) {
       case "MEMBER_CLASS":
         return "Member Class";
       case "GUEST":
         return "Guest";
-      case "COURSE_AVAILABILITY":
-        return "Course Availability";
+      case "LOTTERY":
+        return "Lottery";
       default:
         return category;
     }
@@ -179,15 +172,7 @@ export function OverridesSettings({
   });
 
   return (
-    <Card className="rounded-lg">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">Override Records</CardTitle>
-        <CardDescription>
-          Search and filter restriction override records
-        </CardDescription>
-      </CardHeader>
-
-      <CardContent className="space-y-6 pb-6">
+    <div className="space-y-6">
         {/* Search and Filter Controls */}
         <div className="grid gap-6 md:grid-cols-3">
           <div className="space-y-2">
@@ -291,7 +276,6 @@ export function OverridesSettings({
             </TableBody>
           </Table>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 }

@@ -198,9 +198,9 @@ export async function bookMultiplePlayersAction(
         "hasViolations" in restrictionResult &&
         restrictionResult.hasViolations
       ) {
-        // Check for blocking restrictions (AVAILABILITY and TIME)
+        // Check for blocking restrictions (TIME)
         const blockingViolations = restrictionResult.violations.filter(
-          (v: any) => v.type === "AVAILABILITY" || v.type === "TIME",
+          (v: any) => v.type === "TIME",
         );
 
         if (blockingViolations.length > 0) {
