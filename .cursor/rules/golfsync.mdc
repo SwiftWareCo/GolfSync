@@ -11,3 +11,5 @@ alwaysApply: true
 - refer to other similar sections of app to ensure consistency
 - use ui components in components folder whenever possible for styling
 - refer to [schema.ts](mdc:src/server/db/schema.ts) when doing anything with database to gain proper understanding of what needs to be updated
+- after all changes make sure to run pnpm run check to confirm no type errors
+- Only use colors defined in @global.css dont use things like bg-backround or text-muted-foreground

@@ -11,7 +11,6 @@ import {
   endOfWeek,
   format,
   isBefore,
-  isEqual,
   isSameDay,
   isSameMonth,
   isToday,

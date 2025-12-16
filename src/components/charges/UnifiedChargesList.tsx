@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useTransition } from "react";
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
+import { useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import {
   Table,
@@ -75,7 +75,7 @@ export function UnifiedChargesList({
 }: UnifiedChargesListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [isFiltering, setIsFiltering] = useState(false);
+  const [isFiltering] = useState(false);
 
   // Filter state
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(

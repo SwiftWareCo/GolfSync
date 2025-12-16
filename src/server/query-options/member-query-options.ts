@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { queryKeys } from "./query-keys";
 import { searchMembersAction } from "~/server/members/actions";
+import { getMemberByIdAction } from "~/server/statistics/actions";
 import type { Member } from "~/app/types/MemberTypes";
 
 // Query Options
@@ -26,6 +27,19 @@ export const memberQueryOptions = {
       },
       enabled: !!query.trim(), // Only run query if there's a search term
       staleTime: 5 * 60 * 1000, // 5 minutes - member data doesn't change often
+      gcTime: 10 * 60 * 1000, // 10 minutes
+    }),
+
+  // Get member by ID
+  byId: (id: number) =>
+    queryOptions({
+      queryKey: queryKeys.members.byId(id),
+      queryFn: async () => {
+        const member = await getMemberByIdAction(id);
+        return member;
+      },
+      enabled: !!id,
+      staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 10 * 60 * 1000, // 10 minutes
     }),
 };

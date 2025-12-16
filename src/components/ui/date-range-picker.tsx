@@ -30,8 +30,10 @@ export function DateRangePicker({
 
   // Helper to format the date range display
   const formatDateRange = () => {
-    const fromDate = dateRange.from ? format(dateRange.from, "PPP") : "";
-    const toDate = dateRange.to ? format(dateRange.to, "PPP") : "";
+    const fromDate = dateRange.from
+      ? format(dateRange.from, "MMM d, yyyy")
+      : "";
+    const toDate = dateRange.to ? format(dateRange.to, "MMM d, yyyy") : "";
 
     if (fromDate && toDate) {
       return `${fromDate} - ${toDate}`;
@@ -53,8 +55,8 @@ export function DateRangePicker({
             className,
           )}
         >
-          <CalendarIcon className="mr-2 h-4 w-4" />
-          {formatDateRange()}
+          <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+          <span className="truncate">{formatDateRange()}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
