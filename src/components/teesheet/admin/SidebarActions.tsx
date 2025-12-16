@@ -14,6 +14,7 @@ import {
   ArrowUpDown,
   BaggageClaim,
   Settings,
+  Monitor,
 } from "lucide-react";
 import { getBCToday } from "~/lib/dates";
 import {
@@ -97,6 +98,10 @@ export function SidebarActions({
 
   const handleSettings = () => {
     setIsSettingsOpen(true);
+  };
+
+  const handleProshopDisplay = () => {
+    router.push(`/proshop/display?date=${dateString}`);
   };
 
   const buttonLabelClasses =
@@ -220,6 +225,17 @@ export function SidebarActions({
         >
           <BaggageClaim className="h-5 w-5 shrink-0" />
           <span className={buttonLabelClasses}>Bag Report</span>
+        </Button>
+
+        {/* Proshop Display */}
+        <Button
+          variant="ghost"
+          onClick={handleProshopDisplay}
+          title="Proshop Display"
+          className={sidebarButtonClasses}
+        >
+          <Monitor className="h-5 w-5 shrink-0" />
+          <span className={buttonLabelClasses}>Proshop</span>
         </Button>
 
         {/* Teesheet Settings */}

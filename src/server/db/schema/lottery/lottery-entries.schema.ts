@@ -6,7 +6,6 @@ import {
   varchar,
   date,
   unique,
-  pgEnum,
 } from "drizzle-orm/pg-core";
 import {
   createInsertSchema,

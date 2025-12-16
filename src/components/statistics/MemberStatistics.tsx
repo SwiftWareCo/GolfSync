@@ -7,8 +7,12 @@ import {
   Timer,
   Clock,
   CalendarDays,
+  Trophy,
+  Users,
+  Sun,
+  Share2,
 } from "lucide-react";
-import { PlayingFrequencyChart } from "./charts/PlayingFrequencyChart";
+import { PaceOfPlayChart } from "./charts/PaceOfPlayChart";
 import { PreferredTeeTimesChart } from "./charts/PreferredTeeTimesChart";
 import type { StatisticsData } from "~/lib/statistics/mock-data";
 
@@ -46,15 +50,11 @@ export function MemberStatistics({ data }: MemberStatisticsProps) {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Rounds Played
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Rounds Played</CardTitle>
             <Activity className="text-muted-foreground h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {data.summary.totalRounds}
-            </div>
+            <div className="text-2xl font-bold">{data.summary.totalRounds}</div>
             <p className="text-muted-foreground text-xs">
               {data.summary.guestRounds > 0
                 ? `${data.summary.guestRounds} with guests`
@@ -118,9 +118,7 @@ export function MemberStatistics({ data }: MemberStatisticsProps) {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Preferred Day
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Preferred Day</CardTitle>
             <CalendarDays className="text-muted-foreground h-4 w-4" />
           </CardHeader>
           <CardContent>
@@ -156,13 +154,13 @@ export function MemberStatistics({ data }: MemberStatisticsProps) {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Guests Brought</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Guests Brought
+            </CardTitle>
             <UserPlus className="text-muted-foreground h-4 w-4" />
           </CardHeader>
           <CardContent>
-            <div className="text-xl font-bold">
-              {data.summary.guestRounds}
-            </div>
+            <div className="text-xl font-bold">{data.summary.guestRounds}</div>
             <p className="text-muted-foreground text-xs">
               {data.summary.totalRounds > 0
                 ? `${Math.round(
@@ -174,9 +172,151 @@ export function MemberStatistics({ data }: MemberStatisticsProps) {
         </Card>
       </div>
 
+      {/* Lottery Statistics Cards */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Lottery Entries Created
+            </CardTitle>
+            <Trophy className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.lotteryEntriesAsOrganizer}
+            </div>
+            <p className="text-muted-foreground text-xs">As organizer</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Group Entries Joined
+            </CardTitle>
+            <Users className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.lotteryEntriesAsGroupMember}
+            </div>
+            <p className="text-muted-foreground text-xs">As group member</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Preferred Window
+            </CardTitle>
+            <Sun className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.lotteryMostPreferredWindow
+                ? data.summary.lotteryMostPreferredWindow.charAt(0) +
+                  data.summary.lotteryMostPreferredWindow.slice(1).toLowerCase()
+                : "N/A"}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {data.summary.lotteryMostPreferredWindow
+                ? "Most frequent choice"
+                : "No entries"}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Power Cart Statistics Cards */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Solo Carts</CardTitle>
+            <Car className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.powerCartSolo}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {data.summary.powerCartRentals > 0
+                ? `${Math.round(
+                    (data.summary.powerCartSolo /
+                      data.summary.powerCartRentals) *
+                      100,
+                  )}% of rentals`
+                : "No rentals"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Split Carts</CardTitle>
+            <Share2 className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.powerCartSplit}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {data.summary.powerCartRentals > 0
+                ? `${Math.round(
+                    (data.summary.powerCartSplit /
+                      data.summary.powerCartRentals) *
+                      100,
+                  )}% of rentals`
+                : "No rentals"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">9 Holes</CardTitle>
+            <Clock className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.powerCart9Holes}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {data.summary.powerCartRentals > 0
+                ? `${Math.round(
+                    (data.summary.powerCart9Holes /
+                      data.summary.powerCartRentals) *
+                      100,
+                  )}% of rentals`
+                : "No rentals"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">18 Holes</CardTitle>
+            <Activity className="text-muted-foreground h-4 w-4" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-xl font-bold">
+              {data.summary.powerCart18Holes}
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {data.summary.powerCartRentals > 0
+                ? `${Math.round(
+                    (data.summary.powerCart18Holes /
+                      data.summary.powerCartRentals) *
+                      100,
+                  )}% of rentals`
+                : "No rentals"}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Member Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <PlayingFrequencyChart data={data.roundsOverTime} />
+        <PaceOfPlayChart data={data.paceOfPlayTrend} />
         <PreferredTeeTimesChart data={data.bookingsBySlot} />
       </div>
     </div>

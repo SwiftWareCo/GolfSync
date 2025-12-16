@@ -7,6 +7,13 @@ export interface StatisticsSummary {
   guestRounds: number;
   powerCartRentals: number;
   eventRegistrations: number;
+  lotteryEntriesAsOrganizer: number;
+  lotteryEntriesAsGroupMember: number;
+  lotteryMostPreferredWindow: string | null;
+  powerCartSolo: number;
+  powerCartSplit: number;
+  powerCart9Holes: number;
+  powerCart18Holes: number;
 }
 
 export interface RoundsOverTime {
@@ -279,6 +286,41 @@ export function generateMockStatisticsData(
     eventRegistrations: Math.floor(
       dayCount * 0.5 * (0.8 + seededRandom(seed + 200) * 0.4),
     ),
+    lotteryEntriesAsOrganizer: filters.memberId
+      ? Math.floor(dayCount * 0.3 * (0.5 + seededRandom(seed + 300) * 0.5))
+      : 0,
+    lotteryEntriesAsGroupMember: filters.memberId
+      ? Math.floor(dayCount * 0.2 * (0.3 + seededRandom(seed + 301) * 0.4))
+      : 0,
+    lotteryMostPreferredWindow: filters.memberId
+      ? ["MORNING", "MIDDAY", "AFTERNOON", "EVENING"][
+          Math.floor(seededRandom(seed + 303) * 4)
+        ]!
+      : null,
+    powerCartSolo: filters.memberId
+      ? Math.floor(
+          (powerCartUsage.solo9 + powerCartUsage.solo18) *
+            (0.8 + seededRandom(seed + 304) * 0.4),
+        )
+      : 0,
+    powerCartSplit: filters.memberId
+      ? Math.floor(
+          (powerCartUsage.split9 + powerCartUsage.split18) *
+            (0.8 + seededRandom(seed + 305) * 0.4),
+        )
+      : 0,
+    powerCart9Holes: filters.memberId
+      ? Math.floor(
+          (powerCartUsage.solo9 + powerCartUsage.split9) *
+            (0.8 + seededRandom(seed + 306) * 0.4),
+        )
+      : 0,
+    powerCart18Holes: filters.memberId
+      ? Math.floor(
+          (powerCartUsage.solo18 + powerCartUsage.split18) *
+            (0.8 + seededRandom(seed + 307) * 0.4),
+        )
+      : 0,
   };
 
   return {

@@ -23,6 +23,7 @@ import {
   eventRegistrations,
   timeBlocks,
   teesheets,
+  lotteryEntries,
 } from "../db/schema";
 
 export async function getStatisticsData(filters: StatisticsFilters) {
@@ -229,6 +230,63 @@ async function getMemberStatisticsData(
       ),
     );
 
+  // Fetch member's lottery entries (as organizer)
+  const lotteryEntriesAsOrganizer = await db
+    .select({ count: count() })
+    .from(lotteryEntries)
+    .where(
+      and(
+        eq(lotteryEntries.organizerId, memberId),
+        gte(lotteryEntries.lotteryDate, startDate),
+        lte(lotteryEntries.lotteryDate, endDate),
+      ),
+    );
+
+  // Fetch member's lottery entries (as group member, not organizer)
+  const allLotteryEntries = await db
+    .select()
+    .from(lotteryEntries)
+    .where(
+      and(
+        gte(lotteryEntries.lotteryDate, startDate),
+        lte(lotteryEntries.lotteryDate, endDate),
+      ),
+    );
+
+  const lotteryEntriesAsGroupMember = allLotteryEntries.filter(
+    (entry) =>
+      entry.memberIds.includes(memberId) &&
+      entry.organizerId !== memberId &&
+      entry.memberIds.length > 1,
+  ).length;
+
+  // Calculate most preferred window from lottery entries
+  const memberLotteryEntries = allLotteryEntries.filter(
+    (entry) =>
+      entry.organizerId === memberId || entry.memberIds.includes(memberId),
+  );
+  const windowCounts: Record<string, number> = {};
+  memberLotteryEntries.forEach((entry) => {
+    const window = entry.preferredWindow;
+    windowCounts[window] = (windowCounts[window] || 0) + 1;
+  });
+  const mostPreferredWindow =
+    Object.keys(windowCounts).length > 0
+      ? Object.entries(windowCounts).reduce((a, b) =>
+          a[1]! > b[1]! ? a : b,
+        )[0]
+      : null;
+
+  // Calculate power cart breakdown
+  const powerCartSolo = cartCharges.filter(
+    (c) => !c.isSplit && !c.splitWithMemberId,
+  ).length;
+  const powerCartSplit = cartCharges.filter(
+    (c) => c.isSplit || c.splitWithMemberId !== null,
+  ).length;
+  const powerCart9Holes = cartCharges.filter((c) => c.numHoles === 9).length;
+  const powerCart18Holes = cartCharges.filter((c) => c.numHoles === 18).length;
+
   // Fetch member's pace of play data (join through timeBlocks)
   const paceData = await db
     .select({
@@ -271,6 +329,13 @@ async function getMemberStatisticsData(
     guestRounds: guestBookings.length,
     powerCartRentals: cartCharges.length,
     eventRegistrations: eventRegs[0]?.count ?? 0,
+    lotteryEntriesAsOrganizer: lotteryEntriesAsOrganizer[0]?.count ?? 0,
+    lotteryEntriesAsGroupMember,
+    lotteryMostPreferredWindow: mostPreferredWindow,
+    powerCartSolo,
+    powerCartSplit,
+    powerCart9Holes,
+    powerCart18Holes,
   };
 
   const roundsOverTime = aggregateRoundsByDate(memberBookings, guestBookings);
@@ -327,6 +392,13 @@ function calculateSummary(
     guestRounds: guestBookings.length,
     powerCartRentals: cartCharges.length,
     eventRegistrations: eventRegistrationsCount,
+    lotteryEntriesAsOrganizer: 0,
+    lotteryEntriesAsGroupMember: 0,
+    lotteryMostPreferredWindow: null,
+    powerCartSolo: 0,
+    powerCartSplit: 0,
+    powerCart9Holes: 0,
+    powerCart18Holes: 0,
   };
 }
 

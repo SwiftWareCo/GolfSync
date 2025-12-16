@@ -30,7 +30,6 @@ const NavigationClient = ({ chargesCount }: NavigationClientProps) => {
       count: chargesCount > 0 ? chargesCount : undefined,
     },
     { name: "Statistics", href: "/admin/statistics" },
-    { name: "Proshop Display", href: "/proshop/display" },
     { name: "Settings", href: "/admin/settings" },
   ];
 
