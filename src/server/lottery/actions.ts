@@ -594,10 +594,8 @@ export async function processLotteryForDate(
       await db.insert(timeBlockMembers).values(memberInserts);
     }
 
-    // Update fairness scores after processing
-    if (processedCount > 0) {
-      await updateFairnessScoresAfterProcessing(date, config);
-    }
+    // Note: Fairness scores are no longer updated automatically
+    // They must be assigned manually via assignFairnessScoresForDate after manual adjustments
 
     // Final results logging
     const totalEntries = entries.individual.length + entries.groups.length;
@@ -1368,12 +1366,15 @@ export async function batchUpdateLotteryAssignments(
 }
 
 /**
- * Update fairness scores after lottery processing
+ * Assign fairness scores for lottery entries (manual action)
+ * Only counts preferred and alternate window assignments as "granted"
+ * Fallback assignments (outside preferred/alternate) are NOT counted as granted
+ * Restrictions only exempt if the assigned time is within preferred/alternate windows
  */
-async function updateFairnessScoresAfterProcessing(
+export async function assignFairnessScoresForDate(
   date: string,
   config: TeesheetConfigWithBlocks,
-): Promise<void> {
+): Promise<ActionResult> {
   try {
     const { getLotteryEntriesForDate, getActiveTimeRestrictionsForDate } =
       await import("~/server/lottery/data");
@@ -1413,37 +1414,54 @@ async function updateFairnessScoresAfterProcessing(
           memberClassId: member.memberClass?.id ?? 0,
         };
 
-        // Check what blocks were available without restrictions
-        const allBlocks = [
-          {
-            startTime: assignedTimeBlock.startTime,
-            id: assignedTimeBlock.id,
-            availableSpots: 1,
-          },
-        ];
-        const allowedBlocks = filterBlocksByRestrictions(
-          allBlocks,
-          memberInfo,
-          date,
-          timeRestrictions,
+        // First check if assigned time is in preferred/alternate windows
+        const assignedTimeInPreferredOrAlternate = checkPreferenceMatch(
+          assignedTimeBlock.startTime,
+          entry.preferredWindow,
+          entry.alternateWindow,
+          timeWindows,
         );
 
-        // If the assigned block wouldn't be allowed without restrictions,
-        // or if member has any active restrictions, consider this affected by restrictions
-        const wasBlockedByRestrictions =
-          allowedBlocks.length === 0 ||
-          timeRestrictions.some((restriction) => {
-            const appliesToMemberClass =
-              !restriction.memberClassIds?.length ||
-              restriction.memberClassIds.includes(member.classId);
-            return (
-              restriction.isActive &&
-              restriction.restrictionCategory === "MEMBER_CLASS" &&
-              restriction.restrictionType === "TIME" &&
-              appliesToMemberClass
-            );
-          });
+        // Only check restriction exemption if assigned time is in preferred/alternate windows
+        // Fallback assignments (outside preferred/alternate) should NEVER be exempted
+        let wasBlockedByRestrictions = false;
+        if (assignedTimeInPreferredOrAlternate) {
+          // Get all available blocks for this date to check if restrictions blocked preferred/alternate windows
+          const { getAvailableTimeBlocksForDate } = await import(
+            "~/server/lottery/data"
+          );
+          const allAvailableBlocks = await getAvailableTimeBlocksForDate(date);
+          const availableBlocksOnly = allAvailableBlocks.filter(
+            (block) => block.availableSpots > 0,
+          );
 
+          // Check if there were blocks in preferred/alternate windows that were blocked by restrictions
+          const blocksInPreferredOrAlternate = availableBlocksOnly.filter(
+            (block) =>
+              matchesTimePreference(
+                block,
+                entry.preferredWindow as TimeWindow,
+                entry.alternateWindow as TimeWindow | null,
+                config,
+              ),
+          );
+
+          const allowedBlocksInPreferredOrAlternate =
+            filterBlocksByRestrictions(
+              blocksInPreferredOrAlternate,
+              memberInfo,
+              date,
+              timeRestrictions,
+            );
+
+          // If there were blocks in preferred/alternate windows but restrictions blocked them,
+          // and the assigned time is in preferred/alternate, then restrictions affected the assignment
+          wasBlockedByRestrictions =
+            blocksInPreferredOrAlternate.length > 0 &&
+            allowedBlocksInPreferredOrAlternate.length === 0;
+        }
+
+        // Use the fixed logic: only exempt if assigned time is in preferred/alternate AND restrictions blocked those windows
         const preferenceGranted = checkPreferenceMatchWithRestrictions(
           assignedTimeBlock.startTime,
           entry.preferredWindow,
@@ -1533,33 +1551,66 @@ async function updateFairnessScoresAfterProcessing(
 
         if (!assignedTimeBlock) continue;
 
-        // Check if the group assignment was affected by restrictions from any member
-        const allBlocks = [
-          {
-            startTime: assignedTimeBlock.startTime,
-            id: assignedTimeBlock.id,
-            availableSpots: 1,
-          },
-        ];
+        // First check if assigned time is in preferred/alternate windows
+        const assignedTimeInPreferredOrAlternate = checkPreferenceMatch(
+          assignedTimeBlock.startTime,
+          group.preferredWindow,
+          group.alternateWindow,
+          timeWindows,
+        );
 
-        // Get all group members to check restrictions
-        const groupMembers = await db.query.members.findMany({
-          where: inArray(members.id, group.memberIds),
-          with: {
-            memberClass: true,
-          },
-        });
-
-        const wasBlockedByRestrictions = groupMembers.some((member) => {
-          const memberAllowedBlocks = filterBlocksByRestrictions(
-            allBlocks,
-            { memberId: member.id, memberClassId: member.memberClass?.id ?? 0 },
-            date,
-            timeRestrictions,
+        // Only check restriction exemption if assigned time is in preferred/alternate windows
+        // Fallback assignments (outside preferred/alternate) should NEVER be exempted
+        let wasBlockedByRestrictions = false;
+        if (assignedTimeInPreferredOrAlternate) {
+          // Get all available blocks for this date to check if restrictions blocked preferred/alternate windows
+          const { getAvailableTimeBlocksForDate } = await import(
+            "~/server/lottery/data"
           );
-          return memberAllowedBlocks.length === 0;
-        });
+          const allAvailableBlocks = await getAvailableTimeBlocksForDate(date);
+          const availableBlocksOnly = allAvailableBlocks.filter(
+            (block) => block.availableSpots > 0,
+          );
 
+          // Get all group members to check restrictions
+          const groupMembers = await db.query.members.findMany({
+            where: inArray(members.id, group.memberIds),
+            with: {
+              memberClass: true,
+            },
+          });
+
+          // Check if there were blocks in preferred/alternate windows that were blocked by restrictions for ANY member
+          const blocksInPreferredOrAlternate = availableBlocksOnly.filter(
+            (block) =>
+              matchesTimePreference(
+                block,
+                group.preferredWindow as TimeWindow,
+                group.alternateWindow as TimeWindow | null,
+                config,
+              ),
+          );
+
+          // Check if restrictions blocked preferred/alternate windows for any group member
+          wasBlockedByRestrictions = groupMembers.some((member) => {
+            const memberAllowedBlocks = filterBlocksByRestrictions(
+              blocksInPreferredOrAlternate,
+              {
+                memberId: member.id,
+                memberClassId: member.memberClass?.id ?? 0,
+              },
+              date,
+              timeRestrictions,
+            );
+            // If there were blocks in preferred/alternate but restrictions blocked them all
+            return (
+              blocksInPreferredOrAlternate.length > 0 &&
+              memberAllowedBlocks.length === 0
+            );
+          });
+        }
+
+        // Use the fixed logic: only exempt if assigned time is in preferred/alternate AND restrictions blocked those windows
         const preferenceGranted = checkPreferenceMatchWithRestrictions(
           assignedTimeBlock.startTime,
           group.preferredWindow,
@@ -1634,8 +1685,20 @@ async function updateFairnessScoresAfterProcessing(
         }
       }
     }
+    revalidatePath("/admin/lottery");
+    return {
+      success: true,
+      data: { message: "Fairness scores assigned successfully" },
+    };
   } catch (error) {
-    console.error("Error updating fairness scores:", error);
+    console.error("Error assigning fairness scores:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to assign fairness scores",
+    };
   }
 }
 

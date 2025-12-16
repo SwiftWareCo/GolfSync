@@ -15,7 +15,10 @@ import {
   Undo,
 } from "lucide-react";
 import { insertTimeBlock, deleteTimeBlock } from "~/server/teesheet/actions";
-import { batchUpdateLotteryAssignments } from "~/server/lottery/actions";
+import {
+  batchUpdateLotteryAssignments,
+  assignFairnessScoresForDate,
+} from "~/server/lottery/actions";
 import { formatDate } from "~/lib/dates";
 import { InsertTimeBlockDialog } from "../teesheet/arrange-results/InsertTimeBlockDialog";
 import { TimeBlockPreviewCard } from "../teesheet/arrange-results/TimeBlockPreviewCard";
@@ -128,6 +131,8 @@ export function TeesheetPreviewAndArrange({
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
+  const [isAssigningFairnessScores, setIsAssigningFairnessScores] =
+    useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
     title: "",
@@ -753,6 +758,34 @@ export function TeesheetPreviewAndArrange({
     setInsertTimeBlockDialogOpen(true);
   };
 
+  // Handle assigning fairness scores
+  const handleAssignFairnessScores = async () => {
+    if (!teesheetData?.config) {
+      toast.error("Teesheet configuration not available");
+      return;
+    }
+
+    setIsAssigningFairnessScores(true);
+    try {
+      const result = await assignFairnessScoresForDate(
+        date,
+        teesheetData.config,
+      );
+      if (result.success) {
+        toast.success("Fairness scores assigned successfully");
+        // Optionally refresh data
+        onTimeBlocksChange([]);
+      } else {
+        toast.error(result.error || "Failed to assign fairness scores");
+      }
+    } catch (error) {
+      console.error("Error assigning fairness scores:", error);
+      toast.error("An error occurred while assigning fairness scores");
+    } finally {
+      setIsAssigningFairnessScores(false);
+    }
+  };
+
   return (
     <TooltipProvider>
       <div className="space-y-4">
@@ -940,14 +973,51 @@ export function TeesheetPreviewAndArrange({
         {/* Header */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Teesheet Preview - {formatDate(date)}
-            </CardTitle>
-            <p className="text-sm text-gray-600">
-              Click entries to select, then click time slots to move them. Click
-              up/down arrows to swap all players between adjacent time blocks.
-            </p>
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Teesheet Preview - {formatDate(date)}
+                </CardTitle>
+                <p className="mt-1 text-sm text-gray-600">
+                  Click entries to select, then click time slots to move them.
+                  Click up/down arrows to swap all players between adjacent time
+                  blocks.
+                </p>
+              </div>
+              <Button
+                onClick={handleAssignFairnessScores}
+                disabled={
+                  isAssigningFairnessScores ||
+                  pendingChanges.length > 0 ||
+                  !teesheetData?.config
+                }
+                variant="outline"
+                className="ml-4"
+                title={
+                  pendingChanges.length > 0
+                    ? "Please save all changes before assigning fairness scores"
+                    : "Assign fairness scores based on final assignments. Only preferred and alternate window assignments count as granted."
+                }
+              >
+                {isAssigningFairnessScores ? (
+                  <>
+                    <LoadingSpinner className="mr-2 h-4 w-4" />
+                    Assigning...
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Assign Fairness Scores
+                  </>
+                )}
+              </Button>
+            </div>
+            {pendingChanges.length > 0 && (
+              <p className="mt-2 text-xs text-orange-600">
+                Save all changes before assigning fairness scores
+              </p>
+            )}
           </CardHeader>
         </Card>
 

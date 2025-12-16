@@ -107,7 +107,7 @@ export function LotteryResultsView({
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="preview">
             <Calendar className="mr-2 h-4 w-4" />
-            Teesheet Preview & Arrange
+            Preview & Arrange
           </TabsTrigger>
           <TabsTrigger value="entries">
             <Users className="mr-2 h-4 w-4" />

@@ -54,7 +54,7 @@ export function LotteryProcessor({
           bookingsCreated: number;
         };
         toast.success(
-          `Lottery processed successfully! ${data.processedCount} out of ${data.totalEntries} entries processed and ${data.bookingsCreated} bookings created.`,
+          `Lottery processed successfully! ${data.processedCount} out of ${data.totalEntries} entries processed and ${data.bookingsCreated} bookings created. Remember to assign fairness scores after making any manual adjustments in the Preview & Arrange tab.`,
         );
         onProcessComplete();
       } else {
@@ -68,10 +68,10 @@ export function LotteryProcessor({
   };
 
   const canProcess =
-    stats.processingStatus === "pending" && stats.totalEntries > 0 && !isPastDate;
+    stats.processingStatus === "pending" &&
+    stats.totalEntries > 0 &&
+    !isPastDate;
   const hasProcessed = stats.processingStatus === "completed";
-
-  
 
   return (
     <div className="space-y-6">
@@ -131,13 +131,15 @@ export function LotteryProcessor({
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
                 <span>
-                  Calculates priority scores based on fairness history, speed profiles, and admin adjustments
+                  Calculates priority scores based on fairness history, speed
+                  profiles, and admin adjustments
                 </span>
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
                 <span>
-                  Applies configurable speed bonuses by time window (adjust via Algorithm Settings)
+                  Applies configurable speed bonuses by time window (adjust via
+                  Algorithm Settings)
                 </span>
               </div>
               <div className="flex items-start gap-2">
@@ -148,9 +150,7 @@ export function LotteryProcessor({
               </div>
               <div className="flex items-start gap-2">
                 <div className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500"></div>
-                <span>
-                  Updates fairness scores after processing
-                </span>
+                <span>Updates fairness scores after processing</span>
               </div>
             </div>
           </div>
@@ -194,7 +194,9 @@ export function LotteryProcessor({
                 </Button>
                 <p className="text-sm text-gray-600">
                   This will create actual teesheet bookings for all pending
-                  entries based on preferences and fairness scores
+                  entries based on preferences and fairness scores. After
+                  processing, review and adjust assignments in the Preview &
+                  Arrange tab, then assign fairness scores manually.
                 </p>
               </div>
             )}
@@ -219,25 +221,29 @@ export function LotteryProcessor({
                   </span>
                 </div>
                 <p className="text-sm text-gray-600">
-                  Lottery processing is only available for current and future dates
+                  Lottery processing is only available for current and future
+                  dates
                 </p>
               </div>
             )}
 
-            {!canProcess && stats.totalEntries > 0 && !hasProcessed && !isPastDate && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-center gap-2 text-yellow-700">
-                  <AlertCircle className="h-5 w-5" />
-                  <span className="font-medium">
-                    Cannot process at this time
-                  </span>
+            {!canProcess &&
+              stats.totalEntries > 0 &&
+              !hasProcessed &&
+              !isPastDate && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-yellow-700">
+                    <AlertCircle className="h-5 w-5" />
+                    <span className="font-medium">
+                      Cannot process at this time
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    There may be no available time blocks or entries are already
+                    being processed
+                  </p>
                 </div>
-                <p className="text-sm text-gray-600">
-                  There may be no available time blocks or entries are already
-                  being processed
-                </p>
-              </div>
-            )}
+              )}
           </div>
         </CardContent>
       </Card>
