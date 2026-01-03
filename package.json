@@ -35,7 +35,7 @@
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.1.0",
     "@atlaskit/pragmatic-drag-and-drop-react-drop-indicator": "^3.2.9",
     "@atlaskit/primitives": "^16.3.0",
-    "@clerk/nextjs": "^6.35.4",
+    "@clerk/nextjs": "^6.36.5",
     "@neondatabase/serverless": "^0.10.4",
     "@radix-ui/react-alert-dialog": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.2.3",

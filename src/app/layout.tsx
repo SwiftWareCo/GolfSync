@@ -19,9 +19,9 @@ export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={GeistSans.variable}>
-      <body>
-        <ClerkProvider telemetry={false}>
+    <ClerkProvider telemetry={false}>
+      <html lang="en" className={GeistSans.variable}>
+        <body>
           <QueryProvider>
             {children}
             <Toaster
@@ -35,8 +35,8 @@ export default async function RootLayout({
           </QueryProvider>
           <Analytics />
           <SpeedInsights />
-        </ClerkProvider>
-      </body>
-    </html>
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
