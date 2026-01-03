@@ -3,13 +3,11 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../db";
 
 import {
-  members,
   paceOfPlay,
   teesheets,
   timeBlockMembers,
   timeBlocks,
   timeBlockGuests,
-  guests,
   type PaceOfPlay,
   type PaceOfPlayInsert,
   type TimeBlock,
