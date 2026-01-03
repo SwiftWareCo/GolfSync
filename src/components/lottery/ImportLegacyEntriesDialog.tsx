@@ -295,7 +295,9 @@ export function ImportLegacyEntriesDialog({
                 {/* Warnings */}
                 {validationResult.warnings.length > 0 && (
                   <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3">
-                    <p className="mb-1 font-medium text-yellow-800">Warnings:</p>
+                    <p className="mb-1 font-medium text-yellow-800">
+                      Warnings:
+                    </p>
                     <ul className="list-inside list-disc text-sm text-yellow-700">
                       {validationResult.warnings.map((warn, i) => (
                         <li key={i}>{warn}</li>
