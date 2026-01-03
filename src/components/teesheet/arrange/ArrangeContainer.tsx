@@ -9,6 +9,7 @@ import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
 import { ArrangeControls } from "./ArrangeControls";
 import { ArrangeTimeBlockCard } from "./ArrangeTimeBlockCard";
 import { FrostDelayModal } from "./FrostDelayModal";
+import { BlockRemapModal } from "./BlockRemapModal";
 import {
   ChangeLogModal,
   type ChangeLogEntry,
@@ -20,6 +21,7 @@ import {
   batchMoveChanges,
   insertTimeBlock,
   deleteTimeBlock,
+  replaceTimeBlockRange,
 } from "~/server/teesheet/actions";
 import type {
   TimeBlockWithRelations,
@@ -30,10 +32,12 @@ import { formatTime12Hour } from "~/lib/dates";
 // Pending change for server
 interface PendingMoveChange {
   playerId: number;
-  playerType: "member" | "guest";
+  playerType: "member" | "guest" | "fill";
   sourceTimeBlockId: number;
   targetTimeBlockId: number;
   invitedByMemberId?: number;
+  fillType?: string;
+  fillCustomName?: string | null;
 }
 
 // Pending delete
@@ -48,6 +52,8 @@ interface SelectedPlayer {
   type: "member" | "guest" | "fill";
   sourceTimeBlockId: number;
   name: string;
+  fillType?: string;
+  fillCustomName?: string | null;
 }
 
 interface ArrangeContainerProps {
@@ -55,6 +61,26 @@ interface ArrangeContainerProps {
   teesheetId: number;
   initialTimeBlocks: TimeBlockWithRelations[];
   config: TeesheetConfigWithBlocks | null;
+}
+
+/**
+ * Generate a stable hash of player positions across all timeblocks.
+ * The hash is order-independent within each block - only player IDs and their block assignments matter.
+ * This prevents false "unsaved changes" when arrays have same content but different order.
+ */
+function generatePlayerPositionHash(blocks: TimeBlockWithRelations[]): string {
+  const positions: string[] = [];
+
+  blocks.forEach((block) => {
+    const blockId = block.id;
+    block.members?.forEach((m) => positions.push(`${blockId}:m:${m.id}`));
+    block.guests?.forEach((g) => positions.push(`${blockId}:g:${g.id}`));
+    block.fills?.forEach((f) => positions.push(`${blockId}:f:${f.id}`));
+  });
+
+  // Sort to ensure deterministic order regardless of iteration order
+  positions.sort();
+  return positions.join("|");
 }
 
 export function ArrangeContainer({
@@ -83,6 +109,14 @@ export function ArrangeContainer({
     timeBlocksRef.current = timeBlocks;
   }, [timeBlocks]);
 
+  // Ref to store initial player position hash (for detecting actual changes)
+  const initialHashRef = useRef<string>(
+    generatePlayerPositionHash(initialTimeBlocks),
+  );
+  useEffect(() => {
+    initialHashRef.current = generatePlayerPositionHash(initialTimeBlocks);
+  }, [initialTimeBlocks]);
+
   // Sync local timeBlocks state when initialTimeBlocks prop changes (after server action with revalidatePath)
   // Only sync when there are no pending deletes to avoid losing user edits
   useEffect(() => {
@@ -94,6 +128,7 @@ export function ArrangeContainer({
 
   // Modal states
   const [isFrostDelayOpen, setIsFrostDelayOpen] = useState(false);
+  const [isFrostRemapOpen, setIsFrostRemapOpen] = useState(false);
   const [isChangeLogOpen, setIsChangeLogOpen] = useState(false);
   const [insertDialogOpen, setInsertDialogOpen] = useState(false);
   const [insertAfterBlockId, setInsertAfterBlockId] = useState<number | null>(
@@ -112,8 +147,20 @@ export function ArrangeContainer({
     onConfirm: () => {},
   });
 
+  // Compute current hash for comparison
+  const currentHash = useMemo(
+    () => generatePlayerPositionHash(timeBlocks),
+    [timeBlocks],
+  );
+
   // Compute pending moves by diffing initialTimeBlocks vs current timeBlocks
+  // Only compute if hash differs (optimization + fixes false positives)
   const pendingMoves = useMemo(() => {
+    // Short-circuit if hash matches - no actual changes
+    if (currentHash === initialHashRef.current) {
+      return [];
+    }
+
     const moves: PendingMoveChange[] = [];
 
     // Build lookup of where each player was originally
@@ -122,6 +169,10 @@ export function ArrangeContainer({
       number,
       { blockId: number; invitedBy?: number }
     >(); // guestId -> { blockId, invitedBy }
+    const originalFillLocations = new Map<
+      number,
+      { blockId: number; fillType: string; fillCustomName?: string | null }
+    >(); // fillId -> { blockId, fillType, fillCustomName }
 
     initialTimeBlocks.forEach((block) => {
       block.members?.forEach((member) => {
@@ -131,6 +182,13 @@ export function ArrangeContainer({
         originalGuestLocations.set(guest.id, {
           blockId: block.id!,
           invitedBy: guest.invitedByMemberId,
+        });
+      });
+      block.fills?.forEach((fill) => {
+        originalFillLocations.set(fill.id, {
+          blockId: block.id!,
+          fillType: fill.fillType,
+          fillCustomName: fill.customName,
         });
       });
     });
@@ -160,10 +218,23 @@ export function ArrangeContainer({
           });
         }
       });
+      block.fills?.forEach((fill) => {
+        const original = originalFillLocations.get(fill.id);
+        if (original && original.blockId !== block.id) {
+          moves.push({
+            playerId: fill.id,
+            playerType: "fill",
+            sourceTimeBlockId: original.blockId,
+            targetTimeBlockId: block.id!,
+            fillType: original.fillType,
+            fillCustomName: original.fillCustomName,
+          });
+        }
+      });
     });
 
     return moves;
-  }, [initialTimeBlocks, timeBlocks]);
+  }, [currentHash, initialTimeBlocks, timeBlocks]);
 
   // Compute which blocks have changes
   const blockChanges = useMemo(() => {
@@ -179,7 +250,9 @@ export function ArrangeContainer({
   }, [pendingMoves, pendingDeletes]);
 
   // Total pending changes count
-  const pendingChangesCount = pendingMoves.length + pendingDeletes.length;
+  // Display count based on user actions (matches View Log)
+  // Note: pendingMoves/pendingDeletes are still used for actual save operations
+  const pendingChangesCount = changeLog.length;
 
   // Get last tee time for frost delay validation
   const lastTeeTime = useMemo(() => {
@@ -254,17 +327,20 @@ export function ArrangeContainer({
           ? "Fill"
           : `${player.data.firstName} ${player.data.lastName}`;
 
+      // Extract fill metadata if it's a fill
+      const fillType = playerType === "fill" ? player.data.fillType : undefined;
+      const fillCustomName =
+        playerType === "fill" ? player.data.customName : undefined;
+
       // If no selection, select this player
       if (!selectedPlayer) {
-        if (playerType === "fill") {
-          toast.error("Fills cannot be moved between time slots");
-          return;
-        }
         setSelectedPlayer({
           id: playerId,
           type: playerType,
           sourceTimeBlockId: sourceBlock.id!,
           name: playerName,
+          fillType,
+          fillCustomName,
         });
         return;
       }
@@ -279,11 +355,6 @@ export function ArrangeContainer({
       }
 
       // If clicking different player, swap them
-      if (playerType === "fill") {
-        toast.error("Cannot swap with fills");
-        setSelectedPlayer(null);
-        return;
-      }
 
       // Perform swap
       performSwap(
@@ -293,6 +364,8 @@ export function ArrangeContainer({
           type: playerType,
           sourceTimeBlockId: sourceBlock.id!,
           name: playerName,
+          fillType,
+          fillCustomName,
         },
         timeBlocks,
       );
@@ -364,14 +437,27 @@ export function ArrangeContainer({
               });
             }
 
-            // Handle mixed member/guest swap in same block
-            if (player1.type === "member" && player2.type === "guest") {
-              const member = block.members?.find((m) => m.id === player1.id);
-              const guest = block.guests?.find((g) => g.id === player2.id);
-              // For mixed type, just leave as-is (can't swap types)
-              if (member && guest) {
-                toast.error("Cannot swap member with guest in same block");
-              }
+            // Swap fills if both are fills
+            if (player1.type === "fill" && player2.type === "fill") {
+              newBlock.fills = block.fills?.map((f) => {
+                if (f.id === player1.id) {
+                  return block.fills?.find((x) => x.id === player2.id) ?? f;
+                }
+                if (f.id === player2.id) {
+                  return block.fills?.find((x) => x.id === player1.id) ?? f;
+                }
+                return f;
+              });
+            }
+
+            // Handle mixed type swaps in same block
+            if (
+              (player1.type === "member" && player2.type === "guest") ||
+              (player1.type === "member" && player2.type === "fill") ||
+              (player1.type === "guest" && player2.type === "fill")
+            ) {
+              // For mixed types, just leave as-is (can't swap types)
+              toast.error("Cannot swap different player types in same block");
             }
 
             return newBlock;
@@ -439,6 +525,35 @@ export function ArrangeContainer({
                 }
               }
             }
+            if (player1.type === "fill") {
+              const idx =
+                block.fills?.findIndex((f) => f.id === player1.id) ?? -1;
+              if (idx !== -1 && player2.type === "fill") {
+                const player2Data = block2.fills?.find(
+                  (f) => f.id === player2.id,
+                );
+                if (player2Data) {
+                  newBlock.fills = [...(block.fills ?? [])];
+                  newBlock.fills[idx] = player2Data;
+                }
+              } else {
+                newBlock.fills =
+                  block.fills?.filter((f) => f.id !== player1.id) ?? [];
+                if (player2.type === "fill" && player2.fillType) {
+                  const player2Data = block2.fills?.find(
+                    (f) => f.id === player2.id,
+                  );
+                  if (player2Data) {
+                    const newFill = {
+                      ...player2Data,
+                      fillType: player2.fillType,
+                      customName: player2.fillCustomName ?? null,
+                    };
+                    newBlock.fills = [...newBlock.fills, newFill];
+                  }
+                }
+              }
+            }
             // Add player2 if different type
             if (player2.type === "member" && player1.type !== "member") {
               const player2Data = block2.members?.find(
@@ -454,6 +569,19 @@ export function ArrangeContainer({
               );
               if (player2Data) {
                 newBlock.guests = [...(newBlock.guests ?? []), player2Data];
+              }
+            }
+            if (player2.type === "fill" && player1.type !== "fill" && player2.fillType) {
+              const player2Data = block2.fills?.find(
+                (f) => f.id === player2.id,
+              );
+              if (player2Data) {
+                const newFill = {
+                  ...player2Data,
+                  fillType: player2.fillType,
+                  customName: player2.fillCustomName ?? null,
+                };
+                newBlock.fills = [...(newBlock.fills ?? []), newFill];
               }
             }
           }
@@ -508,6 +636,40 @@ export function ArrangeContainer({
                 }
               }
             }
+            if (player2.type === "fill") {
+              const idx =
+                block.fills?.findIndex((f) => f.id === player2.id) ?? -1;
+              if (idx !== -1 && player1.type === "fill") {
+                const player1Data = block1.fills?.find(
+                  (f) => f.id === player1.id,
+                );
+                if (player1Data && player1.fillType) {
+                  const newFill = {
+                    ...player1Data,
+                    fillType: player1.fillType,
+                    customName: player1.fillCustomName ?? null,
+                  };
+                  newBlock.fills = [...(block.fills ?? [])];
+                  newBlock.fills[idx] = newFill;
+                }
+              } else {
+                newBlock.fills =
+                  block.fills?.filter((f) => f.id !== player2.id) ?? [];
+                if (player1.type === "fill" && player1.fillType) {
+                  const player1Data = block1.fills?.find(
+                    (f) => f.id === player1.id,
+                  );
+                  if (player1Data) {
+                    const newFill = {
+                      ...player1Data,
+                      fillType: player1.fillType,
+                      customName: player1.fillCustomName ?? null,
+                    };
+                    newBlock.fills = [...newBlock.fills, newFill];
+                  }
+                }
+              }
+            }
             // Add player1 if different type
             if (player1.type === "member" && player2.type !== "member") {
               const player1Data = block1.members?.find(
@@ -523,6 +685,19 @@ export function ArrangeContainer({
               );
               if (player1Data) {
                 newBlock.guests = [...(newBlock.guests ?? []), player1Data];
+              }
+            }
+            if (player1.type === "fill" && player2.type !== "fill" && player1.fillType) {
+              const player1Data = block1.fills?.find(
+                (f) => f.id === player1.id,
+              );
+              if (player1Data) {
+                const newFill = {
+                  ...player1Data,
+                  fillType: player1.fillType,
+                  customName: player1.fillCustomName ?? null,
+                };
+                newBlock.fills = [...(newBlock.fills ?? []), newFill];
               }
             }
           }
@@ -610,6 +785,11 @@ export function ArrangeContainer({
                 ...block,
                 guests: block.guests?.filter((g) => g.id !== player.id) ?? [],
               };
+            } else if (player.type === "fill") {
+              return {
+                ...block,
+                fills: block.fills?.filter((f) => f.id !== player.id) ?? [],
+              };
             }
           }
           if (block.id === targetBlockId) {
@@ -631,6 +811,22 @@ export function ArrangeContainer({
                 return {
                   ...block,
                   guests: [...(block.guests ?? []), guest],
+                };
+              }
+            } else if (player.type === "fill") {
+              const fill = prev
+                .find((b) => b.id === sourceBlockId)
+                ?.fills?.find((f) => f.id === player.id);
+              if (fill && player.fillType) {
+                // Create a new fill object with the preserved metadata
+                const newFill = {
+                  ...fill,
+                  fillType: player.fillType,
+                  customName: player.fillCustomName ?? null,
+                };
+                return {
+                  ...block,
+                  fills: [...(block.fills ?? []), newFill],
                 };
               }
             }
@@ -829,7 +1025,7 @@ export function ArrangeContainer({
 
   // Reset all changes
   const handleReset = () => {
-    if (pendingMoves.length === 0 && pendingDeletes.length === 0) return;
+    if (changeLog.length === 0) return;
 
     setConfirmDialog({
       open: true,
@@ -947,6 +1143,53 @@ export function ArrangeContainer({
     setIsFrostDelayOpen(false);
   };
 
+  // Apply frost delay remap (replace blocks with new interval)
+  const handleApplyFrostRemap = async (
+    startBlockId: number,
+    endBlockId: number,
+    replacementBlocks: Array<{
+      id: string;
+      startTime: string;
+      maxMembers: number;
+      displayName?: string;
+      mappedPlayers: Array<{
+        playerId: number;
+        playerType: "member" | "guest" | "fill";
+        name: string;
+        originalBlockId: number;
+        invitedByMemberId?: number;
+        fillType?: string;
+        fillCustomName?: string | null;
+      }>;
+    }>,
+  ) => {
+    const result = await replaceTimeBlockRange(
+      teesheetId,
+      startBlockId,
+      endBlockId,
+      replacementBlocks.map((block) => ({
+        startTime: block.startTime,
+        maxMembers: block.maxMembers,
+        displayName: block.displayName,
+        mappedPlayers: block.mappedPlayers.map((p) => ({
+          playerId: p.playerId,
+          playerType: p.playerType,
+          invitedByMemberId: p.invitedByMemberId,
+          fillType: p.fillType,
+          fillCustomName: p.fillCustomName,
+        })),
+      })),
+    );
+
+    if (result.success) {
+      toast.success("Frost delay remap applied successfully");
+      router.refresh();
+    } else {
+      toast.error(result.error || "Failed to apply remap");
+      throw new Error(result.error || "Failed to apply remap");
+    }
+  };
+
   // Insert timeblock
   const handleInsertTimeBlock = async (data: {
     startTime: string;
@@ -997,6 +1240,7 @@ export function ArrangeContainer({
                 onSave={handleSave}
                 onReset={handleReset}
                 onFrostDelay={() => setIsFrostDelayOpen(true)}
+                onFrostRemap={() => setIsFrostRemapOpen(true)}
                 onViewLog={() => setIsChangeLogOpen(true)}
                 hasLog={changeLog.length > 0}
               />
@@ -1051,6 +1295,14 @@ export function ArrangeContainer({
         onClose={() => setIsFrostDelayOpen(false)}
         onApply={handleApplyFrostDelay}
         lastTeeTime={lastTeeTime}
+      />
+
+      {/* Block Remap Modal */}
+      <BlockRemapModal
+        isOpen={isFrostRemapOpen}
+        onClose={() => setIsFrostRemapOpen(false)}
+        onConfirm={handleApplyFrostRemap}
+        timeBlocks={timeBlocks}
       />
 
       {/* Change Log Modal */}

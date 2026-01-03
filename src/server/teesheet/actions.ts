@@ -13,7 +13,7 @@ import {
   configBlocks,
   type TeesheetConfig,
 } from "~/server/db/schema";
-import { and, eq, sql, asc } from "drizzle-orm";
+import { and, eq, sql, asc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "~/lib/auth-server";
 import { initializePaceOfPlay } from "~/server/pace-of-play/actions";
@@ -1131,10 +1131,12 @@ export async function batchMoveChanges(
   teesheetId: number,
   changes: Array<{
     playerId: number;
-    playerType: "member" | "guest";
+    playerType: "member" | "guest" | "fill";
     sourceTimeBlockId: number;
     targetTimeBlockId: number;
     invitedByMemberId?: number; // Required for guests
+    fillType?: string; // Required for fills
+    fillCustomName?: string | null; // Optional for fills
   }>,
 ): Promise<ActionResult> {
   await requireAdmin();
@@ -1219,6 +1221,43 @@ export async function batchMoveChanges(
             });
             successCount++;
           }
+        } else if (change.playerType === "fill") {
+          // Get fill metadata from existing record if not provided
+          let fillType = change.fillType;
+          let fillCustomName = change.fillCustomName;
+
+          if (!fillType) {
+            const existingFill = await db.query.fills.findFirst({
+              where: and(
+                eq(fills.relatedType, "timeblock"),
+                eq(fills.relatedId, change.sourceTimeBlockId),
+                eq(fills.id, change.playerId),
+              ),
+            });
+            fillType = existingFill?.fillType || "unknown";
+            fillCustomName = existingFill?.customName ?? null;
+          }
+
+          // Remove fill from source timeblock
+          await db
+            .delete(fills)
+            .where(
+              and(
+                eq(fills.relatedType, "timeblock"),
+                eq(fills.relatedId, change.sourceTimeBlockId),
+                eq(fills.id, change.playerId),
+              ),
+            );
+
+          // Recreate fill in target timeblock
+          await db.insert(fills).values({
+            relatedType: "timeblock",
+            relatedId: change.targetTimeBlockId,
+            fillType,
+            customName: fillCustomName || null,
+          });
+
+          successCount++;
         }
       } catch (changeError) {
         console.error(
@@ -1305,5 +1344,158 @@ export async function updateAllBookedByToAdmin(
       success: false,
       error: "Failed to update bookings",
     };
+  }
+}
+
+/**
+ * Replace a range of time blocks with new blocks and remap players
+ * Used for frost delay block remapping feature
+ */
+export async function replaceTimeBlockRange(
+  teesheetId: number,
+  startBlockId: number,
+  endBlockId: number,
+  replacementBlocks: Array<{
+    startTime: string;
+    maxMembers: number;
+    displayName?: string;
+    mappedPlayers: Array<{
+      playerId: number;
+      playerType: "member" | "guest" | "fill";
+      invitedByMemberId?: number;
+      fillType?: string;
+      fillCustomName?: string | null;
+    }>;
+  }>,
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  try {
+    // 1. Get teesheet for booking date
+    const teesheet = await db.query.teesheets.findFirst({
+      where: eq(teesheets.id, teesheetId),
+    });
+    if (!teesheet) {
+      return { success: false, error: "Teesheet not found" };
+    }
+    const bookingDate = formatDateToYYYYMMDD(teesheet.date);
+
+    // 2. Get all blocks for the teesheet to find range
+    const allBlocks = await db.query.timeBlocks.findMany({
+      where: eq(timeBlocks.teesheetId, teesheetId),
+      orderBy: [asc(timeBlocks.sortOrder), asc(timeBlocks.startTime)],
+    });
+
+    const startIdx = allBlocks.findIndex((b) => b.id === startBlockId);
+    const endIdx = allBlocks.findIndex((b) => b.id === endBlockId);
+
+    if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) {
+      return { success: false, error: "Invalid block range" };
+    }
+
+    const blocksToDelete = allBlocks.slice(startIdx, endIdx + 1);
+    const blockIdsToDelete = blocksToDelete.map((b) => b.id);
+
+    // 3. Fetch fills before deletion (they will cascade delete)
+    const fillsToMigrate = await db.query.fills.findMany({
+      where: and(
+        eq(fills.relatedType, "timeblock"),
+        inArray(fills.relatedId, blockIdsToDelete),
+      ),
+    });
+
+    // 4. Clear lottery entry references for blocks being deleted
+    for (const blockId of blockIdsToDelete) {
+      await db
+        .update(lotteryEntries)
+        .set({ assignedTimeBlockId: null, status: "PENDING" })
+        .where(eq(lotteryEntries.assignedTimeBlockId, blockId));
+    }
+
+    // 5. Delete old blocks (cascade handles members, guests, pace of play, fills)
+    for (const blockId of blockIdsToDelete) {
+      await db.delete(timeBlocks).where(eq(timeBlocks.id, blockId));
+    }
+
+    // 6. Create new blocks and map players
+    const baseSortOrder = allBlocks[startIdx]?.sortOrder ?? startIdx;
+    const createdBlocks: { id: number; startTime: string }[] = [];
+
+    for (let i = 0; i < replacementBlocks.length; i++) {
+      const newBlockData = replacementBlocks[i]!;
+
+      // Insert new block
+      const [newBlock] = await db
+        .insert(timeBlocks)
+        .values({
+          teesheetId,
+          startTime: newBlockData.startTime,
+          endTime: newBlockData.startTime,
+          maxMembers: newBlockData.maxMembers,
+          displayName: newBlockData.displayName,
+          sortOrder: baseSortOrder + i,
+        })
+        .returning();
+
+      if (!newBlock) continue;
+      createdBlocks.push({ id: newBlock.id, startTime: newBlock.startTime });
+
+      // Add mapped players
+      for (const player of newBlockData.mappedPlayers) {
+        if (player.playerType === "member") {
+          await db.insert(timeBlockMembers).values({
+            timeBlockId: newBlock.id,
+            memberId: player.playerId,
+            bookingDate,
+            bookingTime: newBlock.startTime,
+          });
+        } else if (player.playerType === "guest") {
+          await db.insert(timeBlockGuests).values({
+            timeBlockId: newBlock.id,
+            guestId: player.playerId,
+            invitedByMemberId: player.invitedByMemberId ?? -1,
+            bookingDate,
+            bookingTime: newBlock.startTime,
+          });
+        } else if (player.playerType === "fill") {
+          await db.insert(fills).values({
+            relatedType: "timeblock",
+            relatedId: newBlock.id,
+            fillType: player.fillType || "unknown",
+            customName: player.fillCustomName || null,
+          });
+        }
+      }
+    }
+
+    // 7. Fills are now mapped explicitly via mappedPlayers (removed proportional migration)
+
+    // 8. Re-number all block sort orders
+    const updatedBlocks = await db.query.timeBlocks.findMany({
+      where: eq(timeBlocks.teesheetId, teesheetId),
+      orderBy: [asc(timeBlocks.startTime)],
+    });
+
+    for (let i = 0; i < updatedBlocks.length; i++) {
+      await db
+        .update(timeBlocks)
+        .set({ sortOrder: i })
+        .where(eq(timeBlocks.id, updatedBlocks[i]!.id));
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/arrange");
+
+    return {
+      success: true,
+      data: {
+        deletedBlocks: blockIdsToDelete.length,
+        createdBlocks: createdBlocks.length,
+        migratedFills: fillsToMigrate.length,
+      },
+    };
+  } catch (error) {
+    console.error("Error replacing time block range:", error);
+    return { success: false, error: "Failed to replace time blocks" };
   }
 }

@@ -21,6 +21,7 @@ import toast from "react-hot-toast";
 import { TeesheetConfigWithBlocksInsertSchema } from "~/server/db/schema/teesheetConfigs.schema";
 import { startTransition } from "react";
 import { Zap } from "lucide-react";
+import { Checkbox } from "~/components/ui/checkbox";
 
 type BlockWithId = Omit<ConfigBlockInsert, "id"> & { id: string | number };
 
@@ -34,7 +35,8 @@ interface ConfigEditorProps {
 function generateBlocks(
   startTime: string,
   endTime: string,
-  interval: number,
+  intervalA: number,
+  intervalB?: number,
   displayName?: string,
 ): BlockWithId[] {
   const blocks: BlockWithId[] = [];
@@ -51,6 +53,7 @@ function generateBlocks(
 
   let currentMinutes = startMinutes;
   let sortOrder = 0;
+  let useFirstInterval = true;
 
   while (currentMinutes < endMinutes) {
     const hour = Math.floor(currentMinutes / 60);
@@ -66,7 +69,13 @@ function generateBlocks(
       configId: 0, // temporary, will be set by server
     });
 
-    currentMinutes += interval;
+    // Alternate between intervals if intervalB is provided
+    if (intervalB !== undefined) {
+      currentMinutes += useFirstInterval ? intervalA : intervalB;
+      useFirstInterval = !useFirstInterval;
+    } else {
+      currentMinutes += intervalA;
+    }
     sortOrder++;
   }
 
@@ -102,7 +111,9 @@ export function ConfigEditor({
   const [generatorState, setGeneratorState] = useState({
     startTime: "08:00",
     endTime: "18:00",
-    interval: 15,
+    intervalA: 6,
+    intervalB: 7,
+    useAlternating: true,
     displayName: "",
   });
 
@@ -115,7 +126,7 @@ export function ConfigEditor({
     if (
       !generatorState.startTime ||
       !generatorState.endTime ||
-      !generatorState.interval
+      !generatorState.intervalA
     ) {
       toast.error("Please fill in all required fields");
       return;
@@ -124,7 +135,8 @@ export function ConfigEditor({
     const newBlocks = generateBlocks(
       generatorState.startTime,
       generatorState.endTime,
-      generatorState.interval,
+      generatorState.intervalA,
+      generatorState.useAlternating ? generatorState.intervalB : undefined,
       generatorState.displayName || undefined,
     );
 
@@ -242,33 +254,95 @@ export function ConfigEditor({
                 </div>
               </div>
 
+              {/* Alternating toggle */}
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="alternating-toggle"
+                  checked={generatorState.useAlternating}
+                  onCheckedChange={(checked) =>
+                    setGeneratorState({
+                      ...generatorState,
+                      useAlternating: checked === true,
+                    })
+                  }
+                />
+                <Label htmlFor="alternating-toggle" className="text-xs font-normal cursor-pointer">
+                  Use alternating intervals (e.g., 6-7-6-7)
+                </Label>
+              </div>
+
+              {/* Interval inputs */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-2">
-                  <Label htmlFor="genInterval" className="text-xs">
-                    Interval (min)
+                  <Label htmlFor="genIntervalA" className="text-xs">
+                    {generatorState.useAlternating ? "Interval A (min)" : "Interval (min)"}
                   </Label>
                   <Input
-                    id="genInterval"
+                    id="genIntervalA"
                     type="number"
                     min={5}
                     max={60}
-                    value={generatorState.interval}
+                    value={generatorState.intervalA}
                     onChange={(e) =>
                       setGeneratorState({
                         ...generatorState,
-                        interval: parseInt(e.target.value) || 15,
+                        intervalA: parseInt(e.target.value) || 6,
                       })
                     }
                     className="text-sm"
                   />
                 </div>
 
+                {generatorState.useAlternating ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="genIntervalB" className="text-xs">
+                      Interval B (min)
+                    </Label>
+                    <Input
+                      id="genIntervalB"
+                      type="number"
+                      min={5}
+                      max={60}
+                      value={generatorState.intervalB}
+                      onChange={(e) =>
+                        setGeneratorState({
+                          ...generatorState,
+                          intervalB: parseInt(e.target.value) || 7,
+                        })
+                      }
+                      className="text-sm"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label htmlFor="genDisplayName" className="text-xs">
+                      Display Name
+                    </Label>
+                    <Input
+                      id="genDisplayName"
+                      type="text"
+                      placeholder="Optional"
+                      value={generatorState.displayName}
+                      onChange={(e) =>
+                        setGeneratorState({
+                          ...generatorState,
+                          displayName: e.target.value,
+                        })
+                      }
+                      className="text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Display name when alternating (moved below) */}
+              {generatorState.useAlternating && (
                 <div className="space-y-2">
-                  <Label htmlFor="genDisplayName" className="text-xs">
+                  <Label htmlFor="genDisplayNameAlt" className="text-xs">
                     Display Name
                   </Label>
                   <Input
-                    id="genDisplayName"
+                    id="genDisplayNameAlt"
                     type="text"
                     placeholder="Optional"
                     value={generatorState.displayName}
@@ -281,7 +355,7 @@ export function ConfigEditor({
                     className="text-sm"
                   />
                 </div>
-              </div>
+              )}
 
               <Button
                 type="button"

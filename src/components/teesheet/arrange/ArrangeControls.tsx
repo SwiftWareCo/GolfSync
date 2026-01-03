@@ -9,6 +9,7 @@ import {
   Snowflake,
   ArrowUpDown,
   ClipboardList,
+  Wand2,
 } from "lucide-react";
 import { formatDate } from "~/lib/dates";
 import Link from "next/link";
@@ -20,6 +21,7 @@ interface ArrangeControlsProps {
   onSave: () => void;
   onReset: () => void;
   onFrostDelay: () => void;
+  onFrostRemap: () => void;
   onViewLog: () => void;
   hasLog: boolean;
 }
@@ -31,6 +33,7 @@ export function ArrangeControls({
   onSave,
   onReset,
   onFrostDelay,
+  onFrostRemap,
   onViewLog,
   hasLog,
 }: ArrangeControlsProps) {
@@ -103,6 +106,18 @@ export function ArrangeControls({
         >
           <Snowflake className="h-3.5 w-3.5 text-blue-500" />
           Frost Delay
+        </Button>
+
+        {/* Remap Blocks Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onFrostRemap}
+          disabled={isSaving}
+          className="w-full gap-2"
+        >
+          <Wand2 className="h-3.5 w-3.5 text-purple-500" />
+          Remap Blocks
         </Button>
 
         {/* View Log Button */}
