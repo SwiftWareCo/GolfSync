@@ -1,6 +1,7 @@
 import "server-only";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql, isNotNull, isNull } from "drizzle-orm";
 import { db } from "../db";
+import { getBCToday } from "~/lib/dates";
 
 import {
   paceOfPlay,
@@ -287,4 +288,114 @@ export async function getGuestPaceOfPlayHistory(guestId: number) {
     .orderBy(desc(teesheets.date), asc(timeBlocks.startTime));
 
   return result;
+}
+
+// Type for member's active round
+export type MemberActiveRound = {
+  timeBlockId: number;
+  teesheetDate: string;
+  scheduledStartTime: string;
+  paceOfPlay: PaceOfPlay;
+  players: PaceOfPlayPlayer[];
+  numPlayers: number;
+};
+
+// Type for member's pace of play history item (inferred from getMemberPaceOfPlayHistory)
+export type MemberPaceOfPlayHistoryItem = Awaited<
+  ReturnType<typeof getMemberPaceOfPlayHistory>
+>[number];
+
+// Get member's active checked-in round for today
+export async function getMemberActiveRound(
+  memberId: number,
+): Promise<MemberActiveRound | null> {
+  const today = getBCToday();
+
+  // First find the member's checked-in time block for today
+  const memberTimeBlock = await db.query.timeBlockMembers.findFirst({
+    where: and(
+      eq(timeBlockMembers.memberId, memberId),
+      eq(timeBlockMembers.checkedIn, true),
+    ),
+    with: {
+      timeBlock: {
+        with: {
+          teesheet: true,
+          timeBlockMembers: {
+            with: { member: true },
+          },
+          timeBlockGuests: {
+            with: { guest: true },
+          },
+        },
+      },
+    },
+  });
+
+
+  // If no checked-in time block found, return null
+  if (!memberTimeBlock?.timeBlock?.teesheet) {
+    return null;
+  }
+
+  // Check if this is today's teesheet
+  if (memberTimeBlock.timeBlock.teesheet.date !== today) {
+    return null;
+  }
+
+  // Get the pace of play record for this time block
+  const paceRecord = await db.query.paceOfPlay.findFirst({
+    where: and(
+      eq(paceOfPlay.timeBlockId, memberTimeBlock.timeBlock.id),
+      isNotNull(paceOfPlay.startTime),
+      isNull(paceOfPlay.finishTime),
+    ),
+  });
+
+  // If no active pace record (not started or already finished), return null
+  if (!paceRecord) {
+    return null;
+  }
+
+  const timeBlock = memberTimeBlock.timeBlock;
+
+  // Build players array from checked-in members and guests
+  const players: PaceOfPlayPlayer[] = [
+    ...(timeBlock.timeBlockMembers || [])
+      .filter((tbm) => tbm.checkedIn)
+      .map((tbm) => ({
+        name: `${tbm.member.firstName} ${tbm.member.lastName}`,
+        checkedIn: true,
+        isGuest: false,
+      })),
+    ...(timeBlock.timeBlockGuests || [])
+      .filter((tbg) => tbg.checkedIn)
+      .map((tbg) => ({
+        name: `${tbg.guest.firstName} ${tbg.guest.lastName}`,
+        checkedIn: true,
+        isGuest: true,
+      })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  return {
+    timeBlockId: timeBlock.id,
+    teesheetDate: timeBlock.teesheet.date,
+    scheduledStartTime: timeBlock.startTime,
+    paceOfPlay: paceRecord,
+    players,
+    numPlayers: players.length,
+  };
+}
+
+// Get combined rounds data for member (active round + history)
+export async function getMemberRoundsData(memberId: number) {
+  const [activeRound, history] = await Promise.all([
+    getMemberActiveRound(memberId),
+    getMemberPaceOfPlayHistory(memberId),
+  ]);
+
+  return {
+    activeRound,
+    history,
+  };
 }

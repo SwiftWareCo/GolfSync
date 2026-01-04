@@ -116,6 +116,53 @@ export function getPaceLabel(
   }
 }
 
+export type HolePhase = "tee" | "fairway" | "green";
+
+/**
+ * Calculate the phase within the current hole based on elapsed time
+ * - Tee box: first ~15% of hole time (~2 min)
+ * - Fairway: middle ~70% of hole time (~9 min)
+ * - Green: last ~15% of hole time (~2 min)
+ */
+export function calculateHolePhase(
+  paceOfPlay: PaceOfPlay | null | undefined,
+): HolePhase {
+  if (!paceOfPlay?.expectedStartTime) {
+    return "tee";
+  }
+
+  const now = getBCNow();
+  const expectedStart = new Date(paceOfPlay.expectedStartTime);
+  const elapsedMinutes =
+    (now.getTime() - expectedStart.getTime()) / (1000 * 60);
+
+  if (elapsedMinutes < 0) {
+    return "tee";
+  }
+
+  const minutesPerHole = 240 / 18; // ~13.33 minutes
+  const progressInCurrentHole = elapsedMinutes % minutesPerHole;
+  const percentInHole = progressInCurrentHole / minutesPerHole;
+
+  if (percentInHole < 0.15) return "tee";
+  if (percentInHole > 0.85) return "green";
+  return "fairway";
+}
+
+/**
+ * Get display label for hole phase
+ */
+export function getHolePhaseLabel(phase: HolePhase): string {
+  switch (phase) {
+    case "tee":
+      return "Tee Box";
+    case "fairway":
+      return "Fairway";
+    case "green":
+      return "Green";
+  }
+}
+
 /**
  * Calculate expected hole based on actual pace and 4-hour standard
  * Returns current hole, expected hole, and status

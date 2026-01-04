@@ -11,6 +11,7 @@ import {
 import { CourseInfoClient } from "~/components/course-info/CourseInfoClient";
 import { WeatherDisplay } from "~/components/weather/WeatherDisplay";
 import { UpcomingTeeTimes } from "~/components/member-teesheet-client/UpcomingTeeTimes";
+import { ActiveRoundCard } from "~/components/member-rounds/ActiveRoundCard";
 import { type Member } from "~/app/types/MemberTypes";
 import { EventTimetableRow } from "~/components/events/EventTimetableRow";
 import Link from "next/link";
@@ -66,6 +67,9 @@ export default async function MembersHome() {
       {courseInfo && !("success" in courseInfo) && (
         <CourseInfoClient data={courseInfo} />
       )}
+
+      {/* My Round Card */}
+      <ActiveRoundCard />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-lg bg-white p-6 shadow-md">
