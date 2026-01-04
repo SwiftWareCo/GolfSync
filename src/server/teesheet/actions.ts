@@ -1157,6 +1157,13 @@ export async function batchMoveChanges(
     for (const change of changes) {
       try {
         if (change.playerType === "member") {
+          const existingMember = await db.query.timeBlockMembers.findFirst({
+            where: and(
+              eq(timeBlockMembers.timeBlockId, change.sourceTimeBlockId),
+              eq(timeBlockMembers.memberId, change.playerId),
+            ),
+          });
+
           // Remove from source timeblock
           await db
             .delete(timeBlockMembers)
@@ -1172,28 +1179,30 @@ export async function batchMoveChanges(
             where: eq(timeBlocks.id, change.targetTimeBlockId),
           });
 
-          if (targetBlock) {
-            // Add to target timeblock
-            await db.insert(timeBlockMembers).values({
-              timeBlockId: change.targetTimeBlockId,
-              memberId: change.playerId,
-              bookingDate,
-              bookingTime: targetBlock.startTime,
-            });
-            successCount++;
-          }
-        } else if (change.playerType === "guest") {
-          // Get invitedByMemberId from existing record if not provided
-          let invitedByMemberId = change.invitedByMemberId;
-          if (!invitedByMemberId) {
+            if (targetBlock) {
+              // Add to target timeblock
+              await db.insert(timeBlockMembers).values({
+                timeBlockId: change.targetTimeBlockId,
+                memberId: change.playerId,
+                bookingDate,
+                bookingTime: targetBlock.startTime,
+                bookedByMemberId: existingMember?.bookedByMemberId ?? null,
+                checkedIn: existingMember?.checkedIn ?? false,
+                checkedInAt: existingMember?.checkedInAt ?? null,
+              });
+              successCount++;
+            }
+          } else if (change.playerType === "guest") {
             const existingGuest = await db.query.timeBlockGuests.findFirst({
               where: and(
                 eq(timeBlockGuests.timeBlockId, change.sourceTimeBlockId),
                 eq(timeBlockGuests.guestId, change.playerId),
               ),
             });
-            invitedByMemberId = existingGuest?.invitedByMemberId ?? -1;
-          }
+            const invitedByMemberId =
+              change.invitedByMemberId ??
+              existingGuest?.invitedByMemberId ??
+              -1;
 
           // Remove from source timeblock
           await db
@@ -1210,17 +1219,19 @@ export async function batchMoveChanges(
             where: eq(timeBlocks.id, change.targetTimeBlockId),
           });
 
-          if (targetBlock) {
-            // Add to target timeblock
-            await db.insert(timeBlockGuests).values({
-              timeBlockId: change.targetTimeBlockId,
-              guestId: change.playerId,
-              invitedByMemberId,
-              bookingDate,
-              bookingTime: targetBlock.startTime,
-            });
-            successCount++;
-          }
+            if (targetBlock) {
+              // Add to target timeblock
+              await db.insert(timeBlockGuests).values({
+                timeBlockId: change.targetTimeBlockId,
+                guestId: change.playerId,
+                invitedByMemberId,
+                bookingDate,
+                bookingTime: targetBlock.startTime,
+                checkedIn: existingGuest?.checkedIn ?? false,
+                checkedInAt: existingGuest?.checkedInAt ?? null,
+              });
+              successCount++;
+            }
         } else if (change.playerType === "fill") {
           // Get fill metadata from existing record if not provided
           let fillType = change.fillType;

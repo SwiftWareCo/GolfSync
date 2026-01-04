@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { EntitySearchCard } from "~/components/ui/entity-search-card";
 import { Badge } from "~/components/ui/badge";
 import { type Member, type Fill, type Guest } from "~/server/db/schema";
+import { cn } from "~/lib/utils";
 import { TimeBlockPersonItem } from "./TimeBlockPersonItem";
 import { TimeBlockFillItem } from "./TimeBlockFillItem";
 
@@ -31,6 +32,7 @@ interface TimeBlockPeopleListProps {
   onUpdateBookedBy?: (memberId: number, bookedByMemberId: number | null) => Promise<void>;
   title?: string;
   maxPeople?: number;
+  className?: string;
 }
 
 export function TimeBlockPeopleList({
@@ -43,6 +45,7 @@ export function TimeBlockPeopleList({
   onUpdateBookedBy,
   title = "People",
   maxPeople = 4,
+  className,
 }: TimeBlockPeopleListProps) {
   // Calculate total people including fills
   const totalPeople = members.length + guests.length + fills.length;
@@ -57,7 +60,7 @@ export function TimeBlockPeopleList({
 
   if (totalPeople === 0) {
     return (
-      <Card className="mt-6">
+      <Card className={cn("mt-6", className)}>
         <CardHeader>
           <CardTitle>{title}</CardTitle>
         </CardHeader>
@@ -83,7 +86,7 @@ export function TimeBlockPeopleList({
   ];
 
   return (
-    <Card className="mt-6">
+    <Card className={cn("mt-6", className)}>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>
           {title} ({totalPeople}/{maxPeople})

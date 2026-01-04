@@ -2,11 +2,31 @@
 
 import { useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
-import { TimeBlockHeader } from "./TimeBlockHeader";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { memberQueryOptions, guestQueryOptions } from "~/server/query-options";
 import { checkTimeblockRestrictionsAction } from "~/server/timeblock-restrictions/actions";
-import type { TimeBlockWithRelations } from "~/server/db/schema";
+import type { TimeBlockWithRelations, Teesheet, Member, Guest, Fill } from "~/server/db/schema";
+import { formatTime12Hour } from "~/lib/dates";
+
+// Type for teesheet query data
+type TeesheetData = {
+  teesheet: Teesheet;
+  config: any;
+  timeBlocks: TimeBlockWithRelations[];
+  occupiedSpots: number;
+  totalCapacity: number;
+};
+
+// Type for member with bookedByMemberId
+type MemberWithBookedBy = Member & {
+  bookedByMemberId?: number | null;
+};
+
+// Type for guest with invitedByMemberId
+type GuestWithInvitedBy = Guest & {
+  invitedByMemberId: number;
+  invitedByMember?: Member;
+};
 import {
   TimeBlockMemberSearch,
   TimeBlockGuestSearch,
@@ -14,6 +34,7 @@ import {
 } from "./TimeBlockPeopleList";
 import { FillForm } from "./fills/FillForm";
 import toast from "react-hot-toast";
+import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import {
   Dialog,
@@ -21,6 +42,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { type RestrictionViolation } from "~/app/types/RestrictionTypes";
 import { RestrictionViolationAlert } from "~/components/settings/timeblock-restrictions/RestrictionViolationAlert";
 import { createGuest } from "~/server/guests/actions";
@@ -31,9 +59,11 @@ import {
   addFillToTimeBlock,
   removeFillFromTimeBlock,
   updateMemberBookedBy,
+  batchMoveChanges,
 } from "~/server/teesheet/actions";
 import { addMemberToTimeBlock } from "~/server/members/actions";
 import { addGuestToTimeBlock } from "~/server/guests/actions";
+import { useTeesheet } from "~/services/teesheet/hooks";
 import { teesheetKeys } from "~/services/teesheet/keys";
 import { GuestForm } from "../guests/GuestForm";
 
@@ -47,6 +77,7 @@ export function TimeBlockMemberManager({
   dateString,
 }: TimeBlockMemberManagerProps) {
   const queryClient = useQueryClient();
+  const { data: teesheetData } = useTeesheet(dateString) as { data: TeesheetData | undefined };
 
   // Mutation for adding members with cache optimism
   const addMemberMutation = useMutation({
@@ -61,11 +92,11 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
@@ -73,15 +104,26 @@ export function TimeBlockMemberManager({
                     ...(block.members || []),
                     {
                       id: memberId,
+                      classId: 0,
                       firstName: "",
                       lastName: "",
                       memberNumber: "",
                       username: "",
                       email: "",
+                      gender: null,
+                      dateOfBirth: null,
+                      handicap: null,
                       bagNumber: null,
+                      phone: null,
+                      address: null,
+                      pushNotificationsEnabled: false,
+                      pushSubscription: null,
+                      createdAt: new Date(),
+                      updatedAt: null,
                       checkedIn: false,
                       checkedInAt: null,
-                    },
+                      bookedByMemberId: null,
+                    } as MemberWithBookedBy,
                   ],
                 }
               : block,
@@ -123,16 +165,16 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
                   members: (block.members || []).filter(
-                    (m: any) => m.id !== memberId,
+                    (m) => m.id !== memberId,
                   ),
                 }
               : block,
@@ -186,11 +228,11 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
@@ -202,9 +244,11 @@ export function TimeBlockMemberManager({
                       lastName: "",
                       email: null,
                       phone: null,
+                      createdAt: new Date(),
+                      updatedAt: null,
                       invitedByMemberId: invitingMemberId,
-                      invitedByMember: {},
-                    },
+                      invitedByMember: undefined,
+                    } as GuestWithInvitedBy,
                   ],
                 }
               : block,
@@ -247,16 +291,16 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
                   guests: (block.guests || []).filter(
-                    (g: any) => g.id !== guestId,
+                    (g) => g.id !== guestId,
                   ),
                 }
               : block,
@@ -309,11 +353,11 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
@@ -322,12 +366,12 @@ export function TimeBlockMemberManager({
                     {
                       id: -Date.now(),
                       relatedType: "timeblock" as const,
-                      relatedId: timeBlock.id,
+                      relatedId: timeBlock.id as number,
                       fillType,
                       customName: customName || null,
                       createdAt: new Date(),
                       updatedAt: null,
-                    },
+                    } as Fill,
                   ],
                 }
               : block,
@@ -369,16 +413,16 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
                   fills: (block.fills || []).filter(
-                    (f: any) => f.id !== fillId,
+                    (f) => f.id !== fillId,
                   ),
                 }
               : block,
@@ -431,15 +475,15 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: any) => {
+      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
         if (!old) return old;
         return {
           ...old,
-          timeBlocks: old.timeBlocks.map((block: any) =>
+          timeBlocks: old.timeBlocks.map((block) =>
             block.id === timeBlock.id
               ? {
                   ...block,
-                  members: (block.members || []).map((m: any) =>
+                  members: (block.members || []).map((m) =>
                     m.id === memberId
                       ? { ...m, bookedByMemberId }
                       : m,
@@ -488,6 +532,9 @@ export function TimeBlockMemberManager({
     guestQueryOptions.search(guestSearchQuery),
   );
   const [selectedMemberId, setSelectedMemberId] = useState<number | null>(null);
+  const [moveTargetId, setMoveTargetId] = useState<string | undefined>(
+    undefined,
+  );
 
   // Restriction violation state
   const [restrictionViolations, setRestrictionViolations] = useState<
@@ -503,10 +550,98 @@ export function TimeBlockMemberManager({
 
   // Constants
   const MAX_PEOPLE = 4;
+  const maxPeople = timeBlock.maxMembers ?? MAX_PEOPLE;
 
   // Calculate current people count
   const currentPeople = members.length + guests.length + fills.length;
-  const isTimeBlockFull = currentPeople >= MAX_PEOPLE;
+  const isTimeBlockFull = currentPeople >= maxPeople;
+
+  const getBlockPeopleCount = (block: TimeBlockWithRelations) =>
+    (block.members?.length || 0) +
+    (block.guests?.length || 0) +
+    (block.fills?.length || 0);
+
+  const timeBlocks = (teesheetData?.timeBlocks ?? [])
+    .slice()
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const moveTargets = timeBlocks.filter(
+    (block) => block.id !== timeBlock.id,
+  );
+  const selectedMoveTarget = moveTargetId
+    ? moveTargets.find((block) => block.id === Number(moveTargetId))
+    : null;
+  const selectedMoveTargetCapacity = selectedMoveTarget
+    ? selectedMoveTarget.maxMembers ?? MAX_PEOPLE
+    : MAX_PEOPLE;
+  const selectedMoveTargetAvailable = selectedMoveTarget
+    ? selectedMoveTargetCapacity - getBlockPeopleCount(selectedMoveTarget)
+    : 0;
+  const canMoveToSelectedTarget =
+    !!selectedMoveTarget &&
+    currentPeople > 0 &&
+    selectedMoveTargetAvailable >= currentPeople;
+
+  const movePlayersMutation = useMutation({
+    mutationFn: async (targetTimeBlockId: number) => {
+      const changes = [
+        ...members.map((member) => ({
+          playerId: member.id,
+          playerType: "member" as const,
+          sourceTimeBlockId: timeBlock.id as number,
+          targetTimeBlockId,
+        })),
+        ...guests.map((guest) => ({
+          playerId: guest.id,
+          playerType: "guest" as const,
+          sourceTimeBlockId: timeBlock.id as number,
+          targetTimeBlockId,
+          invitedByMemberId: guest.invitedByMemberId,
+        })),
+        ...fills.map((fill) => ({
+          playerId: fill.id,
+          playerType: "fill" as const,
+          sourceTimeBlockId: timeBlock.id as number,
+          targetTimeBlockId,
+          fillType: fill.fillType,
+          fillCustomName: fill.customName ?? null,
+        })),
+      ];
+
+      if (changes.length === 0) {
+        return { success: false, error: "No players to move" };
+      }
+
+      return batchMoveChanges(timeBlock.teesheetId as number, changes);
+    },
+
+    onError: () => {
+      toast.error("Failed to move players");
+    },
+
+    onSuccess: (result, targetTimeBlockId) => {
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to move players");
+        return;
+      }
+
+      const targetBlock = timeBlocks.find(
+        (block) => block.id === targetTimeBlockId,
+      );
+      const targetLabel = targetBlock
+        ? formatTime12Hour(targetBlock.startTime)
+        : "target time block";
+      const movedLabel =
+        currentPeople === 1 ? "1 player" : `${currentPeople} players`;
+      toast.success(`Moved ${movedLabel} to ${targetLabel}`);
+      setMoveTargetId(undefined);
+    },
+
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: teesheetKeys.detail(dateString),
+      });
+    },
+  });
 
   // Get search results from TanStack Query
   const memberSearchResults = memberSearchQuery_.data || [];
@@ -739,73 +874,152 @@ export function TimeBlockMemberManager({
     updateBookedByMutation.mutate({ memberId, bookedByMemberId });
   };
 
+  const handleMovePlayers = () => {
+    if (!selectedMoveTarget || !selectedMoveTarget.id) return;
+    movePlayersMutation.mutate(selectedMoveTarget.id);
+  };
+
   return (
-    <div className="space-y-6">
-      <TimeBlockHeader
-        timeBlock={timeBlock}
-        guestsCount={guests.length}
-        maxPeople={MAX_PEOPLE}
-      />
+    <>
+      <div className="flex h-full gap-6">
+        <div className="flex w-1/3 flex-col gap-6">
+        <div className="rounded-lg border border-dashed bg-gray-50 p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-medium text-gray-900">Move players</p>
+                <p className="text-[11px] text-gray-500">
+                  Move all to another tee time
+                </p>
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                <Select
+                  value={moveTargetId}
+                  onValueChange={setMoveTargetId}
+                  disabled={
+                    moveTargets.length === 0 ||
+                    currentPeople === 0 ||
+                    movePlayersMutation.isPending
+                  }
+                >
+                  <SelectTrigger className="h-8 w-full text-xs sm:w-48">
+                    <SelectValue placeholder="Select time" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {moveTargets.map((block) => {
+                      const blockPeople = getBlockPeopleCount(block);
+                      const blockCapacity = block.maxMembers ?? MAX_PEOPLE;
+                      const canFit =
+                        currentPeople === 0 ||
+                        blockCapacity - blockPeople >= currentPeople;
+                      const blockLabel = block.displayName
+                        ? ` - ${block.displayName}`
+                        : "";
 
-      {/* Combined People List - always visible at top */}
-      <TimeBlockPeopleList
-        key={`people-${timeBlock.id}-${members.length}-${guests.length}-${fills.length}`}
-        members={members}
-        guests={guests}
-        fills={fills}
-        onRemoveMember={handleRemoveMember}
-        onRemoveGuest={handleRemoveGuest}
-        onRemoveFill={handleRemoveFill}
-        onUpdateBookedBy={handleUpdateBookedBy}
-        maxPeople={MAX_PEOPLE}
-      />
-
-      <Tabs defaultValue="members" className="mt-6 w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="members">Add Members</TabsTrigger>
-          <TabsTrigger value="guests">Add Guests</TabsTrigger>
-          <TabsTrigger value="fills">Add Fills</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="members" className="space-y-6">
-          <TimeBlockMemberSearch
-            searchQuery={memberSearchQuery}
-            onSearch={debouncedMemberSearch}
-            searchResults={memberSearchResults}
-            isLoading={isMemberSearching}
-            onAddMember={handleAddMember}
-            isTimeBlockFull={isTimeBlockFull}
-            existingMembers={members}
-            autoFocus={true}
-          />
-        </TabsContent>
-
-        <TabsContent value="guests">
-          <div className="space-y-4">
-            <TimeBlockGuestSearch
-              searchQuery={guestSearchQuery}
-              onSearch={debouncedGuestSearch}
-              searchResults={guestSearchResults}
-              isLoading={isGuestSearching}
-              onAddGuest={handleAddGuest}
-              isTimeBlockFull={isTimeBlockFull}
-              members={members}
-              onMemberSelect={handleMemberSelect}
-              selectedMemberId={selectedMemberId}
-              onCreateGuest={handleShowCreateGuestDialog}
-              existingGuests={guests}
-              autoFocus={true}
-            />
+                      return (
+                        <SelectItem
+                          key={block.id}
+                          value={block.id!.toString()}
+                          disabled={!canFit}
+                        >
+                          {`${formatTime12Hour(block.startTime)}${blockLabel} (${blockPeople}/${blockCapacity})`}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  onClick={handleMovePlayers}
+                  disabled={
+                    !canMoveToSelectedTarget || movePlayersMutation.isPending
+                  }
+                >
+                  {movePlayersMutation.isPending ? "Moving..." : "Move"}
+                </Button>
+              </div>
+            </div>
+            {moveTargets.length === 0 && (
+              <p className="mt-1 text-[11px] text-gray-500">
+                No other time blocks available.
+              </p>
+            )}
+            {currentPeople === 0 && (
+              <p className="mt-1 text-[11px] text-gray-500">
+                No players to move.
+              </p>
+            )}
+            {selectedMoveTarget &&
+              !canMoveToSelectedTarget &&
+              currentPeople > 0 && (
+                <p className="mt-1 text-[11px] text-red-600">
+                  Not enough space in selected time block.
+                </p>
+              )}
           </div>
-        </TabsContent>
 
-        <TabsContent value="fills">
-          <FillForm
-            onAddFill={handleAddFill}
-            isTimeBlockFull={isTimeBlockFull}
+          <Tabs defaultValue="members" className="mt-6 w-full">
+            <TabsList className="mb-4">
+              <TabsTrigger value="members">Add Members</TabsTrigger>
+              <TabsTrigger value="guests">Add Guests</TabsTrigger>
+              <TabsTrigger value="fills">Add Fills</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="members" className="space-y-6">
+              <TimeBlockMemberSearch
+                searchQuery={memberSearchQuery}
+                onSearch={debouncedMemberSearch}
+                searchResults={memberSearchResults}
+                isLoading={isMemberSearching}
+                onAddMember={handleAddMember}
+                isTimeBlockFull={isTimeBlockFull}
+                existingMembers={members}
+                autoFocus={true}
+              />
+            </TabsContent>
+
+            <TabsContent value="guests">
+              <div className="space-y-4">
+                <TimeBlockGuestSearch
+                  searchQuery={guestSearchQuery}
+                  onSearch={debouncedGuestSearch}
+                  searchResults={guestSearchResults}
+                  isLoading={isGuestSearching}
+                  onAddGuest={handleAddGuest}
+                  isTimeBlockFull={isTimeBlockFull}
+                  members={members}
+                  onMemberSelect={handleMemberSelect}
+                  selectedMemberId={selectedMemberId}
+                  onCreateGuest={handleShowCreateGuestDialog}
+                  existingGuests={guests}
+                  autoFocus={true}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="fills">
+              <FillForm
+                onAddFill={handleAddFill}
+                isTimeBlockFull={isTimeBlockFull}
+              />
+            </TabsContent>
+          </Tabs>
+        </div>
+
+        <div className="flex h-full w-2/3 flex-col">
+          <TimeBlockPeopleList
+            key={`people-${timeBlock.id}-${members.length}-${guests.length}-${fills.length}`}
+            className="mt-0 h-full"
+            members={members}
+            guests={guests}
+            fills={fills}
+            onRemoveMember={handleRemoveMember}
+            onRemoveGuest={handleRemoveGuest}
+            onRemoveFill={handleRemoveFill}
+            onUpdateBookedBy={handleUpdateBookedBy}
+            maxPeople={maxPeople}
           />
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
 
       {/* Restriction Violation Alert */}
       <RestrictionViolationAlert
@@ -832,6 +1046,6 @@ export function TimeBlockMemberManager({
           />
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }
