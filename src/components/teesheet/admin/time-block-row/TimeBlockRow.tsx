@@ -160,6 +160,7 @@ export function TimeBlockRow({
                   data: fill,
                 }}
                 onRemove={onRemovePlayer}
+                onClick={onPlayerClick}
               />
             ))}
 

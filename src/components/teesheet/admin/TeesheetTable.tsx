@@ -4,12 +4,16 @@ import React, { useState, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeesheet } from "~/services/teesheet/hooks";
 import { TimeBlockRow } from "./time-block-row/TimeBlockRow";
-import { type PlayerType } from "./time-block-row/PlayerBadge";
+import {
+  type PlayerType,
+  type TimeBlockPlayer,
+} from "./time-block-row/PlayerBadge";
 import {
   TimeBlockNote,
   TimeBlockNoteEditor,
 } from "~/components/timeblock/TimeBlockNotes";
 import { AddPlayerModal } from "~/components/timeblock/AddPlayerModal";
+import { ReplaceFillModal } from "~/components/timeblock/ReplaceFillModal";
 import { AccountDialog } from "~/components/member-teesheet-client/AccountDialog";
 import {
   removeTimeBlockMember,
@@ -43,6 +47,12 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [editingNoteTimeBlockId, setEditingNoteTimeBlockId] = useState<
+    number | null
+  >(null);
+
+  // State for fill replacement modal
+  const [selectedFill, setSelectedFill] = useState<any | null>(null);
+  const [selectedFillTimeBlockId, setSelectedFillTimeBlockId] = useState<
     number | null
   >(null);
 
@@ -515,7 +525,7 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
     assignPowerCartMutation.mutate(data);
   };
 
-  const handlePlayerClick = (player: any) => {
+  const handlePlayerClick = (player: TimeBlockPlayer, timeBlockId?: number) => {
     if (player.type === "member" || player.type === "guest") {
       setIsAccountDialogOpen(true);
       setSelectedPlayer({
@@ -523,6 +533,9 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
         guest: player.type === "guest" ? player.data : undefined,
         isMemberAccount: player.type === "member",
       });
+    } else if (player.type === "fill" && timeBlockId) {
+      setSelectedFill(player.data);
+      setSelectedFillTimeBlockId(timeBlockId);
     }
   };
 
@@ -636,7 +649,9 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
                   onCheckInPlayer={(id, type, isCheckedIn) =>
                     handleCheckInPlayer(block.id, id, type, isCheckedIn)
                   }
-                  onPlayerClick={handlePlayerClick}
+                  onPlayerClick={(player) =>
+                    handlePlayerClick(player, block.id)
+                  }
                   onAssignPowerCart={handleAssignPowerCart}
                   otherMembers={getOtherMembers(block)}
                   onTimeClick={() => handleAddPlayer(block.id)}
@@ -667,6 +682,24 @@ export function TeesheetTable({ dateString }: TeesheetTableProps) {
           player={selectedPlayer}
         />
       )}
+
+      {/* Replace Fill Modal */}
+      <ReplaceFillModal
+        open={!!selectedFill && !!selectedFillTimeBlockId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedFill(null);
+            setSelectedFillTimeBlockId(null);
+          }
+        }}
+        fill={selectedFill!}
+        timeBlockId={selectedFillTimeBlockId!}
+        dateString={dateString}
+        members={
+          timeBlocks.find((b: any) => b.id === selectedFillTimeBlockId)
+            ?.members || []
+        }
+      />
     </div>
   );
 }

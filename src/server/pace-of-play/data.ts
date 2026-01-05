@@ -232,6 +232,7 @@ export async function getTimeBlocksAtFinish(date: Date): Promise<{
 }
 
 // Get pace of play history for a specific member
+// Only returns completed rounds (with finishTime) - incomplete rounds are hidden from members
 export async function getMemberPaceOfPlayHistory(memberId: number) {
   const result = await db
     .select({
@@ -256,7 +257,12 @@ export async function getMemberPaceOfPlayHistory(memberId: number) {
       timeBlockMembers,
       eq(timeBlocks.id, timeBlockMembers.timeBlockId),
     )
-    .where(eq(timeBlockMembers.memberId, memberId))
+    .where(
+      and(
+        eq(timeBlockMembers.memberId, memberId),
+        isNotNull(paceOfPlay.finishTime), // Only include completed rounds
+      ),
+    )
     .orderBy(desc(teesheets.date), asc(timeBlocks.startTime));
 
   return result;
@@ -331,7 +337,6 @@ export async function getMemberActiveRound(
       },
     },
   });
-
 
   // If no checked-in time block found, return null
   if (!memberTimeBlock?.timeBlock?.teesheet) {

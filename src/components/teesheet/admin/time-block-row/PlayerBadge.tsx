@@ -128,9 +128,9 @@ export function PlayerBadge({
               className={cn(
                 "truncate text-sm font-medium",
                 player.type === "fill" ? "min-w-[80px]" : "min-w-[100px]",
-                player.type !== "fill" && "cursor-pointer hover:underline",
+                "cursor-pointer hover:underline",
               )}
-              onClick={player.type !== "fill" ? handleClick : undefined}
+              onClick={handleClick}
             >
               {name}
               {player.type === "guest" && (
