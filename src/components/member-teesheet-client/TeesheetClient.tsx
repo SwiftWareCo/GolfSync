@@ -13,6 +13,7 @@ import {
 import {
   bookMultiplePlayersAction,
   cancelTeeTime,
+  addGuestFillAction,
 } from "~/server/members-teesheet-client/actions";
 import { AlertCircle, CheckCircle, X } from "lucide-react";
 import { DatePicker } from "./DatePicker";
@@ -350,6 +351,7 @@ export default function TeesheetClient({
         firstName: string;
         lastName: string;
       }>,
+      fillCount?: number,
     ) => {
       if (!bookingTimeBlockId) return;
 
@@ -362,6 +364,19 @@ export default function TeesheetClient({
         );
 
         if (result.success) {
+          // Add guest fills if any were requested
+          if (fillCount && fillCount > 0) {
+            for (let i = 0; i < fillCount; i++) {
+              const fillResult = await addGuestFillAction(
+                bookingTimeBlockId,
+                member.id,
+              );
+              if (!fillResult.success) {
+                console.error("Failed to add guest fill:", fillResult.error);
+              }
+            }
+          }
+
           toast.success("Tee time booked successfully!", {
             icon: <CheckCircle className="h-5 w-5 text-green-500" />,
             id: `book-${bookingTimeBlockId}`,
@@ -373,6 +388,8 @@ export default function TeesheetClient({
             icon: <X className="h-5 w-5 text-red-500" />,
             id: `book-error-${bookingTimeBlockId}`,
           });
+          // Refresh data so UI shows updated capacity
+          router.refresh();
         }
       } catch (error) {
         console.error("Error booking tee time", error);
@@ -380,11 +397,13 @@ export default function TeesheetClient({
           icon: <AlertCircle className="h-5 w-5 text-red-500" />,
           id: `book-error-unexpected-${bookingTimeBlockId}`,
         });
+        // Refresh data in case of error
+        router.refresh();
       } finally {
         dispatch({ type: "SET_LOADING", payload: false });
       }
     },
-    [bookingTimeBlockId, member.id],
+    [bookingTimeBlockId, member.id, router],
   );
 
   const [debouncedCancelling] = useDebounce(
@@ -438,7 +457,9 @@ export default function TeesheetClient({
   // Edit booking handler
   const handleEditBooking = useCallback((timeBlockId: number) => {
     dispatch({ type: "SHOW_EDIT_MODAL", payload: timeBlockId });
-  }, []);
+    // Refresh data in background to get latest capacity
+    router.refresh();
+  }, [router]);
 
   // Check for booking restrictions
   const checkBookingRestrictions = useCallback(
@@ -505,6 +526,8 @@ export default function TeesheetClient({
           }
           // Proceed with booking despite frequency limit
           dispatch({ type: "SHOW_BOOKING_MODAL", payload: timeBlockId });
+          // Refresh data in background to get latest capacity
+          router.refresh();
         } else {
           // For other restrictions, block the booking
           toast.error(
@@ -520,9 +543,11 @@ export default function TeesheetClient({
       } else {
         // No restrictions, proceed with booking modal
         dispatch({ type: "SHOW_BOOKING_MODAL", payload: timeBlockId });
+        // Refresh data in background to get latest capacity
+        router.refresh();
       }
     },
-    [timeBlocks],
+    [timeBlocks, router],
   );
 
   // Memoized utility functions
@@ -797,9 +822,15 @@ export default function TeesheetClient({
                       (g: any) => g.invitedByMemberId === organizerId,
                     );
 
+                    // Show fills added by the organizer
+                    const yourFills = (timeBlock.fills || []).filter(
+                      (f: any) => f.addedByMemberId === organizerId,
+                    );
+
                     return {
                       members: yourMembers,
                       guests: yourGuests,
+                      fills: yourFills,
                     };
                   })()
                 : undefined

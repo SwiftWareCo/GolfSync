@@ -13,6 +13,7 @@ import {
 } from "drizzle-zod";
 import { z } from "zod";
 import { createTable } from "../helpers";
+import { members } from "./core/members.schema";
 
 // Enums for fill types
 export const fillTypeEnum = pgEnum("fill_type", [
@@ -35,6 +36,9 @@ export const fills = createTable(
     relatedId: integer("related_id").notNull(), // entryId or timeBlockId
     fillType: varchar("fill_type", { length: 50 }).notNull(),
     customName: varchar("custom_name", { length: 100 }), // Only for CUSTOM fill type
+    addedByMemberId: integer("added_by_member_id").references(() => members.id, {
+      onDelete: "set null",
+    }), // Tracks which member added this fill (for guest_fill type)
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),

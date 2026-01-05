@@ -6,7 +6,6 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
-import { Toaster } from "react-hot-toast";
 import { QueryProvider } from "~/components/providers/QueryProvider";
 
 export const metadata: Metadata = {
@@ -24,14 +23,7 @@ export default async function RootLayout({
         <body>
           <QueryProvider>
             {children}
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                style: {
-                  zIndex: 9999,
-                },
-              }}
-            />
+
           </QueryProvider>
           <Analytics />
           <SpeedInsights />

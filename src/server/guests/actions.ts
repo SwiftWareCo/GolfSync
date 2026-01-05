@@ -7,7 +7,7 @@ import {
   timeBlocks,
   teesheets,
 } from "~/server/db/schema";
-import { eq, and, like, or, ilike } from "drizzle-orm";
+import { eq, and, like, or, ilike, sql, desc } from "drizzle-orm";
 
 import { revalidatePath } from "next/cache";
 import { getGuestBookingHistory } from "./data";
@@ -215,4 +215,37 @@ export async function getGuestBookingHistoryAction(
 ) {
   const bookings = await getGuestBookingHistory(guestId, { year, month });
   return bookings;
+}
+
+/**
+ * Get guests that a member has played with frequently (2+ times by default)
+ * Used for the "buddy system" in booking modal
+ * Server action version for client component usage
+ */
+export async function getMemberFrequentGuestsAction(
+  memberId: number,
+  minPlayCount: number = 2,
+) {
+  const result = await db
+    .select({
+      guest: guests,
+      playCount: sql<number>`cast(count(*) as integer)`,
+      lastPlayedDate: sql<string>`max(${timeBlockGuests.bookingDate})`,
+    })
+    .from(timeBlockGuests)
+    .innerJoin(guests, eq(guests.id, timeBlockGuests.guestId))
+    .where(eq(timeBlockGuests.invitedByMemberId, memberId))
+    .groupBy(
+      guests.id,
+      guests.firstName,
+      guests.lastName,
+      guests.email,
+      guests.phone,
+      guests.createdAt,
+      guests.updatedAt,
+    )
+    .having(sql`count(*) >= ${minPlayCount}`)
+    .orderBy(desc(sql`count(*)`), desc(sql`max(${timeBlockGuests.bookingDate})`));
+
+  return result;
 }

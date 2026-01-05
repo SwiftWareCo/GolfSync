@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { queryKeys } from "./query-keys";
 
-import { searchGuestsAction } from "~/server/guests/actions";
+import { searchGuestsAction, getMemberFrequentGuestsAction } from "~/server/guests/actions";
 
 
 
@@ -41,5 +41,14 @@ export const guestQueryOptions = {
       enabled: !!query.trim(), // Only run query if there's a search term
       staleTime: 5 * 60 * 1000, // 5 minutes - guest data doesn't change often
       gcTime: 10 * 60 * 1000, // 10 minutes
+    }),
+
+  // Get frequently played guests for buddy system
+  frequentGuests: (memberId: number) =>
+    queryOptions({
+      queryKey: queryKeys.guests.frequent(memberId),
+      queryFn: () => getMemberFrequentGuestsAction(memberId),
+      staleTime: 10 * 60 * 1000, // 10 min - buddy list changes rarely
+      gcTime: 30 * 60 * 1000, // 30 min cache
     }),
 };

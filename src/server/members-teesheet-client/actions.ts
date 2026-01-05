@@ -7,6 +7,7 @@ import {
   timeBlockGuests,
   members,
   teesheets,
+  fills,
 } from "~/server/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -460,6 +461,137 @@ export async function removeGuestFromParty(
     return {
       success: false,
       error: "Failed to remove guest from party",
+    };
+  }
+}
+
+/**
+ * Add a Guest Fill placeholder to a time block
+ * Used when member knows they'll bring a guest but doesn't know their name yet
+ */
+export async function addGuestFillAction(
+  timeBlockId: number,
+  addedByMemberId: number,
+): Promise<ActionResult> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    // Verify capacity
+    const timeBlock = await db.query.timeBlocks.findFirst({
+      where: eq(timeBlocks.id, timeBlockId),
+      with: {
+        timeBlockMembers: true,
+        timeBlockGuests: true,
+        fills: true,
+      },
+    });
+
+    if (!timeBlock) {
+      return { success: false, error: "Time block not found" };
+    }
+
+    const currentCapacity =
+      (timeBlock.timeBlockMembers?.length || 0) +
+      (timeBlock.timeBlockGuests?.length || 0) +
+      (timeBlock.fills?.length || 0);
+
+    const maxPlayers = timeBlock.maxMembers || 4;
+
+    if (currentCapacity >= maxPlayers) {
+      return { success: false, error: "Time block is full" };
+    }
+
+    // Insert guest fill
+    await db.insert(fills).values({
+      relatedType: "timeblock",
+      relatedId: timeBlockId,
+      fillType: "guest_fill",
+      customName: null,
+      addedByMemberId,
+    });
+
+    revalidatePath("/members/teesheet");
+    return { success: true };
+  } catch (error) {
+    console.error("Error adding guest fill:", error);
+    return {
+      success: false,
+      error: "Failed to add guest fill",
+    };
+  }
+}
+
+/**
+ * Remove a Guest Fill from a time block
+ * Only the party organizer can remove fills (mirrors existing party management)
+ */
+export async function removeGuestFillAction(
+  fillId: number,
+  removedByMemberId: number,
+  timeBlockId: number,
+): Promise<ActionResult> {
+  try {
+    const { userId } = await auth();
+    if (!userId) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    // Get the fill to verify it exists and belongs to this timeblock
+    const fill = await db.query.fills.findFirst({
+      where: and(
+        eq(fills.id, fillId),
+        eq(fills.relatedType, "timeblock"),
+        eq(fills.relatedId, timeBlockId),
+      ),
+    });
+
+    if (!fill) {
+      return { success: false, error: "Guest fill not found" };
+    }
+
+    // Check if the member is the party organizer
+    // The organizer is the member who booked other members in this timeblock
+    // OR the member who added this fill
+    const isOrganizer = await db.query.timeBlockMembers.findFirst({
+      where: and(
+        eq(timeBlockMembers.timeBlockId, timeBlockId),
+        eq(timeBlockMembers.bookedByMemberId, removedByMemberId),
+      ),
+    });
+
+    const isAddedByThisMember = fill.addedByMemberId === removedByMemberId;
+
+    // Also check if this member booked themselves (they're the organizer of their own party)
+    const selfBooking = await db.query.timeBlockMembers.findFirst({
+      where: and(
+        eq(timeBlockMembers.timeBlockId, timeBlockId),
+        eq(timeBlockMembers.memberId, removedByMemberId),
+      ),
+    });
+
+    const isSelfBookedOrganizer =
+      selfBooking && selfBooking.bookedByMemberId === removedByMemberId;
+
+    if (!isOrganizer && !isAddedByThisMember && !isSelfBookedOrganizer) {
+      return {
+        success: false,
+        error: "Only the party organizer can remove guest fills",
+      };
+    }
+
+    // Delete the fill
+    await db.delete(fills).where(eq(fills.id, fillId));
+
+    revalidatePath("/members/teesheet");
+    return { success: true };
+  } catch (error) {
+    console.error("Error removing guest fill:", error);
+    return {
+      success: false,
+      error: "Failed to remove guest fill",
     };
   }
 }

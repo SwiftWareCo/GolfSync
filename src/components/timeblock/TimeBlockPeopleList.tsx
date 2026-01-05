@@ -118,6 +118,7 @@ export function TimeBlockPeopleList({
               key={`fill-${fill.id}`}
               fill={fill}
               onRemove={onRemoveFill}
+              allMembers={members as Member[]}
             />
           ))}
         </div>

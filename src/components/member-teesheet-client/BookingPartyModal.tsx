@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useDebounce } from "use-debounce";
 import {
   Dialog,
@@ -13,7 +13,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
-import { Loader2, Search, UserPlus, X, Lock } from "lucide-react";
+import { Loader2, Search, UserPlus, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { memberQueryOptions, guestQueryOptions } from "~/server/query-options";
@@ -22,7 +22,10 @@ import {
   bookMultiplePlayersAction,
   removeMemberFromParty,
   removeGuestFromParty,
+  addGuestFillAction,
+  removeGuestFillAction,
 } from "~/server/members-teesheet-client/actions";
+import { checkTimeblockRestrictionsAction } from "~/server/timeblock-restrictions/actions";
 
 // Types for the booking party
 type PartyMember = {
@@ -42,7 +45,14 @@ type PartyGuest = {
   isNew?: boolean; // Newly created guest
 };
 
+type PartyFill = {
+  type: "fill";
+  tempId: string; // Client-side ID until saved
+  fillId?: number; // Server ID if already saved
+};
+
 type PartyPlayer = PartyMember | PartyGuest;
+type DisplayPlayer = PartyPlayer | PartyFill;
 
 interface BookingPartyModalProps {
   open: boolean;
@@ -52,12 +62,14 @@ interface BookingPartyModalProps {
     firstName: string;
     lastName: string;
     memberNumber?: string;
+    classId?: number | null;
   };
   maxPlayers: number;
   timeBlockCurrentCapacity?: number; // Total players already in timeblock (not just your party)
-  onConfirm: (players: PartyPlayer[]) => Promise<void>;
+  onConfirm: (players: PartyPlayer[], fillCount?: number) => Promise<void>;
   mode?: "create" | "edit";
   timeBlockId?: number;
+  teesheetDate?: string; // Required for restriction checking (YYYY-MM-DD format)
   existingParty?: {
     members: Array<{
       id: number;
@@ -65,12 +77,18 @@ interface BookingPartyModalProps {
       lastName: string;
       memberNumber?: string;
       bookedByMemberId?: number | null;
+      classId?: number | null;
     }>;
     guests?: Array<{
       id: number;
       firstName: string;
       lastName: string;
       invitedByMemberId?: number;
+    }>;
+    fills?: Array<{
+      id: number;
+      fillType: string;
+      addedByMemberId?: number | null;
     }>;
   };
 }
@@ -84,6 +102,7 @@ export function BookingPartyModal({
   onConfirm,
   mode = "create",
   timeBlockId,
+  teesheetDate,
   existingParty,
 }: BookingPartyModalProps) {
   const queryClient = useQueryClient();
@@ -93,9 +112,13 @@ export function BookingPartyModal({
   const [pendingRemovals, setPendingRemovals] = useState<
     Array<{ id: number; type: string }>
   >([]);
+  const [pendingFills, setPendingFills] = useState<PartyFill[]>([]);
+  const [pendingFillRemovals, setPendingFillRemovals] = useState<number[]>([]); // fillIds to remove
+  const [restrictionErrors, setRestrictionErrors] = useState<Map<number, string>>(new Map());
+  const [checkingRestriction, setCheckingRestriction] = useState<number | null>(null);
 
   // Compute display party from source of truth (existingParty) - pending removals + pending additions
-  const displayParty = useMemo(() => {
+  const displayParty = useMemo((): DisplayPlayer[] => {
     if (mode === "edit" && existingParty) {
       // Edit mode: Map existing party - pending removals + pending additions
       const members: PartyPlayer[] = existingParty.members
@@ -124,9 +147,18 @@ export function BookingPartyModal({
           lastName: g.lastName,
         }));
 
-      return [...members, ...guests, ...pendingAdditions];
+      // Include existing fills (not pending removal) + pending fills
+      const existingFills: PartyFill[] = (existingParty.fills || [])
+        .filter((f) => f.fillType === "guest_fill" && !pendingFillRemovals.includes(f.id))
+        .map((f) => ({
+          type: "fill" as const,
+          tempId: `existing-${f.id}`,
+          fillId: f.id,
+        }));
+
+      return [...members, ...guests, ...pendingAdditions, ...existingFills, ...pendingFills];
     } else {
-      // Create mode: Current member (locked) + pending additions
+      // Create mode: Current member (locked) + pending additions + pending fills
       return [
         {
           type: "member" as const,
@@ -137,9 +169,10 @@ export function BookingPartyModal({
           isLocked: true,
         },
         ...pendingAdditions,
+        ...pendingFills,
       ];
     }
-  }, [mode, existingParty, pendingAdditions, pendingRemovals, currentMember]);
+  }, [mode, existingParty, pendingAdditions, pendingRemovals, pendingFills, pendingFillRemovals, currentMember]);
 
   // Calculate how many slots are available in the timeblock
   // In edit mode, we need to account for players we might remove
@@ -180,79 +213,200 @@ export function BookingPartyModal({
     enabled: debouncedGuestSearch.length >= 2,
   });
 
+  // Frequent guests query (buddy system)
+  const frequentGuestsQuery = useQuery({
+    ...guestQueryOptions.frequentGuests(currentMember.id),
+    enabled: open, // Only fetch when modal is open
+  });
+
   const isFull = displayParty.length >= availableSlots;
 
-  // Filter out already-added players from search results
-  const filteredMemberResults = useMemo(() => {
-    if (!memberSearchQuery.data) return [];
-    const partyMemberIds = displayParty
+  // Get all party member IDs for marking as "Added"
+  const partyMemberIds = useMemo(() => {
+    return displayParty
       .filter((p) => p.type === "member")
       .map((p) => p.id);
-    return memberSearchQuery.data.filter((m) => !partyMemberIds.includes(m.id));
-  }, [memberSearchQuery.data, displayParty]);
+  }, [displayParty]);
 
-  const filteredGuestResults = useMemo(() => {
-    if (!guestSearchQuery.data) return [];
-    const partyGuestIds = displayParty
+  // Don't filter out added members - we'll show them with "Added" badge
+  const memberResults = useMemo(() => {
+    return memberSearchQuery.data || [];
+  }, [memberSearchQuery.data]);
+
+  // Get all party guest IDs for marking as "Added"
+  const partyGuestIds = useMemo(() => {
+    return displayParty
       .filter((p) => p.type === "guest")
       .map((p) => p.id);
-    return guestSearchQuery.data.filter((g) => !partyGuestIds.includes(g.id));
-  }, [guestSearchQuery.data, displayParty]);
+  }, [displayParty]);
 
-  // Show create guest option when no results match
+  // Don't filter out added guests - we'll show them with "Added" badge
+  const guestResults = useMemo(() => {
+    return guestSearchQuery.data || [];
+  }, [guestSearchQuery.data]);
+
+  // Show create guest option only when there are truly no database results
   const showCreateGuestOption =
     debouncedGuestSearch.length >= 2 &&
     !guestSearchQuery.isLoading &&
-    filteredGuestResults.length === 0;
+    guestResults.length === 0;
 
-  // Add member to party
+  // Check restrictions for a member before adding
+  const checkMemberRestrictions = useCallback(
+    async (memberId: number, memberClassId: number | null | undefined) => {
+      if (!timeBlockId || !teesheetDate) return null;
+
+      setCheckingRestriction(memberId);
+      try {
+        const result = await checkTimeblockRestrictionsAction({
+          memberId,
+          memberClassId: memberClassId ?? undefined,
+          bookingDateString: teesheetDate,
+          bookingTime: "", // We don't have the exact time, but TIME restrictions mainly use date
+        });
+
+        if ("hasViolations" in result && result.hasViolations) {
+          // Check for TIME violations (blocking)
+          const timeViolation = result.violations.find(
+            (v: { type: string }) => v.type === "TIME",
+          );
+          if (timeViolation) {
+            return timeViolation.message || "Cannot book this time slot due to restrictions";
+          }
+        }
+        return null;
+      } catch (error) {
+        console.error("Error checking restrictions:", error);
+        return null;
+      } finally {
+        setCheckingRestriction(null);
+      }
+    },
+    [timeBlockId, teesheetDate],
+  );
+
+  // Add member to party (with restriction check)
   const handleAddMember = useCallback(
-    (member: (typeof filteredMemberResults)[0]) => {
+    async (member: (typeof memberResults)[0]) => {
       if (isFull) {
         toast.error(
           `No slots available in this tee time (${availableSlots} max for your party)`,
+          { position: "top-center" },
         );
         return;
       }
 
-      setPendingAdditions((prev) => [
-        ...prev,
-        {
-          type: "member",
-          id: member.id,
-          firstName: member.firstName,
-          lastName: member.lastName,
-          memberNumber: member.memberNumber,
-        },
-      ]);
+      // Check restrictions for this member
+      const restrictionError = await checkMemberRestrictions(
+        member.id,
+        member.classId,
+      );
+
+      if (restrictionError) {
+        setRestrictionErrors((prev) => new Map(prev).set(member.id, restrictionError));
+        toast.error(`${member.firstName} ${member.lastName}: ${restrictionError}`, {
+          position: "top-center",
+        });
+        return;
+      }
+
+      // Clear any previous error for this member
+      setRestrictionErrors((prev) => {
+        const next = new Map(prev);
+        next.delete(member.id);
+        return next;
+      });
+
+      // Check if this member was previously removed (in pendingRemovals)
+      const wasRemoved = pendingRemovals.some(
+        (r) => r.id === member.id && r.type === "member",
+      );
+
+      if (wasRemoved) {
+        // Remove from pendingRemovals instead of adding to pendingAdditions
+        setPendingRemovals((prev) =>
+          prev.filter((r) => !(r.id === member.id && r.type === "member")),
+        );
+      } else {
+        // Add to pending additions
+        setPendingAdditions((prev) => [
+          ...prev,
+          {
+            type: "member",
+            id: member.id,
+            firstName: member.firstName,
+            lastName: member.lastName,
+            memberNumber: member.memberNumber,
+          },
+        ]);
+      }
       setMemberSearch("");
     },
-    [isFull, availableSlots],
+    [isFull, availableSlots, checkMemberRestrictions, pendingRemovals],
   );
 
   // Add guest to party
   const handleAddGuest = useCallback(
-    (guest: (typeof filteredGuestResults)[0]) => {
+    (guest: { id: number; firstName: string; lastName: string }) => {
       if (isFull) {
         toast.error(
           `No slots available in this tee time (${availableSlots} max for your party)`,
+          { position: "top-center" },
         );
         return;
       }
 
-      setPendingAdditions((prev) => [
-        ...prev,
-        {
-          type: "guest",
-          id: guest.id,
-          firstName: guest.firstName,
-          lastName: guest.lastName,
-        },
-      ]);
+      // Check if this guest was previously removed (in pendingRemovals)
+      const wasRemoved = pendingRemovals.some(
+        (r) => r.id === guest.id && r.type === "guest",
+      );
+
+      if (wasRemoved) {
+        // Remove from pendingRemovals instead of adding to pendingAdditions
+        setPendingRemovals((prev) =>
+          prev.filter((r) => !(r.id === guest.id && r.type === "guest")),
+        );
+      } else {
+        // Add to pending additions
+        setPendingAdditions((prev) => [
+          ...prev,
+          {
+            type: "guest",
+            id: guest.id,
+            firstName: guest.firstName,
+            lastName: guest.lastName,
+          },
+        ]);
+      }
       setGuestSearch("");
     },
-    [isFull, availableSlots],
+    [isFull, availableSlots, pendingRemovals],
   );
+
+  // Add guest fill placeholder
+  const handleAddGuestFill = useCallback(() => {
+    if (isFull) {
+      toast.error(
+        `No slots available in this tee time (${availableSlots} max for your party)`,
+        { position: "top-center" },
+      );
+      return;
+    }
+
+    const tempId = `fill-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+    setPendingFills((prev) => [...prev, { type: "fill", tempId }]);
+  }, [isFull, availableSlots]);
+
+  // Remove guest fill
+  const handleRemoveFill = useCallback((fill: PartyFill) => {
+    if (fill.fillId) {
+      // Existing fill - mark for removal
+      setPendingFillRemovals((prev) => [...prev, fill.fillId!]);
+    } else {
+      // Pending fill - remove from pending
+      setPendingFills((prev) => prev.filter((f) => f.tempId !== fill.tempId));
+    }
+  }, []);
 
   // Determine if current member is the booker
   const isBooker =
@@ -437,12 +591,45 @@ export function BookingPartyModal({
           }
         }
 
+        // Process fill removals
+        for (const fillId of pendingFillRemovals) {
+          const result = await removeGuestFillAction(
+            fillId,
+            currentMember.id,
+            timeBlockId,
+          );
+          if (!result.success) {
+            toast.error(result.error || "Failed to remove guest fill", {
+              position: "top-center",
+            });
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
+        // Process fill additions
+        for (const fill of pendingFills) {
+          const result = await addGuestFillAction(timeBlockId, currentMember.id);
+          if (!result.success) {
+            toast.error(result.error || "Failed to add guest fill", {
+              position: "top-center",
+            });
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
         // Show success message if any changes were made
-        if (pendingRemovals.length > 0 || pendingAdditions.length > 0) {
-          toast.success("Booking updated successfully");
+        const hasChanges =
+          pendingRemovals.length > 0 ||
+          pendingAdditions.length > 0 ||
+          pendingFillRemovals.length > 0 ||
+          pendingFills.length > 0;
+        if (hasChanges) {
+          toast.success("Booking updated successfully", { position: "top-center" });
         }
       } else {
-        // Create mode: Submit current member + pending additions
+        // Create mode: Submit current member + pending additions + fill count
         const allPlayers = [
           {
             type: "member" as const,
@@ -453,12 +640,16 @@ export function BookingPartyModal({
           },
           ...pendingAdditions,
         ];
-        await onConfirm(allPlayers);
+        // Pass fill count to parent - parent will add fills after booking
+        await onConfirm(allPlayers, pendingFills.length);
       }
 
       // Clear pending changes on success
       setPendingAdditions([]);
       setPendingRemovals([]);
+      setPendingFills([]);
+      setPendingFillRemovals([]);
+      setRestrictionErrors(new Map());
       setMemberSearch("");
       setGuestSearch("");
 
@@ -475,6 +666,9 @@ export function BookingPartyModal({
       // Clear all modal state on close
       setPendingAdditions([]);
       setPendingRemovals([]);
+      setPendingFills([]);
+      setPendingFillRemovals([]);
+      setRestrictionErrors(new Map());
       setMemberSearch("");
       setGuestSearch("");
       setShowCreateGuest(false);
@@ -495,17 +689,46 @@ export function BookingPartyModal({
           {/* Current Party */}
           <div className="space-y-2">
             <Label>
-              Your Party ({displayParty.length}/{availableSlots} slots available)
+              Your Party ({displayParty.length} of {availableSlots} spots)
             </Label>
             {otherPlayersInTimeBlock > 0 && (
               <p className="text-xs text-gray-500">
-                {otherPlayersInTimeBlock} player(s) already in this tee time
+                {otherPlayersInTimeBlock} other player(s) in this tee time
               </p>
             )}
             <div className="space-y-2">
               {displayParty.map((player) => {
+                // Handle fill type separately
+                if (player.type === "fill") {
+                  const fill = player as PartyFill;
+                  return (
+                    <div
+                      key={fill.tempId}
+                      className="flex items-center justify-between rounded-md border border-dashed border-amber-300 bg-amber-50 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-amber-400  text-xs text-amber-700">
+                          Guest Fill
+                        </Badge>
+                     
+                      </div>
+                      {isBooker && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFill(fill)}
+                          className="text-red-500 hover:text-red-700"
+                          title="Remove guest fill"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Member or Guest
                 const isSelf =
-                  player.id === currentMember.id && player.type === "member";
+                  player.type === "member" && player.id === currentMember.id;
                 const canRemove =
                   mode === "create"
                     ? !(
@@ -581,34 +804,87 @@ export function BookingPartyModal({
                   <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
               )}
-              {filteredMemberResults.length > 0 && (
+              {memberResults.length > 0 && (
                 <div className="max-h-32 overflow-y-auto rounded-md border">
-                  {filteredMemberResults.map((member) => (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => handleAddMember(member)}
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-100"
-                    >
-                      <span>
-                        {member.firstName} {member.lastName}
-                      </span>
-                      {member.memberNumber && (
-                        <span className="text-gray-500">
-                          #{member.memberNumber}
+                  {memberResults.map((member) => {
+                    const isAlreadyAdded = partyMemberIds.includes(member.id);
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => !isAlreadyAdded && handleAddMember(member)}
+                        disabled={isAlreadyAdded}
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
+                          isAlreadyAdded
+                            ? "cursor-default bg-green-50 text-green-700"
+                            : "hover:bg-gray-100"
+                        }`}
+                      >
+                        <span>
+                          {member.firstName} {member.lastName}
                         </span>
-                      )}
-                    </button>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          {member.memberNumber && !isAlreadyAdded && (
+                            <span className="text-gray-500">
+                              #{member.memberNumber}
+                            </span>
+                          )}
+                          {isAlreadyAdded && (
+                            <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                              Added
+                            </Badge>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
+              {debouncedMemberSearch.length >= 2 &&
+                !memberSearchQuery.isLoading &&
+                memberResults.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-2">
+                    No members found matching &quot;{debouncedMemberSearch}&quot;
+                  </p>
+                )}
             </div>
           )}
 
           {/* Add Guests Section */}
           {!isFull && !showCreateGuest && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Add Guests</Label>
+
+              {/* Buddy System - Frequent Guests */}
+              {frequentGuestsQuery.data && frequentGuestsQuery.data.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Players you&apos;ve played with before
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {frequentGuestsQuery.data
+                      .filter(
+                        (item) =>
+                          !displayParty.some(
+                            (p) => p.type === "guest" && p.id === item.guest.id,
+                          ),
+                      )
+                      .slice(0, 5)
+                      .map((item) => (
+                        <Button
+                          key={item.guest.id}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAddGuest(item.guest)}
+                          className="rounded-full"
+                        >
+                          {item.guest.firstName} {item.guest.lastName}
+                        </Button>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               <div className="relative">
                 <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <Input
@@ -623,18 +899,31 @@ export function BookingPartyModal({
                   <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
               )}
-              {filteredGuestResults.length > 0 && (
+              {guestResults.length > 0 && (
                 <div className="max-h-32 overflow-y-auto rounded-md border">
-                  {filteredGuestResults.map((guest) => (
-                    <button
-                      key={guest.id}
-                      type="button"
-                      onClick={() => handleAddGuest(guest)}
-                      className="flex w-full items-center px-3 py-2 text-left text-sm hover:bg-gray-100"
-                    >
-                      {guest.firstName} {guest.lastName}
-                    </button>
-                  ))}
+                  {guestResults.map((guest) => {
+                    const isAlreadyAdded = partyGuestIds.includes(guest.id);
+                    return (
+                      <button
+                        key={guest.id}
+                        type="button"
+                        onClick={() => !isAlreadyAdded && handleAddGuest(guest)}
+                        disabled={isAlreadyAdded}
+                        className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
+                          isAlreadyAdded
+                            ? "cursor-default bg-green-50 text-green-700"
+                            : "hover:bg-gray-100"
+                        }`}
+                      >
+                        <span>{guest.firstName} {guest.lastName}</span>
+                        {isAlreadyAdded && (
+                          <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+                            Added
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
               {showCreateGuestOption && (
@@ -646,9 +935,21 @@ export function BookingPartyModal({
                   className="w-full"
                 >
                   <UserPlus className="mr-2 h-4 w-4" />
-                  Create Guest "{debouncedGuestSearch}"
+                  Create Guest &quot;{debouncedGuestSearch}&quot;
                 </Button>
               )}
+
+              {/* Guest Fill Button */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleAddGuestFill}
+                className="w-full border-dashed border-amber-300 hover:text-black text-amber-700 hover:bg-amber-50"
+              >
+                <UserPlus className="mr-2 h-4 w-4" />
+                Guest Fill 
+              </Button>
             </div>
           )}
 
@@ -712,10 +1013,14 @@ export function BookingPartyModal({
             onClick={handleConfirm}
             disabled={
               isSubmitting ||
-              displayParty.length === 0 ||
+              // Create mode: need at least 1 player
+              (mode === "create" && displayParty.length === 0) ||
+              // Edit mode: need at least one pending change
               (mode === "edit" &&
                 pendingAdditions.length === 0 &&
-                pendingRemovals.length === 0)
+                pendingRemovals.length === 0 &&
+                pendingFills.length === 0 &&
+                pendingFillRemovals.length === 0)
             }
           >
             {isSubmitting ? (

@@ -21,6 +21,7 @@ export const queryKeys = {
     all: () => ["guests"] as const,
     search: (query: string) => ["guests", "search", query] as const,
     byId: (id: number) => ["guests", "byId", id] as const,
+    frequent: (memberId: number) => ["guests", "frequent", memberId] as const,
   },
   // Lottery queries
   lottery: {

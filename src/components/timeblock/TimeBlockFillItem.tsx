@@ -4,22 +4,29 @@ import { UserMinus } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { getFillLabel } from "~/lib/fills";
-import type { Fill } from "~/server/db/schema";
+import type { Fill, Member } from "~/server/db/schema";
 
 interface TimeBlockFillItemProps {
   fill: Fill;
   onRemove: (fillId: number) => Promise<void>;
+  allMembers?: Member[];
 }
 
 export const TimeBlockFillItem = ({
   fill,
   onRemove,
+  allMembers = [],
 }: TimeBlockFillItemProps) => {
   const handleRemove = () => {
     onRemove(fill.id);
   };
 
   const fillLabel = getFillLabel(fill);
+
+  // Find who added this fill
+  const addedByMember = fill.addedByMemberId
+    ? allMembers.find((m) => m.id === fill.addedByMemberId)
+    : null;
 
   // Use a neutral style for fills
   const fillStyle = {
@@ -41,6 +48,11 @@ export const TimeBlockFillItem = ({
               Fill
             </Badge>
           </div>
+          {addedByMember && (
+            <p className="text-xs text-gray-500">
+              Booked by: {addedByMember.firstName} {addedByMember.lastName}
+            </p>
+          )}
         </div>
       </div>
       <Button variant="destructive" size="sm" onClick={handleRemove}>
