@@ -7,6 +7,13 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { ConfigPreview } from "./ConfigPreview";
 import type {
   TeesheetConfigWithBlocks,
@@ -101,11 +108,13 @@ export function ConfigEditor({
       blocks: config?.blocks || [],
       daysOfWeek: config?.daysOfWeek || [],
       isActive: config?.isActive || false,
+      maxWindowDurationMinutes: config?.maxWindowDurationMinutes ?? 60,
     },
   });
 
   const blocks = watch("blocks");
   const daysOfWeek = watch("daysOfWeek");
+  const maxWindowDurationMinutes = watch("maxWindowDurationMinutes");
 
   // Generator state (uncontrolled inputs)
   const [generatorState, setGeneratorState] = useState({
@@ -412,6 +421,34 @@ export function ConfigEditor({
                 {errors.daysOfWeek.message as string}
               </span>
             )}
+          </div>
+
+          {/* Lottery Window Duration */}
+          <div className="space-y-2">
+            <Label htmlFor="maxWindowDurationMinutes">
+              Lottery Time Window Duration
+            </Label>
+            <Select
+              value={maxWindowDurationMinutes?.toString() ?? "60"}
+              onValueChange={(value) =>
+                setValue("maxWindowDurationMinutes", parseInt(value))
+              }
+            >
+              <SelectTrigger id="maxWindowDurationMinutes">
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="30">30 minutes</SelectItem>
+                <SelectItem value="45">45 minutes</SelectItem>
+                <SelectItem value="60">60 minutes (default)</SelectItem>
+                <SelectItem value="90">90 minutes</SelectItem>
+                <SelectItem value="120">2 hours</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500">
+              Time windows are auto-generated for the lottery based on this
+              duration. Shorter durations create more specific windows.
+            </p>
           </div>
 
           {/* Toggles */}

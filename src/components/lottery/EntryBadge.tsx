@@ -9,7 +9,6 @@ import {
 } from "~/components/ui/tooltip";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
-import type { TimeWindow } from "~/lib/lottery-utils";
 
 // Helper types for lottery entry display
 export interface LotteryEntryDisplay {
@@ -68,8 +67,9 @@ const getAssignmentQuality = (
 
   // Check if it falls within preferred window
   if (preferredWindow) {
+    const preferredIndex = parseInt(preferredWindow, 10);
     const preferredWindowInfo = timeWindows.find(
-      (w) => w.value === preferredWindow,
+      (w) => w.index === preferredIndex,
     );
     if (
       preferredWindowInfo &&
@@ -82,8 +82,9 @@ const getAssignmentQuality = (
 
   // Check if it falls within alternate window
   if (alternateWindow) {
+    const alternateIndex = parseInt(alternateWindow, 10);
     const alternateWindowInfo = timeWindows.find(
-      (w) => w.value === alternateWindow,
+      (w) => w.index === alternateIndex,
     );
     if (
       alternateWindowInfo &&

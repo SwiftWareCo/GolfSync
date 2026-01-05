@@ -79,7 +79,6 @@ export function MemberLotteryEntryForm({
 }: LotteryEntryFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<SearchMember[]>([]);
-  const [showPreview, setShowPreview] = useState(false);
 
   // Calculate dynamic time windows based on config
   const timeWindows = calculateDynamicTimeWindows(config);
@@ -164,11 +163,11 @@ export function MemberLotteryEntryForm({
   };
 
   const getSelectedWindowInfo = () => {
-    return timeWindows.find((w) => w.value === selectedWindow);
+    return timeWindows.find((w) => w.index.toString() === selectedWindow);
   };
 
   const getAlternateWindowInfo = () => {
-    return timeWindows.find((w) => w.value === alternateWindow);
+    return timeWindows.find((w) => w.index.toString() === alternateWindow);
   };
 
   const isGroupEntry = selectedMembers.length > 0;
@@ -314,31 +313,31 @@ export function MemberLotteryEntryForm({
                       <FormDescription className="text-sm">
                         Choose your preferred part of the day
                       </FormDescription>
-                      <div className="grid gap-3">
+                      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                         {timeWindows.map((window) => (
                           <div
-                            key={window.value}
+                            key={window.index}
                             className={`cursor-pointer rounded-lg border-2 p-3 transition-all ${
-                              field.value === window.value
+                              field.value === window.index.toString()
                                 ? "border-org-primary bg-org-primary/5"
                                 : "border-gray-200 hover:border-gray-300"
                             }`}
-                            onClick={() => field.onChange(window.value)}
+                            onClick={() =>
+                              field.onChange(window.index.toString())
+                            }
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col gap-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-lg">{window.icon}</span>
-                                <div>
-                                  <div className="font-medium">
-                                    {window.label}
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {window.timeRange}
-                                  </div>
+                                <div className="text-sm font-medium">
+                                  {window.timeRange}
                                 </div>
                               </div>
-                              {field.value === window.value && (
-                                <CheckCircle className="text-org-primary h-5 w-5" />
+                              <div className="text-xs text-gray-500">
+                                {window.description}
+                              </div>
+                              {field.value === window.index.toString() && (
+                                <CheckCircle className="text-org-primary h-4 w-4 self-end" />
                               )}
                             </div>
                           </div>
@@ -360,22 +359,24 @@ export function MemberLotteryEntryForm({
                         <FormDescription>
                           Alternative if preferred time isn't available
                         </FormDescription>
-                        <div className="grid gap-2">
+                        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                           {timeWindows
-                            .filter((w) => w.value !== selectedWindow)
+                            .filter(
+                              (w) => w.index.toString() !== selectedWindow,
+                            )
                             .map((window) => (
                               <div
-                                key={window.value}
+                                key={window.index}
                                 className={`cursor-pointer rounded-lg border p-2 transition-all ${
-                                  field.value === window.value
+                                  field.value === window.index.toString()
                                     ? "border-org-primary bg-org-primary/5"
                                     : "border-gray-200 hover:border-gray-300"
                                 }`}
                                 onClick={() =>
                                   field.onChange(
-                                    field.value === window.value
+                                    field.value === window.index.toString()
                                       ? ""
-                                      : window.value,
+                                      : window.index.toString(),
                                   )
                                 }
                               >
@@ -383,10 +384,10 @@ export function MemberLotteryEntryForm({
                                   <div className="flex items-center gap-2">
                                     <span>{window.icon}</span>
                                     <span className="text-sm font-medium">
-                                      {window.label}
+                                      {window.timeRange}
                                     </span>
                                   </div>
-                                  {field.value === window.value && (
+                                  {field.value === window.index.toString() && (
                                     <CheckCircle className="text-org-primary h-4 w-4" />
                                   )}
                                 </div>
@@ -399,90 +400,6 @@ export function MemberLotteryEntryForm({
                   />
                 )}
               </div>
-
-              {/* Preview Toggle */}
-              {selectedWindow && (
-                <>
-                  <Separator />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowPreview(!showPreview)}
-                    className="w-full"
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    {showPreview ? "Hide" : "Show"} Preview
-                  </Button>
-                </>
-              )}
-
-              {/* Preview Section */}
-              {showPreview && selectedWindow && (
-                <Card className="border-org-primary/20 bg-org-primary/5">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Entry Preview</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <div className="text-sm font-medium text-gray-600">
-                        Date
-                      </div>
-                      <div>{formatDate(lotteryDate, "EEEE, MMMM do")}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-medium text-gray-600">
-                        Type
-                      </div>
-                      <div>
-                        {isGroupEntry
-                          ? `Group Entry (${totalPlayers} players)`
-                          : "Individual Entry"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm font-medium text-gray-600">
-                        Preferred Time
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span>{getSelectedWindowInfo()?.icon}</span>
-                        <span>{getSelectedWindowInfo()?.label}</span>
-                      </div>
-                    </div>
-
-                    {alternateWindow && (
-                      <div>
-                        <div className="text-sm font-medium text-gray-600">
-                          Backup Window
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span>{getAlternateWindowInfo()?.icon}</span>
-                          <span>{getAlternateWindowInfo()?.label}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {isGroupEntry && (
-                      <div>
-                        <div className="text-sm font-medium text-gray-600">
-                          Players
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-sm">
-                            • {member.firstName} {member.lastName} (you)
-                          </div>
-                          {selectedMembers.map((m) => (
-                            <div key={m.id} className="text-sm">
-                              • {m.firstName} {m.lastName}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
 
               <Separator />
 

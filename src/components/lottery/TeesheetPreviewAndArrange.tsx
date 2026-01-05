@@ -179,8 +179,9 @@ export function TeesheetPreviewAndArrange({
 
       // Check if it falls within preferred window
       if (preferredWindow) {
+        const preferredIndex = parseInt(preferredWindow, 10);
         const preferredWindowInfo = timeWindows.find(
-          (w) => w.value === preferredWindow,
+          (w) => w.index === preferredIndex,
         );
         if (
           preferredWindowInfo &&
@@ -193,8 +194,9 @@ export function TeesheetPreviewAndArrange({
 
       // Check if it falls within alternate window
       if (alternateWindow) {
+        const alternateIndex = parseInt(alternateWindow, 10);
         const alternateWindowInfo = timeWindows.find(
-          (w) => w.value === alternateWindow,
+          (w) => w.index === alternateIndex,
         );
         if (
           alternateWindowInfo &&

@@ -8,21 +8,34 @@ import {
 import { z } from "zod";
 import { createTable } from "../../helpers";
 
-// Type for speed bonus configuration per time window
+// Position type for relative time-of-day (first 25%, 25-50%, etc.)
+export type WindowPosition = "early" | "mid_early" | "mid_late" | "late";
+
+// Position-based speed bonus configuration
+// Applied based on relative position in day (instead of fixed windows)
+export interface PositionSpeedBonusConfig {
+  position: WindowPosition;
+  fastBonus: number;
+  averageBonus: number;
+  slowBonus: number;
+}
+
+// Default position-based speed bonuses - exported for use in data layer
+// "early" = first 25% of windows, "mid_early" = 25-50%, etc.
+export const DEFAULT_POSITION_BONUSES: PositionSpeedBonusConfig[] = [
+  { position: "early", fastBonus: 5, averageBonus: 2, slowBonus: 0 },
+  { position: "mid_early", fastBonus: 2, averageBonus: 1, slowBonus: 0 },
+  { position: "mid_late", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
+  { position: "late", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
+];
+
+// Legacy type for backwards compatibility (deprecated)
 export interface SpeedBonusConfig {
   window: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING";
   fastBonus: number;
   averageBonus: number;
   slowBonus: number;
 }
-
-// Default speed bonuses - exported for use in data layer
-export const DEFAULT_SPEED_BONUSES: SpeedBonusConfig[] = [
-  { window: "MORNING", fastBonus: 5, averageBonus: 2, slowBonus: 0 },
-  { window: "MIDDAY", fastBonus: 2, averageBonus: 1, slowBonus: 0 },
-  { window: "AFTERNOON", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
-  { window: "EVENING", fastBonus: 0, averageBonus: 0, slowBonus: 0 },
-];
 
 /**
  * Lottery Algorithm Configuration - Singleton Table
@@ -43,10 +56,11 @@ export const lotteryAlgorithmConfig = createTable("lottery_algorithm_config", {
     .default(245)
     .notNull(),
 
-  // Speed bonuses per time window (JSONB)
+  // Position-based speed bonuses (JSONB)
+  // Applied based on relative position in day (early/mid_early/mid_late/late)
   speedBonuses: jsonb("speed_bonuses")
-    .$type<SpeedBonusConfig[]>()
-    .default(DEFAULT_SPEED_BONUSES)
+    .$type<PositionSpeedBonusConfig[]>()
+    .default(DEFAULT_POSITION_BONUSES)
     .notNull(),
 
   // Audit fields
@@ -57,9 +71,9 @@ export const lotteryAlgorithmConfig = createTable("lottery_algorithm_config", {
   updatedBy: varchar("updated_by", { length: 100 }),
 });
 
-// Zod schema for speed bonus configuration
-export const speedBonusConfigSchema = z.object({
-  window: z.enum(["MORNING", "MIDDAY", "AFTERNOON", "EVENING"]),
+// Zod schema for position-based speed bonus configuration
+export const positionSpeedBonusConfigSchema = z.object({
+  position: z.enum(["early", "mid_early", "mid_late", "late"]),
   fastBonus: z.number().min(0).max(50),
   averageBonus: z.number().min(0).max(50),
   slowBonus: z.number().min(0).max(50),
@@ -93,7 +107,7 @@ export const lotteryAlgorithmConfigFormSchema =
         .number()
         .min(1, "Must be at least 1")
         .max(600, "Must be at most 600"),
-      speedBonuses: z.array(speedBonusConfigSchema),
+      speedBonuses: z.array(positionSpeedBonusConfigSchema),
     })
     .refine(
       (data) => data.fastThresholdMinutes < data.averageThresholdMinutes,

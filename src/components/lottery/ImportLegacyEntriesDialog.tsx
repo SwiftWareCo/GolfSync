@@ -215,8 +215,8 @@ export function ImportLegacyEntriesDialog({
               {timeWindows.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {timeWindows.map((w) => (
-                    <Badge key={w.value} variant="outline" className="text-xs">
-                      {w.icon} {w.label}: {w.timeRange}
+                    <Badge key={w.index} variant="outline" className="text-xs">
+                      {w.icon} {w.timeRange}
                     </Badge>
                   ))}
                 </div>

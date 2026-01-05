@@ -199,8 +199,11 @@ export function LotteryEditDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {timeWindows.map((window) => (
-                    <SelectItem key={window.value} value={window.value}>
-                      {window.label} ({window.timeRange})
+                    <SelectItem
+                      key={window.index}
+                      value={window.index.toString()}
+                    >
+                      {window.timeRange}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -224,8 +227,11 @@ export function LotteryEditDialog({
                 <SelectContent>
                   <SelectItem value="NONE">None</SelectItem>
                   {timeWindows.map((window) => (
-                    <SelectItem key={window.value} value={window.value}>
-                      {window.label} ({window.timeRange})
+                    <SelectItem
+                      key={window.index}
+                      value={window.index.toString()}
+                    >
+                      {window.timeRange}
                     </SelectItem>
                   ))}
                 </SelectContent>

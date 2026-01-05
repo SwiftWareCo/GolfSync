@@ -7,8 +7,9 @@ import {
   teesheets,
   courseInfo,
   TeesheetConfigWithBlocks,
+  lotteryEntries,
 } from "~/server/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "~/lib/auth-server";
@@ -332,6 +333,69 @@ export async function updateTeesheetConfig(
         success: false,
         error: `Cannot activate config: conflicts with existing configs on ${dayNames}. Conflicting configs: ${dayValidation.conflictingConfigNames.join(", ")}`,
       };
+    }
+
+    // VALIDATION 4: Check for pending lottery entries when maxWindowDurationMinutes changes
+    if (
+      configData.maxWindowDurationMinutes !== undefined &&
+      configData.maxWindowDurationMinutes !==
+        existingConfig.maxWindowDurationMinutes
+    ) {
+      // Only check FUTURE pending entries (past lottery dates are stale)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split("T")[0]!;
+
+      // Get pending lottery entries
+      const pendingEntries = await db.query.lotteryEntries.findMany({
+        where: eq(lotteryEntries.status, "PENDING"),
+      });
+
+      if (pendingEntries.length > 0) {
+        // Get unique lottery dates from pending entries that are in the future
+        const futureLotteryDates = [
+          ...new Set(
+            pendingEntries
+              .filter((entry) => entry.lotteryDate >= todayStr)
+              .map((entry) => entry.lotteryDate),
+          ),
+        ];
+
+        if (futureLotteryDates.length > 0) {
+          // Get teesheets for those dates that use THIS config
+          const affectedTeesheets = await db.query.teesheets.findMany({
+            where: and(
+              eq(teesheets.configId, id),
+              inArray(teesheets.date, futureLotteryDates),
+            ),
+          });
+
+          // Get the dates of affected teesheets
+          const affectedDates = affectedTeesheets.map((ts) => ts.date);
+
+          if (affectedDates.length > 0) {
+            // Filter pending entries to only those on affected dates
+            const affectedEntries = pendingEntries.filter(
+              (entry) =>
+                entry.lotteryDate >= todayStr &&
+                affectedDates.includes(entry.lotteryDate),
+            );
+
+            if (affectedEntries.length > 0) {
+              const affectedDatesList = [
+                ...new Set(affectedEntries.map((e) => e.lotteryDate)),
+              ]
+                .sort()
+                .join(", ");
+
+              return {
+                success: false,
+                error: `Cannot change max window duration: ${affectedEntries.length} pending entries exist for upcoming dates (${affectedDatesList}) on teesheets using this config. Process or cancel these lottery entries first.`,
+              };
+            }
+          }
+        }
+      }
     }
 
     // All validations passed, proceed with update

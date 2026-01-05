@@ -23,7 +23,8 @@ import { cn } from "~/lib/utils";
 import {
   lotteryAlgorithmConfigFormSchema,
   type LotteryAlgorithmConfigFormData,
-  type SpeedBonusConfig,
+  type PositionSpeedBonusConfig,
+  type WindowPosition,
 } from "~/server/db/schema";
 
 type TabType = "thresholds" | "bonuses";
@@ -34,15 +35,13 @@ interface LotteryAlgorithmSettingsDialogProps {
   initialData: LotteryAlgorithmConfigFormData;
 }
 
-const WINDOW_LABELS: Record<
-  SpeedBonusConfig["window"],
-  { icon: string; label: string }
-> = {
-  MORNING: { icon: "🌅", label: "Morning" },
-  MIDDAY: { icon: "☀️", label: "Midday" },
-  AFTERNOON: { icon: "🌤️", label: "Afternoon" },
-  EVENING: { icon: "🌆", label: "Evening" },
-};
+const POSITION_LABELS: Record<WindowPosition, { icon: string; label: string }> =
+  {
+    early: { icon: "🌅", label: "Early (first 25%)" },
+    mid_early: { icon: "☀️", label: "Mid-Early (25-50%)" },
+    mid_late: { icon: "🌤️", label: "Mid-Late (50-75%)" },
+    late: { icon: "🌆", label: "Late (last 25%)" },
+  };
 
 export function LotteryAlgorithmSettingsDialog({
   isOpen,
@@ -120,7 +119,7 @@ export function LotteryAlgorithmSettingsDialog({
     const updated = [...speedBonuses];
     if (updated[windowIndex]) {
       updated[windowIndex] = { ...updated[windowIndex], [field]: value };
-      setValue("speedBonuses", updated as SpeedBonusConfig[]);
+      setValue("speedBonuses", updated as PositionSpeedBonusConfig[]);
     }
   };
 
@@ -255,14 +254,14 @@ export function LotteryAlgorithmSettingsDialog({
 
                   <div className="space-y-3">
                     {speedBonuses.map((bonus, index) => {
-                      const windowInfo = WINDOW_LABELS[bonus.window];
+                      const positionInfo = POSITION_LABELS[bonus.position];
                       return (
                         <div
-                          key={bonus.window}
+                          key={bonus.position}
                           className="rounded-lg border bg-gray-50 p-3"
                         >
                           <div className="mb-2 font-medium">
-                            {windowInfo.icon} {windowInfo.label}
+                            {positionInfo.icon} {positionInfo.label}
                           </div>
                           <div className="grid grid-cols-3 gap-3">
                             <div>

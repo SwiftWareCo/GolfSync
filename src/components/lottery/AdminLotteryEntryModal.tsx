@@ -419,31 +419,31 @@ export function AdminLotteryEntryModal({
                   <p className="text-muted-foreground text-sm">
                     Choose the preferred part of the day
                   </p>
-                  <div className="grid gap-3">
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                     {timeWindows.map((window) => (
                       <div
-                        key={window.value}
+                        key={window.index}
                         className={`cursor-pointer rounded-lg border-2 p-3 transition-all ${
-                          preferredWindow === window.value
+                          preferredWindow === window.index.toString()
                             ? "border-org-primary bg-org-primary/5"
                             : "border-gray-200 hover:border-gray-300"
                         }`}
                         onClick={() =>
-                          setValue("preferredWindow", window.value)
+                          setValue("preferredWindow", window.index.toString())
                         }
                       >
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
                             <span className="text-lg">{window.icon}</span>
-                            <div>
-                              <div className="font-medium">{window.label}</div>
-                              <div className="text-sm text-gray-600">
-                                {window.timeRange}
-                              </div>
+                            <div className="text-sm font-medium">
+                              {window.timeRange}
                             </div>
                           </div>
-                          {preferredWindow === window.value && (
-                            <CheckCircle className="text-org-primary h-5 w-5" />
+                          <div className="text-xs text-gray-500">
+                            {window.description}
+                          </div>
+                          {preferredWindow === window.index.toString() && (
+                            <CheckCircle className="text-org-primary h-4 w-4 self-end" />
                           )}
                         </div>
                       </div>
@@ -458,23 +458,25 @@ export function AdminLotteryEntryModal({
                     <p className="text-muted-foreground text-sm">
                       Alternative if preferred time isn't available
                     </p>
-                    <div className="grid gap-2">
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                       {timeWindows
-                        .filter((w) => w.value !== preferredWindow)
+                        .filter(
+                          (w) => w.index.toString() !== preferredWindow,
+                        )
                         .map((window) => (
                           <div
-                            key={window.value}
+                            key={window.index}
                             className={`cursor-pointer rounded-lg border p-2 transition-all ${
-                              alternateWindow === window.value
+                              alternateWindow === window.index.toString()
                                 ? "border-org-primary bg-org-primary/5"
                                 : "border-gray-200 hover:border-gray-300"
                             }`}
                             onClick={() =>
                               setValue(
                                 "alternateWindow",
-                                alternateWindow === window.value
+                                alternateWindow === window.index.toString()
                                   ? ""
-                                  : window.value,
+                                  : window.index.toString(),
                               )
                             }
                           >
@@ -482,10 +484,10 @@ export function AdminLotteryEntryModal({
                               <div className="flex items-center gap-2">
                                 <span>{window.icon}</span>
                                 <span className="text-sm font-medium">
-                                  {window.label}
+                                  {window.timeRange}
                                 </span>
                               </div>
-                              {alternateWindow === window.value && (
+                              {alternateWindow === window.index.toString() && (
                                 <CheckCircle className="text-org-primary h-4 w-4" />
                               )}
                             </div>

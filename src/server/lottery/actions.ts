@@ -11,12 +11,15 @@ import {
   memberSpeedProfiles,
   TeesheetConfigWithBlocks,
 } from "~/server/db/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import type { TimeWindow, DynamicTimeWindowInfo } from "~/lib/lottery-utils";
+import type { DynamicTimeWindowInfo } from "~/lib/lottery-utils";
 import type { LotteryFormInput } from "~/server/db/schema/lottery/lottery-entries.schema";
 import type { TimeblockRestriction } from "~/server/db/schema/restrictions/restrictions.schema";
-import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
+import {
+  calculateDynamicTimeWindows,
+  getWindowPosition,
+} from "~/lib/lottery-utils";
 import { checkLotteryRestrictions } from "~/server/timeblock-restrictions/lottery-restrictions";
 
 // Action result type for consistent return types
@@ -275,7 +278,7 @@ function calculateFairnessScore(
   fairnessMap: Map<number, typeof memberFairnessScores.$inferSelect>,
   speedMap: Map<number, typeof memberSpeedProfiles.$inferSelect>,
   speedBonuses: Array<{
-    window: string;
+    position: string;
     fastBonus: number;
     averageBonus: number;
     slowBonus: number;
@@ -293,25 +296,32 @@ function calculateFairnessScore(
     fairnessScore += fairnessData.fairnessScore || 0;
   }
 
-  // 2. Speed bonus based on preferred window (uses configured values)
+  // 2. Speed bonus based on window position (position-based bonuses)
   const speedData = speedMap.get(memberId);
 
   if (speedData && entry.preferredWindow) {
-    const speedBonus = speedBonuses.find(
-      (bonus) => bonus.window === entry.preferredWindow,
-    );
+    // Parse window index from string (e.g., "0", "1", "2")
+    const windowIndex = parseInt(entry.preferredWindow, 10);
 
-    if (speedBonus) {
-      switch (speedData.speedTier) {
-        case "FAST":
-          fairnessScore += speedBonus.fastBonus;
-          break;
-        case "AVERAGE":
-          fairnessScore += speedBonus.averageBonus;
-          break;
-        case "SLOW":
-          fairnessScore += speedBonus.slowBonus;
-          break;
+    if (!isNaN(windowIndex)) {
+      // Get position category based on window index relative to total windows
+      const position = getWindowPosition(windowIndex, timeWindows.length);
+      const speedBonus = speedBonuses.find(
+        (bonus) => bonus.position === position,
+      );
+
+      if (speedBonus) {
+        switch (speedData.speedTier) {
+          case "FAST":
+            fairnessScore += speedBonus.fastBonus;
+            break;
+          case "AVERAGE":
+            fairnessScore += speedBonus.averageBonus;
+            break;
+          case "SLOW":
+            fairnessScore += speedBonus.slowBonus;
+            break;
+        }
       }
     }
   }
@@ -478,8 +488,8 @@ export async function processLotteryForDate(
       let suitableBlock = allowedBlocks.find((block) =>
         matchesTimePreference(
           block,
-          group.preferredWindow as TimeWindow,
-          group.alternateWindow as TimeWindow | null,
+          group.preferredWindow,
+          group.alternateWindow,
           config,
         ),
       );
@@ -552,8 +562,8 @@ export async function processLotteryForDate(
       // Find available block that matches preferences
       const suitableResult = findSuitableTimeBlock(
         availableBlocksOnly,
-        entry.preferredWindow as TimeWindow,
-        entry.alternateWindow as TimeWindow | null,
+        entry.preferredWindow,
+        entry.alternateWindow,
         config,
         {
           memberId: individualMemberId,
@@ -701,6 +711,8 @@ function filterBlocksByRestrictions(
 
 /**
  * Helper to find a block within preferred/alternate windows
+ * @param preferredWindowIndexStr - Window index as string (e.g., "0", "1", "2")
+ * @param alternateWindowIndexStr - Alternate window index as string, or null
  */
 function findBlockInWindow(
   availableBlocks: Array<{
@@ -708,23 +720,23 @@ function findBlockInWindow(
     startTime: string;
     availableSpots: number;
   }>,
-  preferredWindow: TimeWindow,
-  alternateWindow: TimeWindow | null,
+  preferredWindowIndexStr: string,
+  alternateWindowIndexStr: string | null,
   config: TeesheetConfigWithBlocks,
 ): { id: number; startTime: string; availableSpots: number } | null {
   // Try preferred window
   const preferredMatch = availableBlocks.find(
     (block) =>
-      matchesTimePreference(block, preferredWindow, null, config) &&
+      matchesTimePreference(block, preferredWindowIndexStr, null, config) &&
       block.availableSpots > 0,
   );
   if (preferredMatch) return preferredMatch;
 
   // Then try alternate window
-  if (alternateWindow) {
+  if (alternateWindowIndexStr) {
     const alternateMatch = availableBlocks.find(
       (block) =>
-        matchesTimePreference(block, alternateWindow, null, config) &&
+        matchesTimePreference(block, alternateWindowIndexStr, null, config) &&
         block.availableSpots > 0,
     );
     if (alternateMatch) return alternateMatch;
@@ -736,6 +748,8 @@ function findBlockInWindow(
 /**
  * Helper function to find suitable time block based on preferences
  * IMPORTANT: Does NOT violate restrictions - will return null rather than assign to restricted slot
+ * @param preferredWindowIndexStr - Window index as string (e.g., "0", "1", "2")
+ * @param alternateWindowIndexStr - Alternate window index as string, or null
  */
 function findSuitableTimeBlock(
   availableBlocks: Array<{
@@ -743,8 +757,8 @@ function findSuitableTimeBlock(
     startTime: string;
     availableSpots: number;
   }>,
-  preferredWindow: TimeWindow,
-  alternateWindow: TimeWindow | null,
+  preferredWindowIndexStr: string,
+  alternateWindowIndexStr: string | null,
   config: TeesheetConfigWithBlocks,
   memberInfo: { memberId: number; memberClassId: number },
   bookingDate: string,
@@ -756,8 +770,8 @@ function findSuitableTimeBlock(
   // First try with all blocks (no restriction filtering) to detect if restrictions affect choice
   const unrestrictedBlock = findBlockInWindow(
     availableBlocks,
-    preferredWindow,
-    alternateWindow,
+    preferredWindowIndexStr,
+    alternateWindowIndexStr,
     config,
   );
 
@@ -770,8 +784,8 @@ function findSuitableTimeBlock(
   );
   const restrictedBlock = findBlockInWindow(
     allowedBlocks,
-    preferredWindow,
-    alternateWindow,
+    preferredWindowIndexStr,
+    alternateWindowIndexStr,
     config,
   );
 
@@ -812,11 +826,13 @@ function findSuitableTimeBlock(
 
 /**
  * Helper function to check if a time block matches time preferences using dynamic windows
+ * @param windowIndexStr - Window index as string (e.g., "0", "1", "2")
+ * @param alternateWindowIndexStr - Alternate window index as string, or null
  */
 function matchesTimePreference(
   block: { startTime: string },
-  timeWindow: TimeWindow,
-  alternateWindow: TimeWindow | null,
+  windowIndexStr: string,
+  alternateWindowIndexStr: string | null,
   config: TeesheetConfigWithBlocks,
 ): boolean {
   // Get dynamic time windows from config
@@ -826,9 +842,12 @@ function matchesTimePreference(
   // Convert block time to minutes from midnight for comparison
   const blockMinutes = Math.floor(blockTime / 100) * 60 + (blockTime % 100);
 
+  // Parse preferred window index
+  const windowIndex = parseInt(windowIndexStr, 10);
+
   // Check preferred window
   const preferredWindowInfo = dynamicWindows.find(
-    (w) => w.value === timeWindow,
+    (w) => w.index === windowIndex,
   );
   if (
     preferredWindowInfo &&
@@ -839,9 +858,10 @@ function matchesTimePreference(
   }
 
   // Check alternate window
-  if (alternateWindow) {
+  if (alternateWindowIndexStr) {
+    const alternateIndex = parseInt(alternateWindowIndexStr, 10);
     const alternateWindowInfo = dynamicWindows.find(
-      (w) => w.value === alternateWindow,
+      (w) => w.index === alternateIndex,
     );
     if (
       alternateWindowInfo &&
@@ -899,9 +919,6 @@ export async function createTestLotteryEntries(
 
     const testEntries: any[] = [];
 
-    // Realistic time windows from CSV analysis
-    const timeWindows: TimeWindow[] = ["MORNING", "MIDDAY", "AFTERNOON"];
-
     // Target: Create more realistic high-demand day
     const availableMembers = allMembers.length;
 
@@ -952,24 +969,24 @@ export async function createTestLotteryEntries(
     let memberIndex = 0;
 
     // Helper function to get realistic time preference based on demand
+    // Uses window indexes: "0" (early), "1" (mid), "2" (late)
     const getTimePreference = () => {
       const rand = Math.random();
-      let preferredWindow: TimeWindow = "MORNING";
-      let alternateWindow: TimeWindow | null = null;
+      let preferredWindow = "0"; // Early/morning
+      let alternateWindow: string | null = null;
 
       if (rand < 0.6) {
-        // 60% want high-demand morning times (creates conflicts)
-        preferredWindow = "MORNING";
-        alternateWindow = Math.random() > 0.5 ? "MIDDAY" : null;
+        // 60% want high-demand early times (creates conflicts)
+        preferredWindow = "0";
+        alternateWindow = Math.random() > 0.5 ? "1" : null;
       } else if (rand < 0.8) {
         // 20% want medium-demand times
-        preferredWindow = Math.random() > 0.5 ? "MORNING" : "MIDDAY";
-        alternateWindow =
-          preferredWindow === "MORNING" ? "MIDDAY" : "AFTERNOON";
+        preferredWindow = Math.random() > 0.5 ? "0" : "1";
+        alternateWindow = preferredWindow === "0" ? "1" : "2";
       } else {
-        // 20% want afternoon times (easier to accommodate)
-        preferredWindow = Math.random() > 0.5 ? "MIDDAY" : "AFTERNOON";
-        alternateWindow = "AFTERNOON";
+        // 20% want later times (easier to accommodate)
+        preferredWindow = Math.random() > 0.5 ? "1" : "2";
+        alternateWindow = "2";
       }
 
       return { preferredWindow, alternateWindow };
@@ -1204,8 +1221,8 @@ export async function importLegacyLotteryEntries(
     memberIds: number[];
     organizerId: number;
     lotteryDate: string;
-    preferredWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING";
-    alternateWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING" | null;
+    preferredWindow: string; // Window index as string (e.g., "0", "1", "2")
+    alternateWindow: string | null; // Window index as string, or null
     status: "PENDING" | "ASSIGNED" | "CANCELLED";
     submissionTimestamp: Date;
   }>,
@@ -1440,8 +1457,8 @@ export async function assignFairnessScoresForDate(
             (block) =>
               matchesTimePreference(
                 block,
-                entry.preferredWindow as TimeWindow,
-                entry.alternateWindow as TimeWindow | null,
+                entry.preferredWindow,
+                entry.alternateWindow,
                 config,
               ),
           );
@@ -1585,8 +1602,8 @@ export async function assignFairnessScoresForDate(
             (block) =>
               matchesTimePreference(
                 block,
-                group.preferredWindow as TimeWindow,
-                group.alternateWindow as TimeWindow | null,
+                group.preferredWindow,
+                group.alternateWindow,
                 config,
               ),
           );
@@ -1704,20 +1721,25 @@ export async function assignFairnessScoresForDate(
 
 /**
  * Check if an assigned time matches member's preferences
+ * @param preferredWindow - Window index as string (e.g., "0", "1", "2")
+ * @param alternateWindow - Alternate window index as string, or null
  */
 function checkPreferenceMatch(
   assignedTime: string,
   preferredWindow: string,
   alternateWindow: string | null,
-  timeWindows: any[],
+  timeWindows: DynamicTimeWindowInfo[],
 ): boolean {
   const assignedMinutes = parseInt(assignedTime.replace(":", ""));
   const assignedMinutesFromMidnight =
     Math.floor(assignedMinutes / 100) * 60 + (assignedMinutes % 100);
 
+  // Parse preferred window index
+  const preferredIndex = parseInt(preferredWindow, 10);
+
   // Check preferred window
   const preferredWindowInfo = timeWindows.find(
-    (w) => w.value === preferredWindow,
+    (w) => w.index === preferredIndex,
   );
   if (
     preferredWindowInfo &&
@@ -1729,8 +1751,9 @@ function checkPreferenceMatch(
 
   // Check alternate window
   if (alternateWindow) {
+    const alternateIndex = parseInt(alternateWindow, 10);
     const alternateWindowInfo = timeWindows.find(
-      (w) => w.value === alternateWindow,
+      (w) => w.index === alternateIndex,
     );
     if (
       alternateWindowInfo &&
@@ -1752,7 +1775,7 @@ function checkPreferenceMatchWithRestrictions(
   assignedTime: string,
   preferredWindow: string,
   alternateWindow: string | null,
-  timeWindows: any[],
+  timeWindows: DynamicTimeWindowInfo[],
   wasBlockedByRestrictions = false,
 ): boolean {
   // First check if they got their preferred/alternate window

@@ -61,8 +61,8 @@ export interface ConvertedLotteryEntry {
   memberIds: number[];
   organizerId: number;
   lotteryDate: string;
-  preferredWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING";
-  alternateWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING" | null;
+  preferredWindow: string; // Window index as string (e.g., "0", "1", "2")
+  alternateWindow: string | null; // Window index as string, or null
   status: "PENDING" | "ASSIGNED" | "CANCELLED";
   submissionTimestamp: Date;
   playerMatches: PlayerMatchResult[];
@@ -103,16 +103,17 @@ export function parseTimeToMinutes(time: string): number | null {
 }
 
 /**
- * Convert time in minutes to the appropriate time window
+ * Convert time in minutes to the appropriate time window index
+ * Returns window index as string (e.g., "0", "1", "2")
  */
 export function convertTimeToWindow(
   timeMinutes: number,
   windows: DynamicTimeWindowInfo[],
-): "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING" {
+): string {
   // Find the window that contains this time
   for (const window of windows) {
     if (timeMinutes >= window.startMinutes && timeMinutes < window.endMinutes) {
-      return window.value;
+      return window.index.toString();
     }
   }
 
@@ -122,13 +123,13 @@ export function convertTimeToWindow(
     const lastWindow = windows[windows.length - 1]!;
 
     if (timeMinutes < firstWindow.startMinutes) {
-      return firstWindow.value;
+      return firstWindow.index.toString();
     }
-    return lastWindow.value;
+    return lastWindow.index.toString();
   }
 
-  // Ultimate fallback
-  return "MORNING";
+  // Ultimate fallback - first window
+  return "0";
 }
 
 /**
@@ -297,11 +298,10 @@ export function convertLegacyEntry(
     ? convertTimeToWindow(desiredMinutes, windows)
     : earliestMinutes
       ? convertTimeToWindow(earliestMinutes, windows)
-      : "MORNING";
+      : "0"; // Default to first window
 
   // Determine alternate window (if latest time is in a different window)
-  let alternateWindow: "MORNING" | "MIDDAY" | "AFTERNOON" | "EVENING" | null =
-    null;
+  let alternateWindow: string | null = null;
   if (latestMinutes) {
     const latestWindow = convertTimeToWindow(latestMinutes, windows);
     if (latestWindow !== preferredWindow) {

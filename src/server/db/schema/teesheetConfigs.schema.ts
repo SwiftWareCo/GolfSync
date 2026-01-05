@@ -25,6 +25,10 @@ export const teesheetConfigs = createTable(
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     name: varchar("name", { length: 50 }).notNull(),
     isActive: boolean("is_active").notNull().default(true),
+    // Lottery: max duration for auto-generated time windows (default 60 = 1 hour)
+    maxWindowDurationMinutes: integer("max_window_duration_minutes")
+      .default(60)
+      .notNull(),
     // Scheduling: when this config applies
     daysOfWeek: integer("days_of_week").array(), // [1,2,3,4,5] for Mon-Fri, null = always
     startDate: date("start_date"), // null = no start limit

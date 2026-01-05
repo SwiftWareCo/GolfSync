@@ -4,7 +4,7 @@ import { db } from "~/server/db";
 import { eq } from "drizzle-orm";
 import {
   lotteryAlgorithmConfig,
-  DEFAULT_SPEED_BONUSES,
+  DEFAULT_POSITION_BONUSES,
   type LotteryAlgorithmConfigFormData,
 } from "~/server/db/schema";
 
@@ -29,6 +29,6 @@ export async function getAlgorithmConfig(): Promise<LotteryAlgorithmConfigFormDa
   return {
     fastThresholdMinutes: 235,
     averageThresholdMinutes: 245,
-    speedBonuses: DEFAULT_SPEED_BONUSES,
+    speedBonuses: DEFAULT_POSITION_BONUSES,
   };
 }

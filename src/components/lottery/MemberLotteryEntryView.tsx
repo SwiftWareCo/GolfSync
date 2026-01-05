@@ -118,13 +118,14 @@ export function MemberLotteryEntryView({
   const timeWindows = calculateDynamicTimeWindows(config);
 
   // Helper function to get window display text
-  const getWindowDisplayText = (windowValue: string): string => {
-    const window = timeWindows.find((w) => w.value === windowValue);
+  const getWindowDisplayText = (windowIndexStr: string): string => {
+    const windowIndex = parseInt(windowIndexStr, 10);
+    const window = timeWindows.find((w) => w.index === windowIndex);
     if (window) {
-      return `${window.label} (${window.timeRange})`;
+      return window.timeRange;
     }
-    // Fallback to window value if config is missing or window not found
-    return windowValue;
+    // Fallback to window index if config is missing or window not found
+    return `Window ${windowIndexStr}`;
   };
 
   const statusConfig =
