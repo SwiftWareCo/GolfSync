@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Timer, Users, Flag, Clock, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Timer, Users, Flag, Clock, ChevronDown, ChevronUp, TrendingUp } from "lucide-react";
 import { useMemberRounds } from "~/services/member-rounds/hooks";
 import { PaceOfPlayStatus } from "~/components/pace-of-play/PaceOfPlayStatus";
 import { PaceTimeline } from "./PaceTimeline";
@@ -40,6 +40,8 @@ export function RoundsPageClient({ initialData }: RoundsPageClientProps) {
       ) : (
         <NoActiveRoundBanner />
       )}
+
+      <AveragePaceStats history={history} />
 
       <HistorySection history={history} />
     </div>
@@ -160,6 +162,188 @@ function NoActiveRoundBanner() {
             time.
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function AveragePaceStats({
+  history,
+}: {
+  history: MemberPaceOfPlayHistoryItem[];
+}) {
+  const stats = useMemo(() => {
+    // Filter to completed rounds (have both start and finish times)
+    const completedRounds = history.filter(
+      (round) => round.actualStartTime && round.finishTime,
+    );
+
+    if (completedRounds.length === 0) {
+      return null;
+    }
+
+    // Calculate average duration
+    let totalDurationMs = 0;
+    const durations: number[] = [];
+
+    for (const round of completedRounds) {
+      const start = new Date(round.actualStartTime!).getTime();
+      const finish = new Date(round.finishTime!).getTime();
+      const durationMs = finish - start;
+      totalDurationMs += durationMs;
+      durations.push(durationMs);
+    }
+
+    const avgDurationMs = totalDurationMs / completedRounds.length;
+    const avgHours = Math.floor(avgDurationMs / (1000 * 60 * 60));
+    const avgMinutes = Math.floor(
+      (avgDurationMs % (1000 * 60 * 60)) / (1000 * 60),
+    );
+
+    // Calculate pace distribution by status
+    const statusCounts = {
+      early: 0,
+      onTime: 0,
+      late: 0,
+    };
+
+    for (const round of completedRounds) {
+      const status = round.status;
+      if (status === "completed_early") {
+        statusCounts.early++;
+      } else if (status === "completed_on_time") {
+        statusCounts.onTime++;
+      } else if (status === "completed_late") {
+        statusCounts.late++;
+      }
+    }
+
+    const totalWithStatus =
+      statusCounts.early + statusCounts.onTime + statusCounts.late;
+
+    return {
+      completedCount: completedRounds.length,
+      avgDuration: `${avgHours}h ${avgMinutes}m`,
+      avgDurationMs,
+      paceDistribution:
+        totalWithStatus > 0
+          ? {
+              early: Math.round((statusCounts.early / totalWithStatus) * 100),
+              onTime: Math.round(
+                (statusCounts.onTime / totalWithStatus) * 100,
+              ),
+              late: Math.round((statusCounts.late / totalWithStatus) * 100),
+            }
+          : null,
+      rawCounts: statusCounts,
+    };
+  }, [history]);
+
+  if (!stats) {
+    return null;
+  }
+
+  // Determine overall pace status based on average duration
+  // 4 hours = 240 minutes = 14,400,000 ms
+  const fourHoursMs = 4 * 60 * 60 * 1000;
+  const toleranceMs = 10 * 60 * 1000; // 10 minute tolerance
+  let overallStatus: "early" | "on-time" | "late" = "on-time";
+  if (stats.avgDurationMs < fourHoursMs - toleranceMs) {
+    overallStatus = "early";
+  } else if (stats.avgDurationMs > fourHoursMs + toleranceMs) {
+    overallStatus = "late";
+  }
+
+  return (
+    <div className="rounded-lg bg-white p-6 shadow-md">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+          <TrendingUp className="h-5 w-5 text-blue-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">Your Pace Stats</h2>
+          <p className="text-sm text-gray-500">
+            Based on {stats.completedCount} completed round
+            {stats.completedCount !== 1 ? "s" : ""}
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {/* Average Duration */}
+        <div className="rounded-lg bg-gray-50 p-4">
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-gray-500" />
+            <p className="text-sm text-gray-500">Avg. Duration</p>
+          </div>
+          <p className="mt-1 text-2xl font-bold text-gray-900">
+            {stats.avgDuration}
+          </p>
+          <span
+            className={cn(
+              "mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium",
+              overallStatus === "early" &&
+                "bg-green-100 text-green-700",
+              overallStatus === "on-time" &&
+                "bg-blue-100 text-blue-700",
+              overallStatus === "late" &&
+                "bg-red-100 text-red-700",
+            )}
+          >
+            {overallStatus === "early"
+              ? "Under 4 hrs"
+              : overallStatus === "late"
+                ? "Over 4 hrs"
+                : "~4 hrs"}
+          </span>
+        </div>
+
+        {/* Pace Distribution */}
+        {stats.paceDistribution && (
+          <div className="col-span-2 rounded-lg bg-gray-50 p-4">
+            <p className="mb-2 text-sm text-gray-500">Pace Distribution</p>
+            <div className="flex h-3 w-full overflow-hidden rounded-full">
+              {stats.paceDistribution.early > 0 && (
+                <div
+                  className="bg-green-500"
+                  style={{ width: `${stats.paceDistribution.early}%` }}
+                />
+              )}
+              {stats.paceDistribution.onTime > 0 && (
+                <div
+                  className="bg-blue-500"
+                  style={{ width: `${stats.paceDistribution.onTime}%` }}
+                />
+              )}
+              {stats.paceDistribution.late > 0 && (
+                <div
+                  className="bg-red-500"
+                  style={{ width: `${stats.paceDistribution.late}%` }}
+                />
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-green-500" />
+                <span className="text-gray-600">
+                  Early ({stats.rawCounts.early})
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-blue-500" />
+                <span className="text-gray-600">
+                  On Time ({stats.rawCounts.onTime})
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="h-2 w-2 rounded-full bg-red-500" />
+                <span className="text-gray-600">
+                  Late ({stats.rawCounts.late})
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
