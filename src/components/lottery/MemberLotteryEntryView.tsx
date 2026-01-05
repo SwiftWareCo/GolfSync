@@ -52,7 +52,6 @@ interface LotteryEntryViewProps {
   lotteryDate: string;
   entry: LotteryEntry;
   entryType: "individual" | "group" | "group_member";
-  member: ClientMember;
   config: TeesheetConfigWithBlocks;
   onEdit?: () => void;
   onCancel?: () => void;
@@ -106,7 +105,6 @@ export function MemberLotteryEntryView({
   lotteryDate,
   entry,
   entryType,
-  member,
   config,
   onEdit,
   onCancel,
@@ -238,6 +236,9 @@ export function MemberLotteryEntryView({
                       <Badge variant="outline">
                         {entry.memberIds.length} member
                         {entry.memberIds.length !== 1 ? "s" : ""}
+                        {entry.guestIds.length > 0 || entry.guestFillCount > 0
+                          ? ` + ${entry.guestIds.length + entry.guestFillCount} guests`
+                          : ""}
                       </Badge>
                     </div>
                   </div>

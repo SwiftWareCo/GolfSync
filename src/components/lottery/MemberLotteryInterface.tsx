@@ -30,6 +30,11 @@ interface LotteryInterfaceProps {
     message: string;
     violations: any[];
   } | null;
+  initialWindowRestrictions?: Array<{
+    windowIndex: number;
+    isFullyRestricted: boolean;
+    reasons: string[];
+  }>;
 }
 
 export function LotteryInterface({
@@ -40,6 +45,7 @@ export function LotteryInterface({
   error = null,
   onDataChange,
   lotteryRestrictionViolation,
+  initialWindowRestrictions = [],
 }: LotteryInterfaceProps) {
   // Initialize showForm based on whether there's an existing entry
   // If entry exists, start in view mode (showForm = false)
@@ -90,7 +96,6 @@ export function LotteryInterface({
         lotteryDate={lotteryDate}
         entry={lotteryEntry.entry}
         entryType={lotteryEntry.type}
-        member={member}
         config={config}
         onEdit={lotteryEntry.type !== "group_member" ? handleEdit : undefined}
         onCancel={handleCancel}
@@ -117,6 +122,7 @@ export function LotteryInterface({
             lotteryEntry?.type === "individual" ? lotteryEntry.entry : null
           }
           onSuccess={handleFormSuccess}
+          initialWindowRestrictions={initialWindowRestrictions}
         />
       </div>
     );
@@ -149,6 +155,7 @@ export function LotteryInterface({
       config={config}
       existingEntry={null}
       onSuccess={handleFormSuccess}
+      initialWindowRestrictions={initialWindowRestrictions}
     />
   );
 }

@@ -41,6 +41,11 @@ interface LotteryViewProps {
     message: string;
     violations: any[];
   } | null;
+  initialWindowRestrictions?: Array<{
+    windowIndex: number;
+    isFullyRestricted: boolean;
+    reasons: string[];
+  }>;
 }
 
 export function LotteryView({
@@ -57,6 +62,7 @@ export function LotteryView({
   onDateChange,
   onDataChange,
   lotteryRestrictionViolation,
+  initialWindowRestrictions = [],
 }: LotteryViewProps) {
   return (
     <div className="space-y-6 pb-6">
@@ -81,6 +87,7 @@ export function LotteryView({
         config={config}
         onDataChange={onDataChange}
         lotteryRestrictionViolation={lotteryRestrictionViolation}
+        initialWindowRestrictions={initialWindowRestrictions}
       />
 
       {/* Date Picker Dialog */}

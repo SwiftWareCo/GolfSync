@@ -1,6 +1,8 @@
 import { getMemberTeesheetDataWithRestrictions } from "~/server/members-teesheet-client/data";
 import { getLotteryEntryData } from "~/server/lottery/data";
 import { getLotterySettings } from "~/server/lottery/lottery-settings-data";
+import { checkLotteryTimeWindowRestrictions } from "~/server/timeblock-restrictions/actions";
+import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import TeesheetClient from "../../../../components/member-teesheet-client/TeesheetClient";
 import { auth } from "@clerk/nextjs/server";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
@@ -67,6 +69,34 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
     lotteryRestrictionViolation,
   } = await getMemberTeesheetDataWithRestrictions(date, userId as string);
 
+  // Pre-fetch initial window restrictions for the logged-in member (server-side)
+  let initialWindowRestrictions: Array<{
+    windowIndex: number;
+    isFullyRestricted: boolean;
+    reasons: string[];
+  }> = [];
+
+  if (isLotteryEligible && config && member) {
+    try {
+      const timeWindows = calculateDynamicTimeWindows(config);
+      const result = await checkLotteryTimeWindowRestrictions({
+        lotteryDate: dateString,
+        memberClassIds: [member.classId],
+        hasGuestsOrGuestFills: false, // Initial state - no guests yet
+        timeWindows: timeWindows.map((w) => ({
+          index: w.index,
+          startTime: `${String(Math.floor(w.startMinutes / 60)).padStart(2, "0")}:${String(w.startMinutes % 60).padStart(2, "0")}`,
+          endTime: `${String(Math.floor(w.endMinutes / 60)).padStart(2, "0")}:${String(w.endMinutes % 60).padStart(2, "0")}`,
+        })),
+      });
+      if (result.success) {
+        initialWindowRestrictions = result.restrictions;
+      }
+    } catch (error) {
+      console.error("Error fetching initial window restrictions:", error);
+    }
+  }
+
   return (
     <TeesheetClient
       teesheet={teesheet}
@@ -78,6 +108,7 @@ export default async function MemberTeesheetPage({ searchParams }: PageProps) {
       isLotteryEligible={isLotteryEligible}
       lotterySettings={lotterySettings}
       lotteryRestrictionViolation={lotteryRestrictionViolation}
+      initialWindowRestrictions={initialWindowRestrictions}
     />
   );
 }

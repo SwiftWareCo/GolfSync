@@ -189,6 +189,7 @@ export default function TeesheetClient({
   isLotteryEligible = false,
   lotterySettings = null,
   lotteryRestrictionViolation = null,
+  initialWindowRestrictions = [],
 }: {
   teesheet: any;
   config: any;
@@ -203,6 +204,11 @@ export default function TeesheetClient({
     message: string;
     violations: any[];
   } | null;
+  initialWindowRestrictions?: Array<{
+    windowIndex: number;
+    isFullyRestricted: boolean;
+    reasons: string[];
+  }>;
 }) {
   const [state, dispatch] = useReducer(bookingReducer, initialState);
   const {
@@ -455,11 +461,14 @@ export default function TeesheetClient({
   }, []);
 
   // Edit booking handler
-  const handleEditBooking = useCallback((timeBlockId: number) => {
-    dispatch({ type: "SHOW_EDIT_MODAL", payload: timeBlockId });
-    // Refresh data in background to get latest capacity
-    router.refresh();
-  }, [router]);
+  const handleEditBooking = useCallback(
+    (timeBlockId: number) => {
+      dispatch({ type: "SHOW_EDIT_MODAL", payload: timeBlockId });
+      // Refresh data in background to get latest capacity
+      router.refresh();
+    },
+    [router],
+  );
 
   // Check for booking restrictions
   const checkBookingRestrictions = useCallback(
@@ -630,6 +639,7 @@ export default function TeesheetClient({
           onDataChange={handleDataChange}
           onDateChange={handleDateChange}
           lotteryRestrictionViolation={lotteryRestrictionViolation}
+          initialWindowRestrictions={initialWindowRestrictions}
         />
       )}
 

@@ -15,8 +15,6 @@ import {
 import { z } from "zod";
 import { createTable } from "../../helpers";
 
-
-
 // Consolidated lottery entries table (individual + group)
 // Type Detection: INDIVIDUAL if memberIds.length === 1
 //                 GROUP if memberIds.length > 1
@@ -26,6 +24,8 @@ export const lotteryEntries = createTable(
   {
     id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
     memberIds: integer("member_ids").array().notNull(), // ALL members including organizer
+    guestIds: integer("guest_ids").array().notNull().default([]), // Guest IDs in this entry
+    guestFillCount: integer("guest_fill_count").notNull().default(0), // Number of guest fill placeholders
     organizerId: integer("organizer_id").notNull(), // Always set - the entry creator
     lotteryDate: date("lottery_date").notNull(),
     preferredWindow: varchar("preferred_window", { length: 20 }).notNull(), // MORNING, MIDDAY, AFTERNOON, EVENING
@@ -48,7 +48,10 @@ export const lotteryEntries = createTable(
   (table) => [
     index("lottery_entries_lottery_date_idx").on(table.lotteryDate),
     index("lottery_entries_status_idx").on(table.status),
-    index("lottery_entries_date_status_idx").on(table.lotteryDate, table.status),
+    index("lottery_entries_date_status_idx").on(
+      table.lotteryDate,
+      table.status,
+    ),
     index("lottery_entries_organizer_id_idx").on(table.organizerId),
     index("lottery_entries_organizer_date_idx").on(
       table.organizerId,
@@ -71,10 +74,14 @@ export const lotteryEntryUpdateSchema = createUpdateSchema(lotteryEntries);
 // This combines lottery entry data with fill objects for form submission
 // Note: Form uses simple objects, server transforms to add relatedType and relatedId
 export const lotteryEntryWithFillsSchema = lotteryEntriesInsertSchema.extend({
-  fills: z.array(z.object({
-    fillType: z.string(),
-    customName: z.string().optional(),
-  })).optional(),
+  fills: z
+    .array(
+      z.object({
+        fillType: z.string(),
+        customName: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 // Relations

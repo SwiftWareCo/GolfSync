@@ -581,3 +581,171 @@ export async function checkTimeblockRestrictionsAction(params: {
     return { success: false, error: "Failed to check restrictions" };
   }
 }
+
+/**
+ * Check lottery time window restrictions for the form UI
+ * Used by the lottery entry form to show which windows are restricted based on party composition
+ * A window is fully restricted only if ALL times within it are blocked
+ */
+export async function checkLotteryTimeWindowRestrictions(params: {
+  lotteryDate: string;
+  memberClassIds: number[]; // Member class IDs of all members in party
+  hasGuestsOrGuestFills: boolean;
+  timeWindows: Array<{ index: number; startTime: string; endTime: string }>;
+}): Promise<{
+  success: boolean;
+  restrictions: Array<{
+    windowIndex: number;
+    isFullyRestricted: boolean;
+    partiallyRestricted: boolean;
+    reasons: string[];
+  }>;
+}> {
+  try {
+    const { lotteryDate, memberClassIds, hasGuestsOrGuestFills, timeWindows } =
+      params;
+
+    // Parse date for day of week
+    const dateParts = lotteryDate.split("-");
+    if (dateParts.length !== 3) {
+      return { success: false, restrictions: [] };
+    }
+    const year = parseInt(dateParts[0] || "0", 10);
+    const month = parseInt(dateParts[1] || "0", 10) - 1;
+    const day = parseInt(dateParts[2] || "0", 10);
+    const localDate = new Date(year, month, day);
+    const dayOfWeek = localDate.getDay();
+
+    // Fetch all applicable restrictions once
+    const allRestrictions = await db.query.timeblockRestrictions.findMany({
+      where: and(
+        eq(timeblockRestrictions.isActive, true),
+        eq(timeblockRestrictions.restrictionType, "TIME"),
+      ),
+    });
+
+    const memberClassRestrictions = allRestrictions.filter(
+      (r) => r.restrictionCategory === "MEMBER_CLASS",
+    );
+    const guestRestrictions = allRestrictions.filter(
+      (r) => r.restrictionCategory === "GUEST",
+    );
+
+    const results: Array<{
+      windowIndex: number;
+      isFullyRestricted: boolean;
+      partiallyRestricted: boolean;
+      reasons: string[];
+    }> = [];
+
+    // Check each time window
+    for (const window of timeWindows) {
+      const reasons: string[] = [];
+      let windowStartBlocked = false;
+      let windowEndBlocked = false;
+
+      // Check MEMBER_CLASS restrictions for each member class in party
+      for (const memberClassId of memberClassIds) {
+        for (const restriction of memberClassRestrictions) {
+          // Check if restriction applies to this member class
+          const appliesToClass =
+            !restriction.memberClassIds?.length ||
+            restriction.memberClassIds.includes(memberClassId);
+          if (!appliesToClass) continue;
+
+          // Check day of week
+          const appliesToDay =
+            !restriction.daysOfWeek?.length ||
+            restriction.daysOfWeek.includes(dayOfWeek);
+          if (!appliesToDay) continue;
+
+          // Check date range
+          let dateRangeApplies = true;
+          if (restriction.startDate && restriction.endDate) {
+            dateRangeApplies =
+              lotteryDate >= restriction.startDate &&
+              lotteryDate <= restriction.endDate;
+          }
+          if (!dateRangeApplies) continue;
+
+          // Check if window start or end falls within restriction
+          const restrictionStart = restriction.startTime || "00:00";
+          const restrictionEnd = restriction.endTime || "23:59";
+
+          if (
+            window.startTime >= restrictionStart &&
+            window.startTime <= restrictionEnd
+          ) {
+            windowStartBlocked = true;
+            if (!reasons.includes(restriction.name)) {
+              reasons.push(restriction.name);
+            }
+          }
+          if (
+            window.endTime >= restrictionStart &&
+            window.endTime <= restrictionEnd
+          ) {
+            windowEndBlocked = true;
+          }
+        }
+      }
+
+      // Check GUEST restrictions if party has guests/fills
+      if (hasGuestsOrGuestFills) {
+        for (const restriction of guestRestrictions) {
+          // Check day of week
+          const appliesToDay =
+            !restriction.daysOfWeek?.length ||
+            restriction.daysOfWeek.includes(dayOfWeek);
+          if (!appliesToDay) continue;
+
+          // Check date range
+          let dateRangeApplies = true;
+          if (restriction.startDate && restriction.endDate) {
+            dateRangeApplies =
+              lotteryDate >= restriction.startDate &&
+              lotteryDate <= restriction.endDate;
+          }
+          if (!dateRangeApplies) continue;
+
+          // Check if window times fall within restriction
+          const restrictionStart = restriction.startTime || "00:00";
+          const restrictionEnd = restriction.endTime || "23:59";
+
+          if (
+            window.startTime >= restrictionStart &&
+            window.startTime <= restrictionEnd
+          ) {
+            windowStartBlocked = true;
+            if (!reasons.includes(restriction.name)) {
+              reasons.push(restriction.name);
+            }
+          }
+          if (
+            window.endTime >= restrictionStart &&
+            window.endTime <= restrictionEnd
+          ) {
+            windowEndBlocked = true;
+          }
+        }
+      }
+
+      // Window is fully restricted if BOTH start and end are blocked
+      // Partially restricted if only start is blocked (end is available)
+      const isFullyRestricted = windowStartBlocked && windowEndBlocked;
+      const partiallyRestricted = windowStartBlocked && !windowEndBlocked;
+
+      results.push({
+        windowIndex: window.index,
+        isFullyRestricted,
+        partiallyRestricted,
+        reasons,
+      });
+    }
+
+    return { success: true, restrictions: results };
+  } catch (error) {
+    console.error("Error checking lottery time window restrictions:", error);
+    return { success: false, restrictions: [] };
+  }
+}

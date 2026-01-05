@@ -45,17 +45,30 @@ export async function submitLotteryEntry(
   }
 
   // Always construct memberIds with organizer first, then additional members
-  const allMemberIds = [member.id, ...(data.memberIds || [])];
+  // Filter out the organizer's id from the additional members to avoid duplicates
+  const additionalMembers = (data.memberIds || []).filter(
+    (id) => id !== member.id,
+  );
+  const allMemberIds = [member.id, ...additionalMembers];
 
   // Check if ANY member already has an entry for this date
   const existingEntries = await db.query.lotteryEntries.findMany({
     where: eq(lotteryEntries.lotteryDate, data.lotteryDate),
   });
 
-  // Validate: No member in allMemberIds can already have an entry on this date
+  // Check if THIS user (as organizer) already has an entry - this is an EDIT case
+  const userExistingEntry = existingEntries.find(
+    (entry) => entry.organizerId === member.id,
+  );
+
+  // For other members (not the organizer), validate they don't have entries elsewhere
   for (const memberId of allMemberIds) {
-    const memberHasEntry = existingEntries.some((entry) =>
-      entry.memberIds.includes(memberId),
+    if (memberId === member.id) continue; // Skip organizer check - handled separately
+
+    const memberHasEntry = existingEntries.some(
+      (entry) =>
+        entry.memberIds.includes(memberId) &&
+        entry.id !== userExistingEntry?.id,
     );
     if (memberHasEntry) {
       // Find member details for error message
@@ -83,23 +96,28 @@ export async function submitLotteryEntry(
     };
   }
 
-  // Check lottery restrictions before allowing submission
-  const restrictionCheck = await checkLotteryRestrictions(
-    member.id,
-    member.classId,
-    data.lotteryDate,
-  );
+  // Only check lottery restrictions for NEW entries (not edits)
+  if (!userExistingEntry) {
+    const restrictionCheck = await checkLotteryRestrictions(
+      member.id,
+      member.classId,
+      data.lotteryDate,
+    );
 
-  if (restrictionCheck.hasViolations) {
-    return {
-      success: false,
-      error: restrictionCheck.preferredReason || "Lottery entry limit exceeded",
-    };
+    if (restrictionCheck.hasViolations) {
+      return {
+        success: false,
+        error:
+          restrictionCheck.preferredReason || "Lottery entry limit exceeded",
+      };
+    }
   }
 
   // Create lottery entry - organizerId is ALWAYS set to the creator
   const entryData = {
     memberIds: allMemberIds,
+    guestIds: data.guestIds || [],
+    guestFillCount: data.guestFillCount || 0,
     organizerId: member.id, // Always set - the entry creator
     lotteryDate: data.lotteryDate,
     preferredWindow: data.preferredWindow,
@@ -107,24 +125,44 @@ export async function submitLotteryEntry(
     status: "PENDING" as const,
   };
 
-  const [newEntry] = await db
-    .insert(lotteryEntries)
-    .values(entryData)
-    .returning();
+  let resultEntry;
 
-  // Insert fills if provided (for both individual and group entries)
-  if (data.fills && data.fills.length > 0 && newEntry) {
-    await db.insert(fills).values(
-      data.fills.map((fill) => ({
-        relatedType: "lottery_entry" as const,
-        relatedId: newEntry.id,
-        fillType: fill.fillType,
-        customName: fill.customName || null,
-      })),
-    );
+  if (userExistingEntry) {
+    // UPDATE existing entry
+    const [updated] = await db
+      .update(lotteryEntries)
+      .set({
+        memberIds: entryData.memberIds,
+        guestIds: entryData.guestIds,
+        guestFillCount: entryData.guestFillCount,
+        preferredWindow: entryData.preferredWindow,
+        alternateWindow: entryData.alternateWindow,
+      })
+      .where(eq(lotteryEntries.id, userExistingEntry.id))
+      .returning();
+    resultEntry = updated;
+  } else {
+    // CREATE new entry
+    const [newEntry] = await db
+      .insert(lotteryEntries)
+      .values(entryData)
+      .returning();
+    resultEntry = newEntry;
+
+    // Insert fills if provided (for both individual and group entries)
+    if (data.fills && data.fills.length > 0 && newEntry) {
+      await db.insert(fills).values(
+        data.fills.map((fill) => ({
+          relatedType: "lottery_entry" as const,
+          relatedId: newEntry.id,
+          fillType: fill.fillType,
+          customName: fill.customName || null,
+        })),
+      );
+    }
   }
 
-  return { success: true, data: newEntry };
+  return { success: true, data: resultEntry };
 }
 
 /**
@@ -463,11 +501,19 @@ export async function processLotteryForDate(
       if (group.status !== "PENDING") continue;
 
       const groupSize = group.memberIds.length;
+      // Check if entry has guests or guest fills
+      const hasGuestsOrGuestFills =
+        !!(group.guestIds && group.guestIds.length > 0) ||
+        !!(group.guestFillCount && group.guestFillCount > 0);
 
       // Check restrictions for ALL group members, not just leader
       const allowedBlocks = availableBlocksOnly.filter((block) => {
-        // Block must have enough spots
-        if (block.availableSpots < groupSize) return false;
+        // Block must have enough spots (including guests/fills)
+        const totalPartySize =
+          groupSize +
+          (group.guestIds?.length ?? 0) +
+          (group.guestFillCount ?? 0);
+        if (block.availableSpots < totalPartySize) return false;
 
         // Block must be allowed for ALL group members
         return group.members.every((member) => {
@@ -479,6 +525,7 @@ export async function processLotteryForDate(
             },
             date,
             timeRestrictions,
+            hasGuestsOrGuestFills,
           );
           return memberAllowedBlocks.length > 0;
         });
@@ -559,6 +606,11 @@ export async function processLotteryForDate(
 
       if (!memberData) continue;
 
+      // Check if entry has guests or guest fills
+      const hasGuestsOrGuestFills =
+        !!(entry.guestIds && entry.guestIds.length > 0) ||
+        !!(entry.guestFillCount && entry.guestFillCount > 0);
+
       // Find available block that matches preferences
       const suitableResult = findSuitableTimeBlock(
         availableBlocksOnly,
@@ -571,6 +623,7 @@ export async function processLotteryForDate(
         },
         date,
         timeRestrictions,
+        hasGuestsOrGuestFills,
       );
 
       if (suitableResult.block && suitableResult.block.availableSpots > 0) {
@@ -651,56 +704,98 @@ export async function processLotteryForDate(
 }
 
 /**
- * Filter timeblocks by member class TIME restrictions
+ * Filter timeblocks by member class TIME restrictions and GUEST restrictions
+ * @param hasGuestsOrGuestFills - If true, also check GUEST category restrictions
  */
 function filterBlocksByRestrictions(
   blocks: Array<{ id: number; startTime: string; availableSpots: number }>,
   memberInfo: { memberId: number; memberClassId: number },
   bookingDate: string,
   timeRestrictions: TimeblockRestriction[],
+  hasGuestsOrGuestFills: boolean = false,
 ): Array<{ id: number; startTime: string; availableSpots: number }> {
+  // Parse date once for day of week check
+  const bookingDateObj = new Date(bookingDate);
+  const dayOfWeek = bookingDateObj.getDay();
+
   return blocks.filter((block) => {
+    const blockTime = block.startTime; // "HH:MM"
+
     // Check each time restriction
     for (const restriction of timeRestrictions) {
-      if (restriction.restrictionCategory !== "MEMBER_CLASS") continue;
-      if (restriction.restrictionType !== "TIME") continue;
-      if (!restriction.isActive) continue;
+      // Check MEMBER_CLASS restrictions
+      if (restriction.restrictionCategory === "MEMBER_CLASS") {
+        if (restriction.restrictionType !== "TIME") continue;
+        if (!restriction.isActive) continue;
 
-      // Check if restriction applies to this member class
-      const appliesToMemberClass =
-        !restriction.memberClassIds?.length ||
-        restriction.memberClassIds.includes(memberInfo.memberClassId);
+        // Check if restriction applies to this member class
+        const appliesToMemberClass =
+          !restriction.memberClassIds?.length ||
+          restriction.memberClassIds.includes(memberInfo.memberClassId);
 
-      if (!appliesToMemberClass) continue;
+        if (!appliesToMemberClass) continue;
 
-      // Check day of week
-      const bookingDateObj = new Date(bookingDate);
-      const dayOfWeek = bookingDateObj.getDay();
-      const appliesToDay =
-        !restriction.daysOfWeek?.length ||
-        restriction.daysOfWeek.includes(dayOfWeek);
+        // Check day of week
+        const appliesToDay =
+          !restriction.daysOfWeek?.length ||
+          restriction.daysOfWeek.includes(dayOfWeek);
 
-      if (!appliesToDay) continue;
+        if (!appliesToDay) continue;
 
-      // Check time range
-      const blockTime = block.startTime; // "HH:MM"
-      const withinTimeRange =
-        blockTime >= (restriction.startTime || "00:00") &&
-        blockTime <= (restriction.endTime || "23:59");
+        // Check time range
+        const withinTimeRange =
+          blockTime >= (restriction.startTime || "00:00") &&
+          blockTime <= (restriction.endTime || "23:59");
 
-      if (withinTimeRange) {
-        // Check date range if applicable
-        if (restriction.startDate && restriction.endDate) {
-          const startDateStr = restriction.startDate;
-          const endDateStr = restriction.endDate;
-          const withinDateRange =
-            bookingDate >= startDateStr && bookingDate <= endDateStr;
+        if (withinTimeRange) {
+          // Check date range if applicable
+          if (restriction.startDate && restriction.endDate) {
+            const withinDateRange =
+              bookingDate >= restriction.startDate &&
+              bookingDate <= restriction.endDate;
 
-          if (withinDateRange) {
-            return false; // Block this timeblock
+            if (withinDateRange) {
+              return false; // Block this timeblock
+            }
+          } else {
+            return false; // Block this timeblock (no date range = always applies)
           }
-        } else {
-          return false; // Block this timeblock (no date range = always applies)
+        }
+      }
+
+      // Check GUEST restrictions if entry has guests or guest fills
+      if (
+        hasGuestsOrGuestFills &&
+        restriction.restrictionCategory === "GUEST"
+      ) {
+        if (restriction.restrictionType !== "TIME") continue;
+        if (!restriction.isActive) continue;
+
+        // Check day of week
+        const appliesToDay =
+          !restriction.daysOfWeek?.length ||
+          restriction.daysOfWeek.includes(dayOfWeek);
+
+        if (!appliesToDay) continue;
+
+        // Check time range
+        const withinTimeRange =
+          blockTime >= (restriction.startTime || "00:00") &&
+          blockTime <= (restriction.endTime || "23:59");
+
+        if (withinTimeRange) {
+          // Check date range if applicable
+          if (restriction.startDate && restriction.endDate) {
+            const withinDateRange =
+              bookingDate >= restriction.startDate &&
+              bookingDate <= restriction.endDate;
+
+            if (withinDateRange) {
+              return false; // Block this timeblock for guests
+            }
+          } else {
+            return false; // Block this timeblock for guests (no date range = always applies)
+          }
         }
       }
     }
@@ -750,6 +845,7 @@ function findBlockInWindow(
  * IMPORTANT: Does NOT violate restrictions - will return null rather than assign to restricted slot
  * @param preferredWindowIndexStr - Window index as string (e.g., "0", "1", "2")
  * @param alternateWindowIndexStr - Alternate window index as string, or null
+ * @param hasGuestsOrGuestFills - If true, also check GUEST category restrictions
  */
 function findSuitableTimeBlock(
   availableBlocks: Array<{
@@ -763,6 +859,7 @@ function findSuitableTimeBlock(
   memberInfo: { memberId: number; memberClassId: number },
   bookingDate: string,
   timeRestrictions: TimeblockRestriction[],
+  hasGuestsOrGuestFills: boolean = false,
 ): {
   block: { id: number; startTime: string; availableSpots: number } | null;
   wasBlockedByRestrictions: boolean;
@@ -781,6 +878,7 @@ function findSuitableTimeBlock(
     memberInfo,
     bookingDate,
     timeRestrictions,
+    hasGuestsOrGuestFills,
   );
   const restrictedBlock = findBlockInWindow(
     allowedBlocks,
