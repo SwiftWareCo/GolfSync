@@ -21,6 +21,8 @@ export interface LotteryEntryDisplay {
   alternateWindow?: string;
   assignmentQuality?: "preferred" | "alternate" | "fallback";
   timeBlockId?: number;
+  guestFillCount?: number;
+  guests?: Array<{ name: string }>;
 }
 
 interface EntryBadgeProps {
@@ -117,6 +119,15 @@ export const EntryBadge = React.memo<EntryBadgeProps>(({ entry, config }) => {
     ? getAssignmentQualityColor(entry.assignmentQuality)
     : "border-gray-300 bg-gray-50 text-gray-700";
 
+  // Helper to convert window index to time range string
+  const getWindowTimeRange = (windowIndex: string | undefined) => {
+    if (!windowIndex || !config) return null;
+    const timeWindows = calculateDynamicTimeWindows(config);
+    const idx = parseInt(windowIndex, 10);
+    const window = timeWindows.find((w) => w.index === idx);
+    return window ? window.timeRange : windowIndex;
+  };
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -131,9 +142,13 @@ export const EntryBadge = React.memo<EntryBadgeProps>(({ entry, config }) => {
           <span className="max-w-[120px] truncate">
             {entry.name.replace(" (Group)", "")}
           </span>
-          {entry.isGroup && (
-            <span className="text-xs opacity-70">
-              ({entry.members?.length || 0})
+          {entry.isGroup && entry.members && entry.members.length > 0 && (
+            <span className="text-xs opacity-70">({entry.members.length})</span>
+          )}
+          {((entry.guests && entry.guests.length > 0) ||
+            (entry.guestFillCount ?? 0) > 0) && (
+            <span className="text-xs text-blue-600">
+              +{(entry.guests?.length || 0) + (entry.guestFillCount || 0)}
             </span>
           )}
         </div>
@@ -161,16 +176,40 @@ export const EntryBadge = React.memo<EntryBadgeProps>(({ entry, config }) => {
             </div>
           )}
 
+          {/* Guest details */}
+          {entry.guests && entry.guests.length > 0 && (
+            <div className="text-xs">
+              <div className="mb-1 font-medium text-blue-600">
+                Guests ({entry.guests.length}):
+              </div>
+              {entry.guests.map((guest, idx) => (
+                <div key={idx} className="text-gray-600">
+                  {guest.name}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Fill count */}
+          {(entry.guestFillCount ?? 0) > 0 && (
+            <div className="text-xs text-blue-600">
+              +{entry.guestFillCount} fill
+              {(entry.guestFillCount ?? 0) > 1 ? "s" : ""} (placeholders)
+            </div>
+          )}
+
           {/* Time preferences */}
           {entry.preferredWindow && (
             <div className="text-xs">
               <span className="font-medium">Preferred:</span>{" "}
-              {entry.preferredWindow}
+              {getWindowTimeRange(entry.preferredWindow) ||
+                entry.preferredWindow}
               {entry.alternateWindow && (
                 <>
                   <br />
                   <span className="font-medium">Alternate:</span>{" "}
-                  {entry.alternateWindow}
+                  {getWindowTimeRange(entry.alternateWindow) ||
+                    entry.alternateWindow}
                 </>
               )}
             </div>

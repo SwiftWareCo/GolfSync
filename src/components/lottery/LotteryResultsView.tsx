@@ -1,18 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { Calendar, Users } from "lucide-react";
+import { useState, useCallback } from "react";
+import { Card, CardContent } from "~/components/ui/card";
+import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { Calendar, Play, Sliders } from "lucide-react";
 import { formatDate } from "~/lib/dates";
-import { LotteryAllEntries } from "./LotteryAllEntries";
+import { UnassignedEntriesSidebar } from "./UnassignedEntriesSidebar";
 import { TeesheetPreviewAndArrange } from "./TeesheetPreviewAndArrange";
-import { cancelLotteryEntry } from "~/server/lottery/actions";
+import { LotteryAlgorithmSettingsDialog } from "./LotteryAlgorithmSettingsDialog";
+import {
+  cancelLotteryEntry,
+  processLotteryForDate,
+} from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
 import type {
   TeesheetConfigWithBlocks,
   TimeBlockWithRelations,
+  LotteryAlgorithmConfigFormData,
 } from "~/server/db/schema";
+
+interface LotteryStats {
+  totalEntries: number;
+  individualEntries: number;
+  groupEntries: number;
+  totalPlayers: number;
+  availableSlots: number;
+  processingStatus: "pending" | "processing" | "completed";
+}
 
 interface LotteryResultsViewProps {
   date: string;
@@ -34,6 +49,8 @@ interface LotteryResultsViewProps {
     lotterySettings?: any;
     date: string;
   } | null;
+  stats?: LotteryStats;
+  algorithmConfig?: LotteryAlgorithmConfigFormData;
 }
 
 export function LotteryResultsView({
@@ -43,26 +60,24 @@ export function LotteryResultsView({
   initialLotteryEntries,
   config,
   teesheetData,
+  stats,
+  algorithmConfig,
 }: LotteryResultsViewProps) {
-  const [activeTab, setActiveTab] = useState("preview");
+  // Selection state for sidebar -> teesheet interaction
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
-  const getTimeWindowLabel = (window: string) => {
-    // Simple mapping for common time windows
-    const windowMap: Record<string, string> = {
-      MORNING: "Morning",
-      MIDDAY: "Midday",
-      AFTERNOON: "Afternoon",
-      EVENING: "Evening",
-    };
-    return windowMap[window] || window;
-  };
+  const handleEntrySelect = useCallback((entryId: string, isGroup: boolean) => {
+    setSelectedEntryId((prev) => (prev === entryId ? null : entryId));
+  }, []);
 
   const handleCancelEntry = async (entryId: number, isGroup: boolean) => {
     try {
       const result = await cancelLotteryEntry(entryId);
       if (result.success) {
         toast.success("Entry cancelled successfully");
-        onComplete(); // Refresh the data
+        onComplete();
       } else {
         toast.error(result.error || "Failed to cancel entry");
       }
@@ -71,90 +86,110 @@ export function LotteryResultsView({
     }
   };
 
-  // If no teesheet data yet, show empty preview with entries tab
+  const handleEntryUpdated = () => {
+    // Trigger refresh of lottery data
+    onComplete();
+  };
+
+  const handleProcessLottery = async () => {
+    if (!config) {
+      toast.error("No teesheet config available");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const result = await processLotteryForDate(date, config);
+      if (result.success && result.data) {
+        const data = result.data as {
+          processedCount: number;
+          totalEntries: number;
+          bookingsCreated: number;
+        };
+        toast.success(
+          `Lottery processed! ${data.processedCount}/${data.totalEntries} entries processed, ${data.bookingsCreated} bookings created.`,
+        );
+        onComplete();
+      } else {
+        toast.error(result.error || "Failed to process lottery");
+      }
+    } catch (error) {
+      toast.error("An error occurred while processing the lottery");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const timeBlocks = teesheetData?.timeBlocks || [];
-  const totalAssigned = teesheetData
-    ? timeBlocks.reduce((sum, block) => sum + (block.members?.length || 0), 0)
-    : (initialLotteryEntries?.individual?.length || 0) +
-      (initialLotteryEntries?.groups?.length || 0);
+  const canProcess =
+    stats?.processingStatus === "pending" && (stats?.totalEntries || 0) > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium">
-            Lottery Results - {formatDate(date)}
-          </h3>
-          <p className="text-sm text-gray-600">
-            {teesheetData
-              ? "Bookings have been created. You can arrange the teesheet or view all entries."
-              : "View lottery entries and preview. Process lottery to create teesheet bookings."}
-          </p>
+    <div className="space-y-4">
+      {/* Two-Column Layout */}
+      <div className="flex gap-4">
+        {/* Left Column - Unassigned Entries Sidebar (30%) */}
+        <div className="w-[30%] flex-shrink-0">
+          <UnassignedEntriesSidebar
+            groups={initialLotteryEntries?.groups || []}
+            individuals={initialLotteryEntries?.individual || []}
+            selectedEntryId={selectedEntryId}
+            onEntrySelect={handleEntrySelect}
+            onDeleteEntry={handleCancelEntry}
+            onEntryUpdated={handleEntryUpdated}
+            members={members}
+            config={config}
+          />
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-sm">
-            <span className="font-medium">{totalAssigned}</span>
-            {teesheetData ? " bookings created" : " entries available"}
-          </div>
-        </div>
-      </div>
 
-      <Tabs
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="space-y-4"
-      >
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="preview">
-            <Calendar className="mr-2 h-4 w-4" />
-            Preview & Arrange
-          </TabsTrigger>
-          <TabsTrigger value="entries">
-            <Users className="mr-2 h-4 w-4" />
-            All Entries
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Teesheet Preview & Arrangement Tab */}
-        <TabsContent value="preview">
+        {/* Right Column - Teesheet Preview (70%) */}
+        <div className="flex-1">
           {teesheetData ? (
             <TeesheetPreviewAndArrange
               date={date}
               timeBlocks={timeBlocks}
               teesheetId={teesheetData.teesheet.id}
               onTimeBlocksChange={() => {
-                // Data will be refreshed when parent component reloads
                 console.log("Teesheet changes saved");
               }}
               teesheetData={teesheetData}
               lotteryEntries={initialLotteryEntries}
               members={members}
+              selectedEntryId={selectedEntryId}
+              onEntryClick={(entryId) => setSelectedEntryId(entryId)}
+              // Processing controls
+              stats={stats}
+              onProcessLottery={handleProcessLottery}
+              isProcessing={isProcessing}
+              canProcess={canProcess}
+              onOpenAlgorithmSettings={() => setSettingsDialogOpen(true)}
             />
           ) : (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="mb-4 text-gray-500">
-                  No teesheet data available yet
-                </p>
-                <p className="text-sm text-gray-400">
-                  Run the lottery processing to see teesheet preview
-                </p>
+            <Card className="h-[calc(100vh-280px)]">
+              <CardContent className="flex h-full items-center justify-center">
+                <div className="text-center">
+                  <Calendar className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+                  <p className="mb-2 text-gray-500">
+                    No teesheet data available yet
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Run the lottery processing to see teesheet preview
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}
-        </TabsContent>
+        </div>
+      </div>
 
-        {/* All Entries Tab */}
-        <TabsContent value="entries">
-          <LotteryAllEntries
-            entries={initialLotteryEntries}
-            onCancelEntry={handleCancelEntry}
-            getTimeWindowLabel={getTimeWindowLabel}
-            members={members}
-            config={config}
-          />
-        </TabsContent>
-      </Tabs>
+      {/* Algorithm Settings Dialog */}
+      {algorithmConfig && (
+        <LotteryAlgorithmSettingsDialog
+          isOpen={settingsDialogOpen}
+          onClose={() => setSettingsDialogOpen(false)}
+          initialData={algorithmConfig}
+        />
+      )}
     </div>
   );
 }

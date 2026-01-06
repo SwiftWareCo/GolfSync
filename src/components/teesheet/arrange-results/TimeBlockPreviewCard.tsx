@@ -28,6 +28,9 @@ interface ClientSideAssignment {
   originalTimeBlockId?: number | null;
   currentTimeBlockId?: number | null;
   hasChanges?: boolean;
+  // Guest data
+  guests?: { name: string }[];
+  guestFillCount?: number;
 }
 
 interface TimeBlockPreviewCardProps {
@@ -110,6 +113,7 @@ const MemoizedGroupEntry = React.memo<{
       }`}
       title={titleText}
     >
+      {/* Members */}
       {entry.memberClasses?.map((_, idx) => (
         <MemoizedMemberEntry
           key={`${entry.id}-member-${idx}`}
@@ -118,6 +122,25 @@ const MemoizedGroupEntry = React.memo<{
           config={config}
         />
       ))}
+      {/* Guests */}
+      {entry.guests?.map((guest, index) => (
+        <Badge
+          key={`guest-${index}`}
+          variant="outline"
+          className="border-purple-400 bg-purple-50 text-xs text-purple-700"
+        >
+          {guest.name}
+        </Badge>
+      ))}
+      {/* Guest Fills */}
+      {(entry.guestFillCount ?? 0) > 0 && (
+        <Badge
+          variant="outline"
+          className="border-amber-400 bg-amber-50 text-xs text-amber-700"
+        >
+          +{entry.guestFillCount} fills
+        </Badge>
+      )}
     </div>
   );
 });

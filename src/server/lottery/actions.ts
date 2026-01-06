@@ -173,6 +173,8 @@ export async function updateLotteryEntryAdmin(
   data: {
     preferredWindow: string;
     alternateWindow?: string;
+    guestIds?: number[];
+    guestFillCount?: number;
   },
 ): Promise<ActionResult> {
   try {
@@ -194,6 +196,8 @@ export async function updateLotteryEntryAdmin(
       .set({
         preferredWindow: data.preferredWindow,
         alternateWindow: data.alternateWindow || null,
+        guestIds: data.guestIds ?? entry.guestIds,
+        guestFillCount: data.guestFillCount ?? entry.guestFillCount,
         updatedAt: new Date(),
       })
       .where(eq(lotteryEntries.id, entryId))
@@ -209,7 +213,7 @@ export async function updateLotteryEntryAdmin(
 
 /**
  * Update a group lottery entry (admin action - consolidated schema)
- * Can update memberIds, preferredWindow, and alternateWindow
+ * Can update memberIds, preferredWindow, alternateWindow, guestIds, and guestFillCount
  */
 export async function updateLotteryGroupAdmin(
   entryId: number,
@@ -217,6 +221,8 @@ export async function updateLotteryGroupAdmin(
     preferredWindow: string;
     alternateWindow?: string;
     memberIds: number[];
+    guestIds?: number[];
+    guestFillCount?: number;
   },
 ): Promise<ActionResult> {
   try {
@@ -266,6 +272,8 @@ export async function updateLotteryGroupAdmin(
         preferredWindow: data.preferredWindow,
         alternateWindow: data.alternateWindow || null,
         memberIds: data.memberIds,
+        guestIds: data.guestIds ?? entry.guestIds,
+        guestFillCount: data.guestFillCount ?? entry.guestFillCount,
         updatedAt: new Date(),
       })
       .where(eq(lotteryEntries.id, entryId))

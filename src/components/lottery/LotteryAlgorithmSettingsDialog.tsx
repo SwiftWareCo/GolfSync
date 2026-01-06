@@ -254,10 +254,13 @@ export function LotteryAlgorithmSettingsDialog({
 
                   <div className="space-y-3">
                     {speedBonuses.map((bonus, index) => {
-                      const positionInfo = POSITION_LABELS[bonus.position];
+                      const positionInfo = POSITION_LABELS[bonus.position] ?? {
+                        icon: "❓",
+                        label: bonus.position,
+                      };
                       return (
                         <div
-                          key={bonus.position}
+                          key={`bonus-${bonus.position ?? index}`}
                           className="rounded-lg border bg-gray-50 p-3"
                         >
                           <div className="mb-2 font-medium">

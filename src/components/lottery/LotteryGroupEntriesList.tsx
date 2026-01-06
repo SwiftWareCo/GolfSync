@@ -25,6 +25,12 @@ interface GroupEntry {
   memberIds: number[];
   preferredWindow: string;
   members?: GroupMember[];
+  guestFillCount?: number;
+  guests?: Array<{
+    id: number;
+    firstName: string;
+    lastName: string;
+  }>;
 }
 
 interface LotteryGroupEntriesListProps {
@@ -76,6 +82,32 @@ export function LotteryGroupEntriesList({
                     {group.members
                       .map((m) => `${m.firstName} ${m.lastName}`)
                       .join(", ")}
+                  </div>
+                )}
+                {((group.guests && group.guests.length > 0) ||
+                  (group.guestFillCount && group.guestFillCount > 0)) && (
+                  <div className="text-xs text-blue-600">
+                    {group.guests && group.guests.length > 0 && (
+                      <span>
+                        +{group.guests.length} guest
+                        {group.guests.length > 1 ? "s" : ""} (
+                        {group.guests
+                          .map((g) => `${g.firstName} ${g.lastName}`)
+                          .join(", ")}
+                        )
+                      </span>
+                    )}
+                    {group.guests &&
+                      group.guests.length > 0 &&
+                      group.guestFillCount &&
+                      group.guestFillCount > 0 &&
+                      " • "}
+                    {group.guestFillCount && group.guestFillCount > 0 && (
+                      <span>
+                        +{group.guestFillCount} fill
+                        {group.guestFillCount > 1 ? "s" : ""}
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

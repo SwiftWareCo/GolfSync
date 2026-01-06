@@ -50,7 +50,7 @@ export default async function LotteryManagementPage({ params }: PageProps) {
   }));
 
   return (
-    <div className="container mx-auto max-w-7xl p-6">
+    <div className="mx-auto p-4">
       {/* Page Header */}
       <div className="mb-6">
         <div className="mb-4 flex items-center justify-between">

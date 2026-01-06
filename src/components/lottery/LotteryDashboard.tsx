@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { Settings, Sliders, Upload } from "lucide-react";
-import { LotteryProcessor } from "./LotteryProcessor";
+import { Sliders, Upload } from "lucide-react";
 import { LotteryResultsView } from "./LotteryResultsView";
 import { LotteryAlgorithmSettingsDialog } from "./LotteryAlgorithmSettingsDialog";
 import { ImportLegacyEntriesDialog } from "./ImportLegacyEntriesDialog";
@@ -81,7 +79,6 @@ export function LotteryDashboard({
   const [isLoading, setIsLoading] = useState(false);
   const [isCreatingTest, setIsCreatingTest] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  const [processingExpanded, setProcessingExpanded] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
@@ -144,12 +141,6 @@ export function LotteryDashboard({
     });
   };
 
-  const handleProcessComplete = () => {
-    // Stats will update via prop changes from server
-    // Collapse processing section after completion
-    setProcessingExpanded(false);
-  };
-
   const handleConfirmationComplete = () => {
     toast.success("Lottery results finalized successfully!");
     // Stats will update via prop changes from server
@@ -164,95 +155,63 @@ export function LotteryDashboard({
   }
 
   return (
-    <div className="space-y-6">
-      {/* Testing Controls - Available in production for now */}
-      <Card className="border-orange-200 bg-orange-50">
-        <CardHeader>
-          <CardTitle className="text-orange-800">🧪 Testing Controls</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
+    <div className="space-y-4">
+      {/* Testing Controls - Compact bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-orange-200 bg-orange-50 p-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-orange-800">
+            🧪 Testing
+          </span>
           <Button
             onClick={() => setImportDialogOpen(true)}
             variant="outline"
+            size="sm"
             className="border-blue-300 text-blue-700 hover:bg-blue-100"
           >
-            <Upload className="mr-2 h-4 w-4" />
-            Import Legacy Entries
+            <Upload className="mr-1 h-3 w-3" />
+            Import
           </Button>
           <Button
             onClick={handleCreateTestEntries}
             disabled={isCreatingTest}
             variant="outline"
+            size="sm"
             className="border-orange-300 text-orange-700 hover:bg-orange-100"
           >
-            {isCreatingTest ? "Creating..." : "Create Random Test Entries"}
+            {isCreatingTest ? "Creating..." : "Add Test Data"}
           </Button>
           <Button
             onClick={handleClearEntries}
             disabled={isClearing}
             variant="outline"
+            size="sm"
             className="border-red-300 text-red-700 hover:bg-red-100"
           >
-            {isClearing ? "Clearing..." : "Clear All Entries"}
+            {isClearing ? "Clearing..." : "Clear All"}
           </Button>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">{stats.totalEntries} entries</Badge>
+          <Badge variant="secondary">{stats.totalPlayers} players</Badge>
+          <Badge
+            variant={
+              stats.processingStatus === "pending" ? "destructive" : "outline"
+            }
+          >
+            {stats.processingStatus}
+          </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSettingsDialogOpen(true)}
+          >
+            <Sliders className="mr-1 h-3 w-3" />
+            Algorithm
+          </Button>
+        </div>
+      </div>
 
-      {/* Processing Controls */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Lottery Processing
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{stats.totalEntries} entries</Badge>
-                <Badge variant="secondary">{stats.totalPlayers} players</Badge>
-                <Badge
-                  variant={
-                    stats.processingStatus === "pending"
-                      ? "destructive"
-                      : "outline"
-                  }
-                >
-                  {stats.processingStatus}
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSettingsDialogOpen(true)}
-              >
-                <Sliders className="mr-2 h-4 w-4" />
-                Algorithm Settings
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setProcessingExpanded(!processingExpanded)}
-              >
-                {processingExpanded ? "Collapse" : "Expand"}
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        {processingExpanded && config && (
-          <CardContent>
-            <LotteryProcessor
-              date={date}
-              stats={stats}
-              onProcessComplete={handleProcessComplete}
-              config={config}
-            />
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Lottery Results - always show for preview and arrangement */}
+      {/* Lottery Results - Full width */}
       {config && (
         <LotteryResultsView
           date={date}
@@ -261,6 +220,8 @@ export function LotteryDashboard({
           initialLotteryEntries={initialLotteryEntries}
           config={config}
           teesheetData={teesheetData}
+          stats={stats}
+          algorithmConfig={algorithmConfig}
         />
       )}
 

@@ -7,6 +7,7 @@ import {
   teesheets,
   timeBlocks,
   timeblockRestrictions,
+  guests,
 } from "~/server/db/schema";
 import { eq, and, desc, asc, inArray } from "drizzle-orm";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
@@ -132,10 +133,33 @@ export async function getLotteryDataForDate(date: string) {
     // Create a map for O(1) lookup
     const memberMap = new Map(allGroupMembers.map((m) => [m.id, m]));
 
-    // Map members to groups
+    // Fetch all guests referenced in all entries
+    const allGuestIds = [
+      ...new Set(allEntries.flatMap((e) => e.guestIds || [])),
+    ];
+    const allGuests =
+      allGuestIds.length > 0
+        ? await db.query.guests.findMany({
+            where: inArray(guests.id, allGuestIds),
+          })
+        : [];
+    const guestMap = new Map(allGuests.map((g) => [g.id, g]));
+
+    // Map guests to individual entries
+    const individualEntriesWithGuests = individualEntries.map((entry) => ({
+      ...entry,
+      guests: (entry.guestIds || [])
+        .map((id) => guestMap.get(id))
+        .filter(Boolean),
+    }));
+
+    // Map members and guests to groups
     const groupEntriesWithMembers = groupEntries.map((group) => ({
       ...group,
       members: group.memberIds.map((id) => memberMap.get(id)).filter(Boolean),
+      guests: (group.guestIds || [])
+        .map((id) => guestMap.get(id))
+        .filter(Boolean),
     }));
 
     // Calculate total players in groups
@@ -178,7 +202,7 @@ export async function getLotteryDataForDate(date: string) {
         processingStatus,
       },
       entries: {
-        individual: individualEntries,
+        individual: individualEntriesWithGuests,
         groups: groupEntriesWithMembers,
       },
     };
@@ -237,14 +261,37 @@ export async function getLotteryEntriesForDate(date: string) {
     // Create a map for O(1) lookup
     const memberMap = new Map(allGroupMembers.map((m) => [m.id, m]));
 
-    // Map members to groups
+    // Fetch all guests referenced in all entries
+    const allGuestIds = [
+      ...new Set(allEntries.flatMap((e) => e.guestIds || [])),
+    ];
+    const allGuests =
+      allGuestIds.length > 0
+        ? await db.query.guests.findMany({
+            where: inArray(guests.id, allGuestIds),
+          })
+        : [];
+    const guestMap = new Map(allGuests.map((g) => [g.id, g]));
+
+    // Map guests to individual entries
+    const individualEntriesWithGuests = individualEntries.map((entry) => ({
+      ...entry,
+      guests: (entry.guestIds || [])
+        .map((id) => guestMap.get(id))
+        .filter(Boolean),
+    }));
+
+    // Map members and guests to groups
     const groupEntriesWithMembers = groupEntries.map((group) => ({
       ...group,
       members: group.memberIds.map((id) => memberMap.get(id)).filter(Boolean),
+      guests: (group.guestIds || [])
+        .map((id) => guestMap.get(id))
+        .filter(Boolean),
     }));
 
     return {
-      individual: individualEntries,
+      individual: individualEntriesWithGuests,
       groups: groupEntriesWithMembers,
     };
   } catch (error) {

@@ -5,7 +5,13 @@ import { useDebouncedCallback } from "use-debounce";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { memberQueryOptions, guestQueryOptions } from "~/server/query-options";
 import { checkTimeblockRestrictionsAction } from "~/server/timeblock-restrictions/actions";
-import type { TimeBlockWithRelations, Teesheet, Member, Guest, Fill } from "~/server/db/schema";
+import type {
+  TimeBlockWithRelations,
+  Teesheet,
+  Member,
+  Guest,
+  Fill,
+} from "~/server/db/schema";
 import { formatTime12Hour } from "~/lib/dates";
 
 // Type for teesheet query data
@@ -32,7 +38,6 @@ import {
   TimeBlockGuestSearch,
   TimeBlockPeopleList,
 } from "./TimeBlockPeopleList";
-import { FillForm } from "./fills/FillForm";
 import toast from "react-hot-toast";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -77,7 +82,9 @@ export function TimeBlockMemberManager({
   dateString,
 }: TimeBlockMemberManagerProps) {
   const queryClient = useQueryClient();
-  const { data: teesheetData } = useTeesheet(dateString) as { data: TeesheetData | undefined };
+  const { data: teesheetData } = useTeesheet(dateString) as {
+    data: TeesheetData | undefined;
+  };
 
   // Mutation for adding members with cache optimism
   const addMemberMutation = useMutation({
@@ -92,44 +99,47 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  members: [
-                    ...(block.members || []),
-                    {
-                      id: memberId,
-                      classId: 0,
-                      firstName: "",
-                      lastName: "",
-                      memberNumber: "",
-                      username: "",
-                      email: "",
-                      gender: null,
-                      dateOfBirth: null,
-                      handicap: null,
-                      bagNumber: null,
-                      phone: null,
-                      address: null,
-                      pushNotificationsEnabled: false,
-                      pushSubscription: null,
-                      createdAt: new Date(),
-                      updatedAt: null,
-                      checkedIn: false,
-                      checkedInAt: null,
-                      bookedByMemberId: null,
-                    } as MemberWithBookedBy,
-                  ],
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    members: [
+                      ...(block.members || []),
+                      {
+                        id: memberId,
+                        classId: 0,
+                        firstName: "",
+                        lastName: "",
+                        memberNumber: "",
+                        username: "",
+                        email: "",
+                        gender: null,
+                        dateOfBirth: null,
+                        handicap: null,
+                        bagNumber: null,
+                        phone: null,
+                        address: null,
+                        pushNotificationsEnabled: false,
+                        pushSubscription: null,
+                        createdAt: new Date(),
+                        updatedAt: null,
+                        checkedIn: false,
+                        checkedInAt: null,
+                        bookedByMemberId: null,
+                      } as MemberWithBookedBy,
+                    ],
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -165,22 +175,25 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  members: (block.members || []).filter(
-                    (m) => m.id !== memberId,
-                  ),
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    members: (block.members || []).filter(
+                      (m) => m.id !== memberId,
+                    ),
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -228,33 +241,36 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  guests: [
-                    ...(block.guests || []),
-                    {
-                      id: guestId,
-                      firstName: "",
-                      lastName: "",
-                      email: null,
-                      phone: null,
-                      createdAt: new Date(),
-                      updatedAt: null,
-                      invitedByMemberId: invitingMemberId,
-                      invitedByMember: undefined,
-                    } as GuestWithInvitedBy,
-                  ],
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    guests: [
+                      ...(block.guests || []),
+                      {
+                        id: guestId,
+                        firstName: "",
+                        lastName: "",
+                        email: null,
+                        phone: null,
+                        createdAt: new Date(),
+                        updatedAt: null,
+                        invitedByMemberId: invitingMemberId,
+                        invitedByMember: undefined,
+                      } as GuestWithInvitedBy,
+                    ],
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -291,22 +307,25 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  guests: (block.guests || []).filter(
-                    (g) => g.id !== guestId,
-                  ),
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    guests: (block.guests || []).filter(
+                      (g) => g.id !== guestId,
+                    ),
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -353,31 +372,34 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  fills: [
-                    ...(block.fills || []),
-                    {
-                      id: -Date.now(),
-                      relatedType: "timeblock" as const,
-                      relatedId: timeBlock.id as number,
-                      fillType,
-                      customName: customName || null,
-                      createdAt: new Date(),
-                      updatedAt: null,
-                    } as Fill,
-                  ],
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    fills: [
+                      ...(block.fills || []),
+                      {
+                        id: -Date.now(),
+                        relatedType: "timeblock" as const,
+                        relatedId: timeBlock.id as number,
+                        fillType,
+                        customName: customName || null,
+                        createdAt: new Date(),
+                        updatedAt: null,
+                      } as Fill,
+                    ],
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -413,22 +435,23 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  fills: (block.fills || []).filter(
-                    (f) => f.id !== fillId,
-                  ),
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    fills: (block.fills || []).filter((f) => f.id !== fillId),
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -459,7 +482,8 @@ export function TimeBlockMemberManager({
     }: {
       memberId: number;
       bookedByMemberId: number | null;
-    }) => updateMemberBookedBy(timeBlock.id as number, memberId, bookedByMemberId),
+    }) =>
+      updateMemberBookedBy(timeBlock.id as number, memberId, bookedByMemberId),
 
     onMutate: async ({
       memberId,
@@ -475,24 +499,25 @@ export function TimeBlockMemberManager({
         teesheetKeys.detail(dateString),
       );
 
-      queryClient.setQueryData(teesheetKeys.detail(dateString), (old: TeesheetData | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          timeBlocks: old.timeBlocks.map((block) =>
-            block.id === timeBlock.id
-              ? {
-                  ...block,
-                  members: (block.members || []).map((m) =>
-                    m.id === memberId
-                      ? { ...m, bookedByMemberId }
-                      : m,
-                  ),
-                }
-              : block,
-          ),
-        };
-      });
+      queryClient.setQueryData(
+        teesheetKeys.detail(dateString),
+        (old: TeesheetData | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            timeBlocks: old.timeBlocks.map((block) =>
+              block.id === timeBlock.id
+                ? {
+                    ...block,
+                    members: (block.members || []).map((m) =>
+                      m.id === memberId ? { ...m, bookedByMemberId } : m,
+                    ),
+                  }
+                : block,
+            ),
+          };
+        },
+      );
 
       return { previous };
     },
@@ -564,14 +589,12 @@ export function TimeBlockMemberManager({
   const timeBlocks = (teesheetData?.timeBlocks ?? [])
     .slice()
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  const moveTargets = timeBlocks.filter(
-    (block) => block.id !== timeBlock.id,
-  );
+  const moveTargets = timeBlocks.filter((block) => block.id !== timeBlock.id);
   const selectedMoveTarget = moveTargetId
     ? moveTargets.find((block) => block.id === Number(moveTargetId))
     : null;
   const selectedMoveTargetCapacity = selectedMoveTarget
-    ? selectedMoveTarget.maxMembers ?? MAX_PEOPLE
+    ? (selectedMoveTarget.maxMembers ?? MAX_PEOPLE)
     : MAX_PEOPLE;
   const selectedMoveTargetAvailable = selectedMoveTarget
     ? selectedMoveTargetCapacity - getBlockPeopleCount(selectedMoveTarget)
@@ -883,10 +906,12 @@ export function TimeBlockMemberManager({
     <>
       <div className="flex h-full gap-6">
         <div className="flex w-1/3 flex-col gap-6">
-        <div className="rounded-lg border border-dashed bg-gray-50 p-3">
+          <div className="rounded-lg border border-dashed bg-gray-50 p-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-medium text-gray-900">Move players</p>
+                <p className="text-xs font-medium text-gray-900">
+                  Move players
+                </p>
                 <p className="text-[11px] text-gray-500">
                   Move all to another tee time
                 </p>
@@ -997,10 +1022,25 @@ export function TimeBlockMemberManager({
             </TabsContent>
 
             <TabsContent value="fills">
-              <FillForm
-                onAddFill={handleAddFill}
-                isTimeBlockFull={isTimeBlockFull}
-              />
+              <div className="flex flex-wrap gap-2 p-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAddFill("guest_fill")}
+                  disabled={isTimeBlockFull}
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50"
+                >
+                  + Guest Fill
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleAddFill("reciprocal")}
+                  disabled={isTimeBlockFull}
+                >
+                  + Reciprocal
+                </Button>
+              </div>
             </TabsContent>
           </Tabs>
         </div>

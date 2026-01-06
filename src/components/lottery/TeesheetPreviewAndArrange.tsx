@@ -13,6 +13,8 @@ import {
   ChevronRight,
   Save,
   Undo,
+  Play,
+  Sliders,
 } from "lucide-react";
 import { insertTimeBlock, deleteTimeBlock } from "~/server/teesheet/actions";
 import {
@@ -48,6 +50,8 @@ interface ClientSideAssignment {
   originalTimeBlockId?: number | null;
   currentTimeBlockId?: number | null;
   hasChanges?: boolean;
+  guestFillCount?: number;
+  guests?: Array<{ name: string }>;
 }
 
 // Pending changes tracking
@@ -81,6 +85,15 @@ interface TimeBlockWithEntries extends TimeBlockWithRelations {
   assignedEntries: ClientSideAssignment[];
 }
 
+interface LotteryStats {
+  totalEntries: number;
+  individualEntries: number;
+  groupEntries: number;
+  totalPlayers: number;
+  availableSlots: number;
+  processingStatus: "pending" | "processing" | "completed";
+}
+
 interface TeesheetPreviewAndArrangeProps {
   date: string;
   timeBlocks: TimeBlockWithRelations[];
@@ -102,6 +115,15 @@ interface TeesheetPreviewAndArrangeProps {
     lastName: string;
     memberClass?: { label: string } | null;
   }>;
+  // Props from sidebar selection
+  selectedEntryId?: string | null;
+  onEntryClick?: (entryId: string) => void;
+  // Processing control props
+  stats?: LotteryStats;
+  onProcessLottery?: () => void;
+  isProcessing?: boolean;
+  canProcess?: boolean;
+  onOpenAlgorithmSettings?: () => void;
 }
 
 export function TeesheetPreviewAndArrange({
@@ -112,6 +134,13 @@ export function TeesheetPreviewAndArrange({
   teesheetData,
   lotteryEntries,
   members,
+  selectedEntryId: externalSelectedEntryId,
+  onEntryClick: externalOnEntryClick,
+  stats,
+  onProcessLottery,
+  isProcessing,
+  canProcess,
+  onOpenAlgorithmSettings,
 }: TeesheetPreviewAndArrangeProps) {
   const [insertTimeBlockDialogOpen, setInsertTimeBlockDialogOpen] =
     useState(false);
@@ -119,7 +148,6 @@ export function TeesheetPreviewAndArrange({
     number | null
   >(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showUnassigned, setShowUnassigned] = useState(false);
 
   // Client-side state management
   const [clientTimeBlocks, setClientTimeBlocks] = useState<
@@ -228,6 +256,8 @@ export function TeesheetPreviewAndArrange({
       alternateWindow: entry.alternateWindow || undefined,
       assignmentQuality: entry.assignmentQuality || undefined,
       timeBlockId: entry.currentTimeBlockId || undefined,
+      guestFillCount: entry.guestFillCount,
+      guests: entry.guests,
     }),
     [],
   );
@@ -255,6 +285,11 @@ export function TeesheetPreviewAndArrange({
           originalTimeBlockId: null,
           currentTimeBlockId: null,
           hasChanges: false,
+          guestFillCount: entry.guestFillCount || 0,
+          guests:
+            entry.guests?.map((g: any) => ({
+              name: `${g.firstName} ${g.lastName}`,
+            })) || [],
         });
       });
 
@@ -286,6 +321,11 @@ export function TeesheetPreviewAndArrange({
           originalTimeBlockId: null,
           currentTimeBlockId: null,
           hasChanges: false,
+          guestFillCount: group.guestFillCount || 0,
+          guests:
+            group.guests?.map((g: any) => ({
+              name: `${g.firstName} ${g.lastName}`,
+            })) || [],
         });
       });
 
@@ -314,6 +354,11 @@ export function TeesheetPreviewAndArrange({
             originalTimeBlockId: block.id,
             currentTimeBlockId: block.id,
             hasChanges: false,
+            guestFillCount: entry.guestFillCount || 0,
+            guests:
+              entry.guests?.map((g: any) => ({
+                name: `${g.firstName} ${g.lastName}`,
+              })) || [],
           });
         });
 
@@ -351,6 +396,11 @@ export function TeesheetPreviewAndArrange({
             originalTimeBlockId: block.id,
             currentTimeBlockId: block.id,
             hasChanges: false,
+            guestFillCount: group.guestFillCount || 0,
+            guests:
+              group.guests?.map((g: any) => ({
+                name: `${g.firstName} ${g.lastName}`,
+              })) || [],
           });
         });
 
@@ -378,8 +428,42 @@ export function TeesheetPreviewAndArrange({
     transformInitialData();
   }, [transformInitialData]);
 
+  // Sync external selection state with internal state
+  React.useEffect(() => {
+    if (externalSelectedEntryId !== undefined) {
+      if (externalSelectedEntryId === null) {
+        setSelectedItem(null);
+      } else if (selectedItem?.entryId !== externalSelectedEntryId) {
+        // Find the entry and set selection
+        const entry = [
+          ...unassignedEntries,
+          ...clientTimeBlocks.flatMap((b) => b.assignedEntries),
+        ].find((e) => e.id === externalSelectedEntryId);
+
+        if (entry) {
+          setSelectedItem({
+            type: "entry",
+            entryId: externalSelectedEntryId,
+            isGroup: entry.isGroup,
+            sourceTimeBlockId: entry.currentTimeBlockId,
+          });
+        }
+      }
+    }
+  }, [
+    externalSelectedEntryId,
+    unassignedEntries,
+    clientTimeBlocks,
+    selectedItem?.entryId,
+  ]);
+
   // Entry selection handler
   const handleEntryClick = (entryId: string) => {
+    // Notify parent if callback provided
+    if (externalOnEntryClick) {
+      externalOnEntryClick(entryId);
+    }
+
     if (selectedItem?.entryId === entryId) {
       setSelectedItem(null);
       return;
@@ -760,7 +844,44 @@ export function TeesheetPreviewAndArrange({
     setInsertTimeBlockDialogOpen(true);
   };
 
-  // Handle assigning fairness scores
+  // Handle Process Lottery with confirmation
+  const handleProcessLotteryWithConfirm = () => {
+    if (!onProcessLottery) return;
+
+    setConfirmDialog({
+      open: true,
+      title: "Process Lottery",
+      description:
+        "This will run the lottery algorithm to assign all pending entries to time slots based on their preferences, fairness scores, and speed ratings. Entries with higher priority will be placed first. This action creates teesheet bookings - are you sure you want to proceed?",
+      onConfirm: () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        onProcessLottery();
+      },
+      variant: "default",
+    });
+  };
+
+  // Handle Fairness Scores with confirmation
+  const handleFairnessScoresWithConfirm = () => {
+    if (!teesheetData?.config) {
+      toast.error("Teesheet configuration not available");
+      return;
+    }
+
+    setConfirmDialog({
+      open: true,
+      title: "Assign Fairness Scores",
+      description:
+        "This will update each member's fairness score based on their final teesheet placement. Members who received their preferred time window will have their fairness score decreased, while those who didn't will have it increased. This helps ensure fair distribution in future lotteries.",
+      onConfirm: async () => {
+        setConfirmDialog((prev) => ({ ...prev, open: false }));
+        await handleAssignFairnessScores();
+      },
+      variant: "default",
+    });
+  };
+
+  // Handle assigning fairness scores (internal function)
   const handleAssignFairnessScores = async () => {
     if (!teesheetData?.config) {
       toast.error("Teesheet configuration not available");
@@ -824,154 +945,6 @@ export function TeesheetPreviewAndArrange({
           </div>
         )}
 
-        {/* Unassigned Entries */}
-        {unassignedEntries.length > 0 && (
-          <Card>
-            <CardHeader
-              className="cursor-pointer p-4"
-              onClick={() => setShowUnassigned(!showUnassigned)}
-            >
-              <div className="flex items-center gap-2">
-                {showUnassigned ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
-                <span className="text-sm font-medium">
-                  Unassigned Entries ({unassignedEntries.length})
-                </span>
-              </div>
-            </CardHeader>
-            {showUnassigned && (
-              <CardContent className="pt-0">
-                <div className="space-y-4">
-                  {/* Summary Stats */}
-                  <div className="flex justify-center gap-6 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded border-2 border-dashed border-orange-300 bg-orange-50/30"></div>
-                      <span>
-                        Groups:{" "}
-                        {unassignedEntries.filter((e) => e.isGroup).length}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-3 w-3 rounded border-2 border-dashed border-gray-300 bg-gray-50/30"></div>
-                      <span>
-                        Individuals:{" "}
-                        {unassignedEntries.filter((e) => !e.isGroup).length}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Organized Grid Layout */}
-                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    {/* Groups Column */}
-                    <div className="space-y-3">
-                      <h4 className="text-center text-sm font-medium text-gray-700">
-                        Group Entries
-                      </h4>
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {unassignedEntries
-                          .filter(
-                            (entry) =>
-                              entry.isGroup &&
-                              entry.memberClasses &&
-                              entry.memberClasses.length > 0,
-                          )
-                          .map((entry) => (
-                            <div
-                              key={entry.id}
-                              onClick={() => handleEntryClick(entry.id)}
-                              className={`flex min-h-[32px] min-w-[60px] cursor-pointer flex-wrap gap-1 rounded-md border-2 border-dashed border-orange-300 bg-orange-50/30 p-2 transition-all hover:shadow-md ${
-                                selectedItem?.entryId === entry.id
-                                  ? "shadow-lg ring-2 ring-blue-500"
-                                  : "hover:bg-orange-100/50"
-                              }`}
-                              title="Unassigned group - Click to select"
-                            >
-                              {entry.memberClasses?.map((member, idx) => {
-                                const memberEntry: LotteryEntryDisplay = {
-                                  id: `${entry.id}-member-${idx}`,
-                                  name: member.name,
-                                  isGroup: false,
-                                  memberClass: member.class, // This comes from memberClassMappings which already uses memberClass?.label
-                                  members: [],
-                                  preferredWindow: entry.preferredWindow,
-                                  alternateWindow:
-                                    entry.alternateWindow || undefined,
-                                  assignmentQuality:
-                                    entry.assignmentQuality || undefined,
-                                  timeBlockId:
-                                    entry.currentTimeBlockId || undefined,
-                                };
-
-                                return (
-                                  <EntryBadge
-                                    key={`${entry.id}-member-${idx}`}
-                                    entry={memberEntry}
-                                    config={teesheetData?.config}
-                                  />
-                                );
-                              })}
-                            </div>
-                          ))}
-                        {unassignedEntries.filter((e) => e.isGroup).length ===
-                          0 && (
-                          <div className="py-8 text-center text-sm text-gray-500">
-                            No unassigned groups
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Individuals Column */}
-                    <div className="space-y-3">
-                      <h4 className="text-center text-sm font-medium text-gray-700">
-                        Individual Entries
-                      </h4>
-                      <div className="flex flex-wrap justify-center gap-2">
-                        {unassignedEntries
-                          .filter((entry) => !entry.isGroup)
-                          .map((entry) => (
-                            <div
-                              key={entry.id}
-                              onClick={() => handleEntryClick(entry.id)}
-                              className={`flex min-h-[32px] min-w-[60px] cursor-pointer rounded-md border-2 border-dashed border-gray-300 bg-gray-50/30 p-2 transition-all hover:shadow-md ${
-                                selectedItem?.entryId === entry.id
-                                  ? "shadow-lg ring-2 ring-blue-500"
-                                  : "hover:bg-gray-100/50"
-                              }`}
-                              title="Unassigned individual - Click to select"
-                            >
-                              <EntryBadge
-                                entry={convertToLotteryDisplay(entry)}
-                                config={teesheetData?.config}
-                              />
-                            </div>
-                          ))}
-                        {unassignedEntries.filter((e) => !e.isGroup).length ===
-                          0 && (
-                          <div className="py-8 text-center text-sm text-gray-500">
-                            No unassigned individuals
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Instructions */}
-                  <div className="mt-4 rounded-md bg-blue-50 p-3">
-                    <div className="text-center text-sm text-blue-700">
-                      <strong>💡 Tip:</strong> Click on an entry to select it,
-                      then click on a time slot to assign it.
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            )}
-          </Card>
-        )}
-
         {/* Header */}
         <Card>
           <CardHeader>
@@ -987,33 +960,76 @@ export function TeesheetPreviewAndArrange({
                   blocks.
                 </p>
               </div>
-              <Button
-                onClick={handleAssignFairnessScores}
-                disabled={
-                  isAssigningFairnessScores ||
-                  pendingChanges.length > 0 ||
-                  !teesheetData?.config
-                }
-                variant="outline"
-                className="ml-4"
-                title={
-                  pendingChanges.length > 0
-                    ? "Please save all changes before assigning fairness scores"
-                    : "Assign fairness scores based on final assignments. Only preferred and alternate window assignments count as granted."
-                }
-              >
-                {isAssigningFairnessScores ? (
-                  <>
-                    <LoadingSpinner className="mr-2 h-4 w-4" />
-                    Assigning...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Assign Fairness Scores
-                  </>
+              <div className="flex items-center gap-2">
+                {/* Process Lottery Button */}
+                {onProcessLottery && (
+                  <Button
+                    onClick={handleProcessLotteryWithConfirm}
+                    disabled={isProcessing || !canProcess}
+                    variant="default"
+                    size="sm"
+                    className="bg-org-primary hover:bg-org-primary/90"
+                    title={
+                      !canProcess
+                        ? "Lottery already processed or no entries to process"
+                        : "Run lottery algorithm"
+                    }
+                  >
+                    {isProcessing ? (
+                      <>
+                        <LoadingSpinner className="mr-2 h-4 w-4" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-2 h-4 w-4" />
+                        Process Lottery
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
+
+                {/* Algorithm Settings Button */}
+                {onOpenAlgorithmSettings && (
+                  <Button
+                    onClick={onOpenAlgorithmSettings}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Sliders className="mr-2 h-4 w-4" />
+                    Algorithm
+                  </Button>
+                )}
+
+                {/* Assign Fairness Scores Button */}
+                <Button
+                  onClick={handleFairnessScoresWithConfirm}
+                  disabled={
+                    isAssigningFairnessScores ||
+                    pendingChanges.length > 0 ||
+                    !teesheetData?.config
+                  }
+                  variant="outline"
+                  size="sm"
+                  title={
+                    pendingChanges.length > 0
+                      ? "Please save all changes before assigning fairness scores"
+                      : "Assign fairness scores based on final assignments"
+                  }
+                >
+                  {isAssigningFairnessScores ? (
+                    <>
+                      <LoadingSpinner className="mr-2 h-4 w-4" />
+                      Assigning...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Fairness Scores
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
             {pendingChanges.length > 0 && (
               <p className="mt-2 text-xs text-orange-600">

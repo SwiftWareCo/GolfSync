@@ -19,6 +19,12 @@ interface IndividualEntry {
   assignedTimeBlock?: {
     startTime: string;
   } | null;
+  guestFillCount?: number;
+  guests?: Array<{
+    id: number;
+    firstName: string;
+    lastName: string;
+  }>;
 }
 
 interface LotteryIndividualEntriesListProps {
@@ -66,6 +72,32 @@ export function LotteryIndividualEntriesList({
                   {entry.organizer.memberClass?.label || "No Class"} •{" "}
                   {getTimeWindowLabel(entry.preferredWindow)}
                 </div>
+                {((entry.guests && entry.guests.length > 0) ||
+                  (entry.guestFillCount && entry.guestFillCount > 0)) && (
+                  <div className="mt-1 text-xs text-blue-600">
+                    {entry.guests && entry.guests.length > 0 && (
+                      <span>
+                        +{entry.guests.length} guest
+                        {entry.guests.length > 1 ? "s" : ""} (
+                        {entry.guests
+                          .map((g) => `${g.firstName} ${g.lastName}`)
+                          .join(", ")}
+                        )
+                      </span>
+                    )}
+                    {entry.guests &&
+                      entry.guests.length > 0 &&
+                      entry.guestFillCount &&
+                      entry.guestFillCount > 0 &&
+                      " • "}
+                    {entry.guestFillCount && entry.guestFillCount > 0 && (
+                      <span>
+                        +{entry.guestFillCount} fill
+                        {entry.guestFillCount > 1 ? "s" : ""}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
               <Badge
                 variant={entry.status === "ASSIGNED" ? "default" : "secondary"}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { toast } from "react-hot-toast";
 import { useForm } from "react-hook-form";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDebounce } from "use-debounce";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Dialog,
@@ -15,12 +16,24 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
-import { Clock, Dice1, CheckCircle, Users, X } from "lucide-react";
+import {
+  Clock,
+  Dice1,
+  CheckCircle,
+  Users,
+  X,
+  Search,
+  UserPlus,
+  Loader2,
+} from "lucide-react";
 import { formatDate } from "~/lib/dates";
 import { submitLotteryEntry } from "~/server/lottery/actions";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
-import { FillForm } from "~/components/timeblock/fills/FillForm";
+import { guestQueryOptions } from "~/server/query-options";
+import { createGuest } from "~/server/guests/actions";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import type { Teesheet, TeesheetConfigWithBlocks } from "~/server/db/schema";
 import {
@@ -34,6 +47,12 @@ interface SearchMember {
   firstName: string;
   lastName: string;
   memberNumber: string;
+}
+
+interface Guest {
+  id: number;
+  firstName: string;
+  lastName: string;
 }
 
 interface AdminLotteryEntryModalProps {
@@ -51,7 +70,9 @@ export function AdminLotteryEntryModal({
   config,
   onSuccess,
 }: AdminLotteryEntryModalProps) {
-  // Form management with React Hook Form - using destructuring pattern
+  const queryClient = useQueryClient();
+
+  // Form management with React Hook Form
   const {
     handleSubmit,
     setValue,
@@ -72,13 +93,25 @@ export function AdminLotteryEntryModal({
     },
   });
 
-  // Display state for member information (minimal UI state)
+  // Display state for member information
   const [selectedMembersDisplay, setSelectedMembersDisplay] = useState<
     SearchMember[]
   >([]);
   const [organizerDisplay, setOrganizerDisplay] = useState<SearchMember | null>(
     null,
   );
+
+  // Guest state - matching BookingPartyModal pattern
+  const [selectedGuests, setSelectedGuests] = useState<Guest[]>([]);
+  const [guestSearch, setGuestSearch] = useState("");
+  const [debouncedGuestSearch] = useDebounce(guestSearch, 300);
+  const [showCreateGuest, setShowCreateGuest] = useState(false);
+  const [newGuestFirstName, setNewGuestFirstName] = useState("");
+  const [newGuestLastName, setNewGuestLastName] = useState("");
+  const [isCreatingGuest, setIsCreatingGuest] = useState(false);
+
+  // Guest fills (placeholder slots)
+  const [guestFillCount, setGuestFillCount] = useState(0);
 
   // Derived state from form
   const timeWindows = calculateDynamicTimeWindows(config);
@@ -89,7 +122,27 @@ export function AdminLotteryEntryModal({
   const preferredWindow = watch("preferredWindow");
   const alternateWindow = watch("alternateWindow");
   const totalPlayers =
-    (organizerId ? 1 : 0) + memberIds.length + formFills.length;
+    (organizerId ? 1 : 0) +
+    memberIds.length +
+    selectedGuests.length +
+    guestFillCount;
+
+  // Guest search query
+  const guestSearchQuery = useQuery({
+    ...guestQueryOptions.search(debouncedGuestSearch),
+    enabled: debouncedGuestSearch.length >= 2,
+  });
+
+  const guestResults = useMemo(() => {
+    return guestSearchQuery.data || [];
+  }, [guestSearchQuery.data]);
+
+  const showCreateGuestOption =
+    debouncedGuestSearch.length >= 2 &&
+    !guestSearchQuery.isLoading &&
+    guestResults.length === 0;
+
+  const isFull = totalPlayers >= 4;
 
   // Mutation for submitting lottery entry
   const submitMutation = useMutation({
@@ -115,6 +168,12 @@ export function AdminLotteryEntryModal({
     reset();
     setOrganizerDisplay(null);
     setSelectedMembersDisplay([]);
+    setSelectedGuests([]);
+    setGuestFillCount(0);
+    setGuestSearch("");
+    setShowCreateGuest(false);
+    setNewGuestFirstName("");
+    setNewGuestLastName("");
     onOpenChange(false);
   };
 
@@ -131,8 +190,9 @@ export function AdminLotteryEntryModal({
       selectedMembersDisplay.filter((m) => m.id !== selectedMember.id),
     );
 
-    // Reset fills when organizer changes (as per original logic)
-    setValue("fills", []);
+    // Reset guests when organizer changes
+    setSelectedGuests([]);
+    setGuestFillCount(0);
   };
 
   const handleMemberSelect = (selectedMember: SearchMember | null) => {
@@ -175,23 +235,92 @@ export function AdminLotteryEntryModal({
 
   const removeOrganizer = () => {
     setValue("organizerId", 0);
-    setValue("fills", []);
     setOrganizerDisplay(null);
+    setSelectedGuests([]);
+    setGuestFillCount(0);
   };
 
-  const addFill = (fillType: string, customName?: string) => {
-    if (totalPlayers >= 4) {
-      setError("fills", { message: "Maximum 4 players per group" });
+  // Guest handlers - matching BookingPartyModal
+  const handleAddGuest = useCallback(
+    (guest: Guest) => {
+      if (isFull) {
+        toast.error("Maximum 4 players per group");
+        return;
+      }
+
+      if (selectedGuests.find((g) => g.id === guest.id)) {
+        toast.error("Guest already added");
+        return;
+      }
+
+      setSelectedGuests((prev) => [...prev, guest]);
+      setGuestSearch("");
+    },
+    [isFull, selectedGuests],
+  );
+
+  const handleRemoveGuest = (guestId: number) => {
+    setSelectedGuests((prev) => prev.filter((g) => g.id !== guestId));
+  };
+
+  const handleAddGuestFill = useCallback(() => {
+    if (isFull) {
+      toast.error("Maximum 4 players per group");
       return;
     }
-    const newFills = [...(formFills || []), { fillType, customName }];
-    setValue("fills", newFills);
+    setGuestFillCount((prev) => prev + 1);
+  }, [isFull]);
+
+  const handleRemoveGuestFill = () => {
+    if (guestFillCount > 0) {
+      setGuestFillCount((prev) => prev - 1);
+    }
   };
 
-  const removeFill = (index: number) => {
-    const newFills = (formFills || []).filter((_, i: number) => i !== index);
-    setValue("fills", newFills);
+  // Create guest handler
+  const handleCreateGuest = async () => {
+    if (!newGuestFirstName.trim() || !newGuestLastName.trim()) {
+      toast.error("Please enter first and last name");
+      return;
+    }
+
+    setIsCreatingGuest(true);
+    try {
+      const result = await createGuest({
+        firstName: newGuestFirstName.trim(),
+        lastName: newGuestLastName.trim(),
+      });
+
+      if (result.success && result.data) {
+        await queryClient.invalidateQueries({ queryKey: ["guests"] });
+        setSelectedGuests((prev) => [...prev, result.data!]);
+        toast.success("Guest created and added");
+        setShowCreateGuest(false);
+        setNewGuestFirstName("");
+        setNewGuestLastName("");
+        setGuestSearch("");
+      } else {
+        toast.error(result.error || "Failed to create guest");
+      }
+    } catch (error) {
+      console.error("Error creating guest:", error);
+      toast.error("Failed to create guest");
+    } finally {
+      setIsCreatingGuest(false);
+    }
   };
+
+  const handleShowCreateGuest = useCallback(() => {
+    const parts = debouncedGuestSearch.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      setNewGuestFirstName(parts[0] || "");
+      setNewGuestLastName(parts.slice(1).join(" ") || "");
+    } else {
+      setNewGuestFirstName(debouncedGuestSearch.trim());
+      setNewGuestLastName("");
+    }
+    setShowCreateGuest(true);
+  }, [debouncedGuestSearch]);
 
   const onSubmit = async (data: LotteryFormInput) => {
     if (!organizerId) {
@@ -199,15 +328,21 @@ export function AdminLotteryEntryModal({
       return;
     }
 
+    // Build fills array from guest fills
+    const fills: { fillType: string; customName?: string }[] = [];
+    for (let i = 0; i < guestFillCount; i++) {
+      fills.push({ fillType: "guest" });
+    }
+
     const formData: LotteryFormInput = {
       organizerId: organizerId,
       lotteryDate: teesheet.date,
       preferredWindow: data.preferredWindow,
       alternateWindow: data.alternateWindow || undefined,
-      // Additional members (organizer will be added server-side)
       memberIds: data.memberIds,
-      // Fills can be added to any entry (individual or group)
-      fills: data.fills && data.fills.length > 0 ? data.fills : undefined,
+      fills: fills.length > 0 ? fills : undefined,
+      // Note: Guest IDs would need to be handled by the server action
+      // For now, we're passing fills as guest placeholders
     };
 
     await submitMutation.mutateAsync(formData);
@@ -315,10 +450,10 @@ export function AdminLotteryEntryModal({
                 </div>
 
                 {/* Add Member Search - Show only if space available */}
-                {totalPlayers < 4 && (
+                {!isFull && (
                   <div className="space-y-2">
                     <div className="text-sm text-gray-600">
-                      Add additional players (optional):
+                      Add additional members (optional):
                     </div>
                     <MemberSearchInput
                       onSelect={handleMemberSelect}
@@ -332,75 +467,221 @@ export function AdminLotteryEntryModal({
                   </div>
                 )}
 
-                {/* Display all players (members and fills) together */}
-                {selectedMembersDisplay.map((selectedMember) => (
-                  <div
-                    key={selectedMember.id}
-                    className="flex items-center gap-3 rounded-lg border p-3"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm font-medium">
-                      {selectedMember.firstName[0]}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {selectedMember.firstName} {selectedMember.lastName}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        #{selectedMember.memberNumber}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeMember(selectedMember.id)}
-                      className="h-8 w-8 p-0"
+                {/* Display all players (members, guests, fills) */}
+                <div className="space-y-2">
+                  {/* Members */}
+                  {selectedMembersDisplay.map((selectedMember) => (
+                    <div
+                      key={selectedMember.id}
+                      className="flex items-center gap-3 rounded-lg border px-3 py-2"
                     >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-
-                {/* Display fills in the same list */}
-                {formFills.map((fill, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 rounded-lg border p-3"
-                  >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm font-medium">
-                      F
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {fill.fillType === "guest" && "Guest Fill"}
-                        {fill.fillType === "reciprocal" && "Reciprocal Fill"}
-                        {fill.fillType === "custom" &&
-                          (fill.customName || "Custom Fill")}
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-sm font-medium">
+                        {selectedMember.firstName[0]}
                       </div>
-                      <div className="text-sm text-gray-500">Fill</div>
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {selectedMember.firstName} {selectedMember.lastName}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          #{selectedMember.memberNumber}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeMember(selectedMember.id)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeFill(index)}
-                      className="h-8 w-8 p-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+                  ))}
 
-                {/* Add Fills Section - Show only if space available */}
-                {totalPlayers < 4 && (
+                  {/* Guests */}
+                  {selectedGuests.map((guest) => (
+                    <div
+                      key={guest.id}
+                      className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-700">
+                        {guest.firstName[0]}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {guest.firstName} {guest.lastName}
+                        </div>
+                        <div className="text-sm text-blue-600">Guest</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveGuest(guest.id)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  {/* Guest Fills */}
+                  {Array.from({ length: guestFillCount }).map((_, index) => (
+                    <div
+                      key={`fill-${index}`}
+                      className="flex items-center gap-3 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-2"
+                    >
+                      <Badge
+                        variant="outline"
+                        className="border-amber-400 text-amber-700"
+                      >
+                        Guest Fill
+                      </Badge>
+                      <div className="flex-1 text-sm text-amber-600">
+                        Placeholder for guest
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRemoveGuestFill}
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Guests Section */}
+                {!isFull && !showCreateGuest && (
                   <div className="space-y-3 border-t pt-4">
-                    <div className="text-sm font-medium text-gray-700">
-                      Add Fills (Optional)
+                    <Label>Add Guests</Label>
+                    <div className="relative">
+                      <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        placeholder="Search guests..."
+                        value={guestSearch}
+                        onChange={(e) => setGuestSearch(e.target.value)}
+                        className="pl-10"
+                      />
                     </div>
-                    <FillForm
-                      onAddFill={addFill}
-                      isDisabled={totalPlayers >= 4}
-                    />
+                    {guestSearchQuery.isLoading && (
+                      <div className="flex items-center justify-center py-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </div>
+                    )}
+                    {guestResults.length > 0 && (
+                      <div className="max-h-32 overflow-y-auto rounded-md border">
+                        {guestResults.map((guest) => {
+                          const isAlreadyAdded = selectedGuests.some(
+                            (g) => g.id === guest.id,
+                          );
+                          return (
+                            <button
+                              key={guest.id}
+                              type="button"
+                              onClick={() =>
+                                !isAlreadyAdded && handleAddGuest(guest)
+                              }
+                              disabled={isAlreadyAdded}
+                              className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm ${
+                                isAlreadyAdded
+                                  ? "cursor-default bg-green-50 text-green-700"
+                                  : "hover:bg-gray-100"
+                              }`}
+                            >
+                              <span>
+                                {guest.firstName} {guest.lastName}
+                              </span>
+                              {isAlreadyAdded && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-green-100 text-xs text-green-800"
+                                >
+                                  Added
+                                </Badge>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {showCreateGuestOption && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleShowCreateGuest}
+                        className="w-full"
+                      >
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Create Guest &quot;{debouncedGuestSearch}&quot;
+                      </Button>
+                    )}
+
+                    {/* Guest Fill Button */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddGuestFill}
+                      className="w-full border-dashed border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-black"
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Guest Fill
+                    </Button>
+                  </div>
+                )}
+
+                {/* Create Guest Form */}
+                {showCreateGuest && (
+                  <div className="space-y-3 rounded-md border bg-gray-50 p-4">
+                    <Label>Create New Guest</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        placeholder="First Name"
+                        value={newGuestFirstName}
+                        onChange={(e) => setNewGuestFirstName(e.target.value)}
+                        disabled={isCreatingGuest}
+                      />
+                      <Input
+                        placeholder="Last Name"
+                        value={newGuestLastName}
+                        onChange={(e) => setNewGuestLastName(e.target.value)}
+                        disabled={isCreatingGuest}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleCreateGuest}
+                        disabled={
+                          isCreatingGuest ||
+                          !newGuestFirstName.trim() ||
+                          !newGuestLastName.trim()
+                        }
+                      >
+                        {isCreatingGuest ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating...
+                          </>
+                        ) : (
+                          "Create & Add"
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowCreateGuest(false)}
+                        disabled={isCreatingGuest}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -460,9 +741,7 @@ export function AdminLotteryEntryModal({
                     </p>
                     <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
                       {timeWindows
-                        .filter(
-                          (w) => w.index.toString() !== preferredWindow,
-                        )
+                        .filter((w) => w.index.toString() !== preferredWindow)
                         .map((window) => (
                           <div
                             key={window.index}
