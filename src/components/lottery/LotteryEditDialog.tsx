@@ -22,10 +22,7 @@ import { LoadingSpinner } from "~/components/ui/loading-spinner";
 import { Badge } from "~/components/ui/badge";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import type { TeesheetConfigWithBlocks } from "~/server/db/schema";
-import {
-  updateLotteryEntryAdmin,
-  updateLotteryGroupAdmin,
-} from "~/server/lottery/actions";
+import { updateLotteryEntryAdmin } from "~/server/lottery/actions";
 import { toast } from "react-hot-toast";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
 import { X, Search, UserPlus, Loader2 } from "lucide-react";
@@ -91,6 +88,7 @@ interface GroupEntry {
 interface LotteryEditDialogProps {
   open: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
   entry: IndividualEntry | GroupEntry | null;
   isGroup: boolean;
   members: Member[];
@@ -100,6 +98,7 @@ interface LotteryEditDialogProps {
 export function LotteryEditDialog({
   open,
   onClose,
+  onSuccess,
   entry,
   isGroup,
   members,
@@ -141,16 +140,10 @@ export function LotteryEditDialog({
     !guestSearchQuery.isLoading &&
     guestResults.length === 0;
 
-  // Calculate total players
+  // Calculate total players - always use selectedMemberIds
   const totalPlayers = useMemo(() => {
-    const memberCount = isGroup ? selectedMemberIds.length : 1;
-    return memberCount + selectedGuests.length + guestFillCount;
-  }, [
-    isGroup,
-    selectedMemberIds.length,
-    selectedGuests.length,
-    guestFillCount,
-  ]);
+    return selectedMemberIds.length + selectedGuests.length + guestFillCount;
+  }, [selectedMemberIds.length, selectedGuests.length, guestFillCount]);
 
   const isFull = totalPlayers >= 4;
 
@@ -164,11 +157,15 @@ export function LotteryEditDialog({
       setGuestSearch("");
       setShowCreateGuest(false);
 
-      if (isGroup && "memberIds" in entry) {
+      // Initialize memberIds for all entries
+      if ("memberIds" in entry) {
         setSelectedMemberIds(entry.memberIds);
+      } else if ("member" in entry) {
+        // Individual entry - organizer is the only member
+        setSelectedMemberIds([entry.member.id]);
       }
     }
-  }, [entry, isGroup]);
+  }, [entry]);
 
   // Guest handlers
   const handleAddGuest = useCallback(
@@ -258,28 +255,23 @@ export function LotteryEditDialog({
 
     setIsLoading(true);
     try {
-      const updateData = {
+      // Use unified update function for all entry types
+      const result = await updateLotteryEntryAdmin(entry.id, {
         preferredWindow,
         alternateWindow: alternateWindow || undefined,
+        memberIds: selectedMemberIds,
         guestIds: selectedGuests.map((g) => g.id),
         guestFillCount,
-      };
-
-      let result;
-      if (isGroup && "memberIds" in entry) {
-        result = await updateLotteryGroupAdmin(entry.id, {
-          ...updateData,
-          memberIds: selectedMemberIds,
-        });
-      } else {
-        result = await updateLotteryEntryAdmin(entry.id, updateData);
-      }
+      });
 
       if (result.success) {
-        toast.success(
-          `${isGroup ? "Group" : "Individual"} entry updated successfully`,
-        );
-        onClose();
+        toast.success("Entry updated");
+        // Call onSuccess if provided, otherwise onClose
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          onClose();
+        }
       } else {
         toast.error(result.error || "Failed to update entry");
       }
@@ -294,9 +286,7 @@ export function LotteryEditDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            Edit {isGroup ? "Group" : "Individual"} Entry
-          </DialogTitle>
+          <DialogTitle>Edit Entry</DialogTitle>
         </DialogHeader>
 
         {entry && (
@@ -383,81 +373,88 @@ export function LotteryEditDialog({
               </Select>
             </div>
 
-            {/* Group Members (only for groups) */}
-            {isGroup && (
-              <div className="space-y-2">
-                <Label>Group Members</Label>
-                {selectedMemberIds.length < 4 && (
-                  <MemberSearchInput
-                    onSelect={(searchMember: any) => {
-                      if (
-                        searchMember &&
-                        !selectedMemberIds.includes(searchMember.id)
-                      ) {
-                        setSelectedMemberIds((prev) => [
-                          ...prev,
-                          searchMember.id,
-                        ]);
-                      }
-                    }}
-                    placeholder="Search and add members..."
-                  />
-                )}
-                {selectedMemberIds.length >= 4 && (
-                  <div className="text-sm text-gray-500 italic">
-                    Maximum group size of 4 members reached
-                  </div>
-                )}
+            {/* Members Section - allows adding members to any entry */}
+            <div className="space-y-2">
+              <Label>Members ({selectedMemberIds.length})</Label>
+              {!isFull && (
+                <MemberSearchInput
+                  onSelect={(searchMember: any) => {
+                    if (
+                      searchMember &&
+                      !selectedMemberIds.includes(searchMember.id)
+                    ) {
+                      setSelectedMemberIds((prev) => [
+                        ...prev,
+                        searchMember.id,
+                      ]);
+                    }
+                  }}
+                  placeholder="Search and add members..."
+                />
+              )}
+              {isFull && (
+                <div className="text-sm text-gray-500 italic">
+                  Maximum 4 players per entry
+                </div>
+              )}
 
-                {/* Selected Members List */}
-                {selectedMemberIds.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium">
-                      Selected Members ({selectedMemberIds.length})
-                    </div>
-                    <div className="space-y-1">
-                      {selectedMemberIds.map((memberId) => {
-                        const member = members.find((m) => m.id === memberId);
-                        if (!member) return null;
+              {/* Selected Members List */}
+              {selectedMemberIds.length > 0 && (
+                <div className="space-y-1">
+                  {selectedMemberIds.map((memberId, index) => {
+                    const member = members.find((m) => m.id === memberId);
+                    if (!member) return null;
 
-                        return (
-                          <div
-                            key={memberId}
-                            className="flex items-center justify-between rounded border bg-gray-50 p-2"
-                          >
-                            <div>
-                              <div className="font-medium">
-                                {member.firstName} {member.lastName}
-                              </div>
-                              <div className="text-sm text-gray-600">
-                                {member.class}
-                              </div>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() =>
-                                setSelectedMemberIds((prev) =>
-                                  prev.filter((id) => id !== memberId),
-                                )
-                              }
-                              className="h-8 w-8 text-red-500 hover:bg-red-50"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
+                    // First member is always the organizer (cannot be removed)
+                    const isOrganizer = index === 0;
+
+                    return (
+                      <div
+                        key={memberId}
+                        className={`flex items-center justify-between rounded border p-2 ${
+                          isOrganizer
+                            ? "border-green-200 bg-green-50"
+                            : "bg-gray-50"
+                        }`}
+                      >
+                        <div>
+                          <div className="font-medium">
+                            {member.firstName} {member.lastName}
+                            {isOrganizer && (
+                              <span className="ml-2 text-xs text-green-600">
+                                (Organizer)
+                              </span>
+                            )}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                          <div className="text-sm text-gray-600">
+                            {member.class}
+                          </div>
+                        </div>
+                        {!isOrganizer && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() =>
+                              setSelectedMemberIds((prev) =>
+                                prev.filter((id) => id !== memberId),
+                              )
+                            }
+                            className="h-8 w-8 text-red-500 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Guests Section - matching BookingPartyModal pattern */}
             <div className="space-y-3">
-              <Label>Guests ({selectedGuests.length})</Label>
+              <Label>Guests ({selectedGuests.length + guestFillCount})</Label>
 
               {/* Selected Guests List */}
               {selectedGuests.length > 0 && (

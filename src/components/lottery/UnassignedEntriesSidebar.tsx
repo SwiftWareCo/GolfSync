@@ -403,7 +403,10 @@ export function UnassignedEntriesSidebar({
       {/* Edit Dialog */}
       <LotteryEditDialog
         open={editDialog.open}
-        onClose={() => {
+        onClose={() =>
+          setEditDialog({ open: false, entry: null, isGroup: false })
+        }
+        onSuccess={() => {
           setEditDialog({ open: false, entry: null, isGroup: false });
           onEntryUpdated();
         }}

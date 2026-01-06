@@ -167,12 +167,14 @@ export async function submitLotteryEntry(
 
 /**
  * Update a lottery entry (admin action)
+ * Handles both individual and group entries - auto-converts to group when memberIds.length > 1
  */
 export async function updateLotteryEntryAdmin(
   entryId: number,
   data: {
     preferredWindow: string;
     alternateWindow?: string;
+    memberIds?: number[];
     guestIds?: number[];
     guestFillCount?: number;
   },
@@ -190,12 +192,38 @@ export async function updateLotteryEntryAdmin(
       };
     }
 
+    // If memberIds are provided, validate them
+    let finalMemberIds = entry.memberIds;
+    if (data.memberIds !== undefined) {
+      // Validate that memberIds includes the organizer
+      if (!data.memberIds.includes(entry.organizerId)) {
+        return {
+          success: false,
+          error: "Entry organizer must be included in member list",
+        };
+      }
+
+      // Validate all member IDs exist
+      const foundMembers = await db.query.members.findMany({
+        where: inArray(members.id, data.memberIds),
+      });
+      if (foundMembers.length !== data.memberIds.length) {
+        return {
+          success: false,
+          error: "One or more members in the group do not exist",
+        };
+      }
+
+      finalMemberIds = data.memberIds;
+    }
+
     // Update the entry
     const [updatedEntry] = await db
       .update(lotteryEntries)
       .set({
         preferredWindow: data.preferredWindow,
         alternateWindow: data.alternateWindow || null,
+        memberIds: finalMemberIds,
         guestIds: data.guestIds ?? entry.guestIds,
         guestFillCount: data.guestFillCount ?? entry.guestFillCount,
         updatedAt: new Date(),
@@ -208,82 +236,6 @@ export async function updateLotteryEntryAdmin(
   } catch (error) {
     console.error("Error updating lottery entry (admin):", error);
     return { success: false, error: "Failed to update lottery entry" };
-  }
-}
-
-/**
- * Update a group lottery entry (admin action - consolidated schema)
- * Can update memberIds, preferredWindow, alternateWindow, guestIds, and guestFillCount
- */
-export async function updateLotteryGroupAdmin(
-  entryId: number,
-  data: {
-    preferredWindow: string;
-    alternateWindow?: string;
-    memberIds: number[];
-    guestIds?: number[];
-    guestFillCount?: number;
-  },
-): Promise<ActionResult> {
-  try {
-    // Verify the entry exists and is a group
-    const entry = await db.query.lotteryEntries.findFirst({
-      where: eq(lotteryEntries.id, entryId),
-    });
-
-    if (!entry) {
-      return {
-        success: false,
-        error: "Lottery entry not found",
-      };
-    }
-
-    // Verify it's a group (memberIds.length > 1)
-    if (entry.memberIds.length <= 1) {
-      return {
-        success: false,
-        error: "This is not a group entry",
-      };
-    }
-
-    // Validate that memberIds includes the organizer
-    if (!data.memberIds.includes(entry.organizerId)) {
-      return {
-        success: false,
-        error: "Group organizer must be included in member list",
-      };
-    }
-
-    // Validate all member IDs exist
-    const memberIds = await db.query.members.findMany({
-      where: inArray(members.id, data.memberIds),
-    });
-    if (memberIds.length !== data.memberIds.length) {
-      return {
-        success: false,
-        error: "One or more members in the group do not exist",
-      };
-    }
-
-    // Update the entry
-    const [updatedEntry] = await db
-      .update(lotteryEntries)
-      .set({
-        preferredWindow: data.preferredWindow,
-        alternateWindow: data.alternateWindow || null,
-        memberIds: data.memberIds,
-        guestIds: data.guestIds ?? entry.guestIds,
-        guestFillCount: data.guestFillCount ?? entry.guestFillCount,
-        updatedAt: new Date(),
-      })
-      .where(eq(lotteryEntries.id, entryId))
-      .returning();
-
-    revalidatePath("/admin/lottery");
-    return { success: true, data: updatedEntry };
-  } catch (error) {
-    console.error("Error updating lottery group (admin):", error);
-    return { success: false, error: "Failed to update lottery group" };
   }
 }
 

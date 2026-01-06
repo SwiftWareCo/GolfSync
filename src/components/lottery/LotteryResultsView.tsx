@@ -87,8 +87,8 @@ export function LotteryResultsView({
   };
 
   const handleEntryUpdated = () => {
-    // Trigger refresh of lottery data
-    onComplete();
+    // Data refresh happens via revalidatePath in the update action
+    // No need to call onComplete() which would show the "finalized" toast
   };
 
   const handleProcessLottery = async () => {

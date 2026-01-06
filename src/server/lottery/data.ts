@@ -105,13 +105,19 @@ export async function getLotteryDataForDate(date: string) {
       orderBy: [asc(lotteryEntries.submissionTimestamp)],
     });
 
-    // Separate entries by type
+    // Helper to calculate total players in an entry
+    const getTotalPlayers = (entry: (typeof allEntries)[0]) =>
+      entry.memberIds.length +
+      (entry.guestIds?.length || 0) +
+      (entry.guestFillCount || 0);
+
+    // Separate entries by type - group when total players > 1
     const individualEntries = allEntries.filter(
-      (entry) => entry.memberIds.length === 1,
+      (entry) => getTotalPlayers(entry) === 1,
     );
 
     const groupEntries = allEntries.filter(
-      (entry) => entry.memberIds.length > 1,
+      (entry) => getTotalPlayers(entry) > 1,
     );
 
     // Collect all unique member IDs from all groups for batch fetch
@@ -212,7 +218,6 @@ export async function getLotteryDataForDate(date: string) {
   }
 }
 
-
 /**
  * Get all lottery entries for a date with member details
  * Queries consolidated table and separates by type (individual vs group)
@@ -233,13 +238,19 @@ export async function getLotteryEntriesForDate(date: string) {
       orderBy: [asc(lotteryEntries.submissionTimestamp)],
     });
 
-    // Separate entries by type
+    // Helper to calculate total players in an entry
+    const getTotalPlayers = (entry: (typeof allEntries)[0]) =>
+      entry.memberIds.length +
+      (entry.guestIds?.length || 0) +
+      (entry.guestFillCount || 0);
+
+    // Separate entries by type - group when total players > 1
     const individualEntries = allEntries.filter(
-      (entry) => entry.memberIds.length === 1,
+      (entry) => getTotalPlayers(entry) === 1,
     );
 
     const groupEntries = allEntries.filter(
-      (entry) => entry.memberIds.length > 1,
+      (entry) => getTotalPlayers(entry) > 1,
     );
 
     // Collect all unique member IDs from all groups
