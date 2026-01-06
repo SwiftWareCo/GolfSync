@@ -132,15 +132,16 @@ const MemoizedGroupEntry = React.memo<{
           {guest.name}
         </Badge>
       ))}
-      {/* Guest Fills */}
-      {(entry.guestFillCount ?? 0) > 0 && (
+      {/* Guest Fills - render each as individual badge */}
+      {Array.from({ length: entry.guestFillCount ?? 0 }).map((_, index) => (
         <Badge
+          key={`fill-${index}`}
           variant="outline"
           className="border-amber-400 bg-amber-50 text-xs text-amber-700"
         >
-          +{entry.guestFillCount} fills
+          Guest Fill
         </Badge>
-      )}
+      ))}
     </div>
   );
 });

@@ -6,6 +6,7 @@ import {
   fills,
   members,
   timeBlockMembers,
+  timeBlockGuests,
   memberFairnessScores,
   timeBlocks,
   memberSpeedProfiles,
@@ -373,6 +374,19 @@ export async function processLotteryForDate(
       bookingDate: string;
       bookingTime: string;
     }> = [];
+    const guestInserts: Array<{
+      timeBlockId: number;
+      guestId: number;
+      invitedByMemberId: number;
+      bookingDate: string;
+      bookingTime: string;
+    }> = [];
+    const fillInserts: Array<{
+      relatedType: "timeblock";
+      relatedId: number;
+      fillType: string;
+      addedByMemberId: number;
+    }> = [];
 
     // Simple logging for algorithm decisions
     console.log(`🎲 Starting lottery processing for ${date}`);
@@ -543,8 +557,37 @@ export async function processLotteryForDate(
           });
         }
 
-        // Update available spots for next assignment calculations
-        suitableBlock.availableSpots -= groupSize;
+        // Create timeBlockGuests records for named guests
+        if (group.guestIds && group.guestIds.length > 0) {
+          for (const guestId of group.guestIds) {
+            guestInserts.push({
+              timeBlockId: suitableBlock.id,
+              guestId: guestId,
+              invitedByMemberId: group.organizerId,
+              bookingDate: date,
+              bookingTime: suitableBlock.startTime,
+            });
+          }
+        }
+
+        // Create fill records for guest fill placeholders
+        if (group.guestFillCount && group.guestFillCount > 0) {
+          for (let i = 0; i < group.guestFillCount; i++) {
+            fillInserts.push({
+              relatedType: "timeblock",
+              relatedId: suitableBlock.id,
+              fillType: "guest_fill",
+              addedByMemberId: group.organizerId,
+            });
+          }
+        }
+
+        // Update available spots for next assignment calculations (include ALL players)
+        const totalPartySize =
+          groupSize +
+          (group.guestIds?.length ?? 0) +
+          (group.guestFillCount ?? 0);
+        suitableBlock.availableSpots -= totalPartySize;
         processedCount++;
       }
     }
@@ -606,8 +649,35 @@ export async function processLotteryForDate(
           bookingTime: suitableResult.block.startTime,
         });
 
-        // Update available spots for next assignment calculations
-        suitableResult.block.availableSpots -= 1;
+        // Create timeBlockGuests records for named guests
+        if (entry.guestIds && entry.guestIds.length > 0) {
+          for (const guestId of entry.guestIds) {
+            guestInserts.push({
+              timeBlockId: suitableResult.block.id,
+              guestId: guestId,
+              invitedByMemberId: individualMemberId,
+              bookingDate: date,
+              bookingTime: suitableResult.block.startTime,
+            });
+          }
+        }
+
+        // Create fill records for guest fill placeholders
+        if (entry.guestFillCount && entry.guestFillCount > 0) {
+          for (let i = 0; i < entry.guestFillCount; i++) {
+            fillInserts.push({
+              relatedType: "timeblock",
+              relatedId: suitableResult.block.id,
+              fillType: "guest_fill",
+              addedByMemberId: individualMemberId,
+            });
+          }
+        }
+
+        // Update available spots for next assignment calculations (include ALL players)
+        const totalEntrySize =
+          1 + (entry.guestIds?.length ?? 0) + (entry.guestFillCount ?? 0);
+        suitableResult.block.availableSpots -= totalEntrySize;
         processedCount++;
       }
     }
@@ -615,6 +685,16 @@ export async function processLotteryForDate(
     // Insert all timeBlockMembers records at once
     if (memberInserts.length > 0) {
       await db.insert(timeBlockMembers).values(memberInserts);
+    }
+
+    // Insert all timeBlockGuests records at once
+    if (guestInserts.length > 0) {
+      await db.insert(timeBlockGuests).values(guestInserts);
+    }
+
+    // Insert all fill records at once
+    if (fillInserts.length > 0) {
+      await db.insert(fills).values(fillInserts);
     }
 
     // Note: Fairness scores are no longer updated automatically
@@ -644,7 +724,9 @@ export async function processLotteryForDate(
       `🏌️ Individuals: ${assignedIndividuals}/${entries.individual.length} assigned`,
     );
     console.log(`🎯 Remaining slots: ${remainingSlots}`);
-    console.log(`🎫 Created ${memberInserts.length} actual bookings`);
+    console.log(
+      `🎫 Created ${memberInserts.length} member bookings, ${guestInserts.length} guest bookings, ${fillInserts.length} fills`,
+    );
 
     revalidatePath("/admin/lottery");
     revalidatePath("/admin/teesheet");
@@ -653,8 +735,12 @@ export async function processLotteryForDate(
       data: {
         processedCount,
         totalEntries,
-        bookingsCreated: memberInserts.length,
-        message: `Enhanced algorithm processed ${processedCount} entries and created ${memberInserts.length} bookings`,
+        bookingsCreated:
+          memberInserts.length + guestInserts.length + fillInserts.length,
+        memberBookings: memberInserts.length,
+        guestBookings: guestInserts.length,
+        fillsCreated: fillInserts.length,
+        message: `Enhanced algorithm processed ${processedCount} entries and created ${memberInserts.length} member bookings, ${guestInserts.length} guest bookings, and ${fillInserts.length} fills`,
       },
     };
   } catch (error) {
@@ -674,8 +760,11 @@ function filterBlocksByRestrictions(
   timeRestrictions: TimeblockRestriction[],
   hasGuestsOrGuestFills: boolean = false,
 ): Array<{ id: number; startTime: string; availableSpots: number }> {
-  // Parse date once for day of week check
-  const bookingDateObj = new Date(bookingDate);
+  // Parse date correctly to avoid timezone issues
+  // new Date("YYYY-MM-DD") interprets as UTC midnight, which can shift the day in local timezone
+  // Instead, parse the components and create a local date
+  const [year, month, day] = bookingDate.split("-").map(Number);
+  const bookingDateObj = new Date(year!, month! - 1, day!); // Month is 0-indexed
   const dayOfWeek = bookingDateObj.getDay();
 
   return blocks.filter((block) => {

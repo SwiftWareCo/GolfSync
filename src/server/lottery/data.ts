@@ -9,7 +9,7 @@ import {
   timeblockRestrictions,
   guests,
 } from "~/server/db/schema";
-import { eq, and, desc, asc, inArray } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, or } from "drizzle-orm";
 import type { LotteryEntryData } from "~/server/db/schema/lottery/lottery-entries.schema";
 
 /**
@@ -369,13 +369,16 @@ export async function getAvailableTimeBlocksForDate(date: string) {
 
 /**
  * Get active time restrictions for lottery processing
- * Only fetches MEMBER_CLASS TIME restrictions that are currently active
+ * Fetches both MEMBER_CLASS and GUEST TIME restrictions that are currently active
  */
 export async function getActiveTimeRestrictionsForDate(date: string) {
   try {
     return await db.query.timeblockRestrictions.findMany({
       where: and(
-        eq(timeblockRestrictions.restrictionCategory, "MEMBER_CLASS"),
+        or(
+          eq(timeblockRestrictions.restrictionCategory, "MEMBER_CLASS"),
+          eq(timeblockRestrictions.restrictionCategory, "GUEST"),
+        ),
         eq(timeblockRestrictions.restrictionType, "TIME"),
         eq(timeblockRestrictions.isActive, true),
       ),
