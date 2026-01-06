@@ -4,7 +4,6 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -33,12 +32,20 @@ export function ConfirmationDialog({
   variant = "default",
   loading = false,
 }: ConfirmationDialogProps) {
+  // Check if description is a simple string or complex ReactNode
+  const isSimpleDescription = typeof description === "string";
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
+          {/* Render as div for complex content to avoid <p> nesting issues */}
+          {isSimpleDescription ? (
+            <p className="text-muted-foreground text-sm">{description}</p>
+          ) : (
+            <div className="text-muted-foreground text-sm">{description}</div>
+          )}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={loading}>{cancelText}</AlertDialogCancel>
@@ -46,7 +53,9 @@ export function ConfirmationDialog({
             onClick={onConfirm}
             disabled={loading}
             className={
-              variant === "destructive" ? "bg-red-600 hover:bg-red-700" : ""
+              variant === "destructive"
+                ? "bg-red-600 hover:bg-red-700"
+                : "bg-org-primary hover:bg-org-primary/90"
             }
           >
             {loading ? "Loading..." : confirmText}

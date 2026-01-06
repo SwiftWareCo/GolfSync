@@ -11,6 +11,8 @@ import {
   timeBlocks,
   memberSpeedProfiles,
   TeesheetConfigWithBlocks,
+  lotteryProcessingRuns,
+  lotteryProcessingEntryLogs,
 } from "~/server/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -367,6 +369,9 @@ export async function processLotteryForDate(
     // Calculate dynamic time windows for scoring
     const timeWindows = calculateDynamicTimeWindows(config);
     let processedCount = 0;
+    let groupsAssignedCount = 0;
+    let individualsAssignedCount = 0;
+    let violationCount = 0;
     const now = new Date();
     const memberInserts: Array<{
       timeBlockId: number;
@@ -387,6 +392,23 @@ export async function processLotteryForDate(
       fillType: string;
       addedByMemberId: number;
     }> = [];
+
+    // Entry log tracking for the processing run
+    type EntryLogRecord = {
+      entryId: number;
+      entryType: "GROUP" | "INDIVIDUAL";
+      preferredWindow: string;
+      alternateWindow: string | null;
+      autoAssignedTimeBlockId: number | null;
+      autoAssignedStartTime: string | null;
+      assignmentReason: string;
+      violatedRestrictions: boolean;
+      restrictionDetails: {
+        restrictionIds: number[];
+        reasons: string[];
+      } | null;
+    };
+    const entryLogs: EntryLogRecord[] = [];
 
     // Simple logging for algorithm decisions
     console.log(`🎲 Starting lottery processing for ${date}`);
@@ -505,6 +527,34 @@ export async function processLotteryForDate(
         });
       });
 
+      // Debug logging when no allowed blocks
+      if (allowedBlocks.length === 0) {
+        console.log(
+          `📊 Group ${group.id}: ${availableBlocksOnly.length} available → 0 allowed after restrictions`,
+        );
+        const memberClasses = group.members
+          .map((m) => m?.memberClass?.label || "Unknown")
+          .join(", ");
+        console.log(
+          `⚠️ Group ${group.id} has NO allowed blocks. Members: [${memberClasses}], hasGuests: ${hasGuestsOrGuestFills}`,
+        );
+
+        // Log detailed restriction info for each member
+        for (const member of group.members) {
+          filterBlocksByRestrictions(
+            availableBlocksOnly.slice(0, 5), // Log first 5 blocks only to avoid spam
+            {
+              memberId: member?.id as number,
+              memberClassId: member?.memberClass?.id ?? 0,
+            },
+            date,
+            timeRestrictions,
+            hasGuestsOrGuestFills,
+            true, // Enable debug logging
+          );
+        }
+      }
+
       // Try to find a block that matches time preferences
       let suitableBlock = allowedBlocks.find((block) =>
         matchesTimePreference(
@@ -514,15 +564,38 @@ export async function processLotteryForDate(
           config,
         ),
       );
+      let assignmentReason = "PREFERRED_MATCH";
+      let violatesRestrictions = false;
+
+      // Check if it's preferred vs alternate match
+      if (suitableBlock) {
+        const isPreferredMatch = matchesTimePreference(
+          suitableBlock,
+          group.preferredWindow,
+          null, // Check only preferred, not alternate
+          config,
+        );
+        assignmentReason = isPreferredMatch
+          ? "PREFERRED_MATCH"
+          : "ALTERNATE_MATCH";
+      }
 
       // Fallback: if no preference match, try any allowed block
       if (!suitableBlock) {
         suitableBlock = allowedBlocks.find(
           (block) => block.availableSpots >= groupSize,
         );
+        if (suitableBlock) {
+          assignmentReason = "ALLOWED_FALLBACK";
+        }
       }
 
       // Final fallback: try ANY available block (even if restrictions violated)
+      // Also capture WHY restrictions blocked all preferred blocks
+      let violationDetails: {
+        restrictionIds: number[];
+        reasons: string[];
+      } | null = null;
       if (!suitableBlock) {
         const anyAvailableBlock = availableBlocksOnly.find(
           (block) => block.availableSpots >= groupSize,
@@ -532,20 +605,65 @@ export async function processLotteryForDate(
             `⚠️ Group fallback assignment: Group ${group.id} assigned to ${anyAvailableBlock.startTime} (may violate restrictions)`,
           );
           suitableBlock = anyAvailableBlock;
+          assignmentReason = "RESTRICTION_VIOLATION";
+          violatesRestrictions = true;
+          violationCount++;
+
+          // Capture detailed restriction info for each group member
+          const allRestrictionIds = new Set<number>();
+          const allReasons: string[] = [];
+          for (const member of group.members) {
+            const details = getRestrictionViolationDetails(
+              availableBlocksOnly,
+              {
+                memberId: member?.id as number,
+                memberClassId: member?.memberClass?.id ?? 0,
+              },
+              date,
+              timeRestrictions,
+              hasGuestsOrGuestFills,
+            );
+            details.restrictionIds.forEach((id) => allRestrictionIds.add(id));
+            details.reasons.forEach((reason) => {
+              if (!allReasons.includes(reason)) {
+                allReasons.push(reason);
+              }
+            });
+          }
+          violationDetails = {
+            restrictionIds: Array.from(allRestrictionIds),
+            reasons: allReasons,
+          };
         }
       }
 
       if (suitableBlock) {
-        // Update group status to ASSIGNED
+        // Update group status to ASSIGNED with new tracking fields
         await db
           .update(lotteryEntries)
           .set({
             status: "ASSIGNED",
             assignedTimeBlockId: suitableBlock.id,
+            autoAssignedTimeBlockId: suitableBlock.id,
+            assignmentReason: assignmentReason,
+            violatesRestrictions: violatesRestrictions,
             processedAt: now,
             updatedAt: now,
           })
           .where(eq(lotteryEntries.id, group.id));
+
+        // Track entry log
+        entryLogs.push({
+          entryId: group.id,
+          entryType: "GROUP",
+          preferredWindow: group.preferredWindow,
+          alternateWindow: group.alternateWindow,
+          autoAssignedTimeBlockId: suitableBlock.id,
+          autoAssignedStartTime: suitableBlock.startTime,
+          assignmentReason,
+          violatedRestrictions: violatesRestrictions,
+          restrictionDetails: violationDetails,
+        });
 
         // Create timeBlockMembers records for all group members
         for (const memberId of group.memberIds) {
@@ -589,6 +707,7 @@ export async function processLotteryForDate(
           (group.guestFillCount ?? 0);
         suitableBlock.availableSpots -= totalPartySize;
         processedCount++;
+        groupsAssignedCount++;
       }
     }
 
@@ -629,17 +748,75 @@ export async function processLotteryForDate(
         hasGuestsOrGuestFills,
       );
 
+      // Capture restriction details if there was a restriction violation
+      let individualViolationDetails: {
+        restrictionIds: number[];
+        reasons: string[];
+      } | null = null;
+
+      if (suitableResult.wasBlockedByRestrictions) {
+        individualViolationDetails = getRestrictionViolationDetails(
+          availableBlocksOnly,
+          {
+            memberId: individualMemberId,
+            memberClassId: memberData.memberClass?.id ?? 0,
+          },
+          date,
+          timeRestrictions,
+          hasGuestsOrGuestFills,
+        );
+      }
+
       if (suitableResult.block && suitableResult.block.availableSpots > 0) {
-        // Update entry status to ASSIGNED
+        // Determine assignment reason
+        let individualAssignmentReason = "ALLOWED_FALLBACK";
+        const isPreferredMatch = matchesTimePreference(
+          suitableResult.block,
+          entry.preferredWindow,
+          null, // Check only preferred
+          config,
+        );
+        const isAlternateMatch =
+          entry.alternateWindow &&
+          matchesTimePreference(
+            suitableResult.block,
+            entry.alternateWindow,
+            null,
+            config,
+          );
+
+        if (isPreferredMatch) {
+          individualAssignmentReason = "PREFERRED_MATCH";
+        } else if (isAlternateMatch) {
+          individualAssignmentReason = "ALTERNATE_MATCH";
+        }
+
+        // Update entry status to ASSIGNED with new tracking fields
         await db
           .update(lotteryEntries)
           .set({
             status: "ASSIGNED",
             assignedTimeBlockId: suitableResult.block.id,
+            autoAssignedTimeBlockId: suitableResult.block.id,
+            assignmentReason: individualAssignmentReason,
+            violatesRestrictions: false, // Individual entries don't use restriction violation fallback
             processedAt: now,
             updatedAt: now,
           })
           .where(eq(lotteryEntries.id, entry.id));
+
+        // Track entry log
+        entryLogs.push({
+          entryId: entry.id,
+          entryType: "INDIVIDUAL",
+          preferredWindow: entry.preferredWindow,
+          alternateWindow: entry.alternateWindow,
+          autoAssignedTimeBlockId: suitableResult.block.id,
+          autoAssignedStartTime: suitableResult.block.startTime,
+          assignmentReason: individualAssignmentReason,
+          violatedRestrictions: suitableResult.wasBlockedByRestrictions,
+          restrictionDetails: individualViolationDetails,
+        });
 
         // Create timeBlockMembers record (use the individual member ID)
         memberInserts.push({
@@ -679,6 +856,7 @@ export async function processLotteryForDate(
           1 + (entry.guestIds?.length ?? 0) + (entry.guestFillCount ?? 0);
         suitableResult.block.availableSpots -= totalEntrySize;
         processedCount++;
+        individualsAssignedCount++;
       }
     }
 
@@ -697,17 +875,68 @@ export async function processLotteryForDate(
       await db.insert(fills).values(fillInserts);
     }
 
+    // Create processing run record
+    const totalEntries = entries.individual.length + entries.groups.length;
+    const [processingRun] = await db
+      .insert(lotteryProcessingRuns)
+      .values({
+        lotteryDate: date,
+        processedAt: now,
+        totalEntries,
+        assignedCount: processedCount,
+        groupCount: groupsAssignedCount,
+        individualCount: individualsAssignedCount,
+        violationCount,
+      })
+      .onConflictDoUpdate({
+        target: lotteryProcessingRuns.lotteryDate,
+        set: {
+          processedAt: now,
+          totalEntries,
+          assignedCount: processedCount,
+          groupCount: groupsAssignedCount,
+          individualCount: individualsAssignedCount,
+          violationCount,
+          // Reset workflow tracking on reprocess
+          fairnessAssignedAt: null,
+          finalizedAt: null,
+        },
+      })
+      .returning();
+
+    // Insert entry logs if we have a run record
+    if (processingRun && entryLogs.length > 0) {
+      // First delete any existing logs for this run (in case of reprocessing)
+      await db
+        .delete(lotteryProcessingEntryLogs)
+        .where(eq(lotteryProcessingEntryLogs.runId, processingRun.id));
+
+      // Insert new logs
+      await db.insert(lotteryProcessingEntryLogs).values(
+        entryLogs.map((log) => ({
+          runId: processingRun.id,
+          entryId: log.entryId,
+          entryType: log.entryType,
+          preferredWindow: log.preferredWindow,
+          alternateWindow: log.alternateWindow,
+          autoAssignedTimeBlockId: log.autoAssignedTimeBlockId,
+          autoAssignedStartTime: log.autoAssignedStartTime,
+          // Final will be same as auto initially - updated by finalizeLottery after manual changes
+          finalTimeBlockId: log.autoAssignedTimeBlockId,
+          finalStartTime: log.autoAssignedStartTime,
+          assignmentReason: log.assignmentReason,
+          violatedRestrictions: log.violatedRestrictions,
+          restrictionDetails: log.restrictionDetails,
+          processedAt: now,
+        })),
+      );
+    }
+
     // Note: Fairness scores are no longer updated automatically
     // They must be assigned manually via assignFairnessScoresForDate after manual adjustments
 
-    // Final results logging
-    const totalEntries = entries.individual.length + entries.groups.length;
-    const assignedGroups = entries.groups.filter(
-      (g) => g.status === "ASSIGNED",
-    ).length;
-    const assignedIndividuals = entries.individual.filter(
-      (e) => e.status === "ASSIGNED",
-    ).length;
+    // Final results logging - use increment counters, not query-based counting
+    // (entries.groups/individual still have old PENDING status since we only updated DB)
     const remainingSlots = availableBlocksOnly.reduce(
       (sum, b) => sum + b.availableSpots,
       0,
@@ -718,10 +947,10 @@ export async function processLotteryForDate(
       `📈 Results: ${processedCount}/${totalEntries} entries assigned (${Math.round((processedCount / totalEntries) * 100)}%)`,
     );
     console.log(
-      `👥 Groups: ${assignedGroups}/${entries.groups.length} assigned`,
+      `👥 Groups: ${groupsAssignedCount}/${entries.groups.length} assigned`,
     );
     console.log(
-      `🏌️ Individuals: ${assignedIndividuals}/${entries.individual.length} assigned`,
+      `🏌️ Individuals: ${individualsAssignedCount}/${entries.individual.length} assigned`,
     );
     console.log(`🎯 Remaining slots: ${remainingSlots}`);
     console.log(
@@ -752,6 +981,7 @@ export async function processLotteryForDate(
 /**
  * Filter timeblocks by member class TIME restrictions and GUEST restrictions
  * @param hasGuestsOrGuestFills - If true, also check GUEST category restrictions
+ * @param enableDebugLogging - If true, logs which restrictions blocked which blocks
  */
 function filterBlocksByRestrictions(
   blocks: Array<{ id: number; startTime: string; availableSpots: number }>,
@@ -759,6 +989,7 @@ function filterBlocksByRestrictions(
   bookingDate: string,
   timeRestrictions: TimeblockRestriction[],
   hasGuestsOrGuestFills: boolean = false,
+  enableDebugLogging: boolean = false,
 ): Array<{ id: number; startTime: string; availableSpots: number }> {
   // Parse date correctly to avoid timezone issues
   // new Date("YYYY-MM-DD") interprets as UTC midnight, which can shift the day in local timezone
@@ -767,7 +998,10 @@ function filterBlocksByRestrictions(
   const bookingDateObj = new Date(year!, month! - 1, day!); // Month is 0-indexed
   const dayOfWeek = bookingDateObj.getDay();
 
-  return blocks.filter((block) => {
+  const blockedByMemberClass: string[] = [];
+  const blockedByGuest: string[] = [];
+
+  const result = blocks.filter((block) => {
     const blockTime = block.startTime; // "HH:MM"
 
     // Check each time restriction
@@ -804,9 +1038,19 @@ function filterBlocksByRestrictions(
               bookingDate <= restriction.endDate;
 
             if (withinDateRange) {
+              if (enableDebugLogging) {
+                blockedByMemberClass.push(
+                  `${blockTime} (restriction ${restriction.id}: ${restriction.name || "unnamed"})`,
+                );
+              }
               return false; // Block this timeblock
             }
           } else {
+            if (enableDebugLogging) {
+              blockedByMemberClass.push(
+                `${blockTime} (restriction ${restriction.id}: ${restriction.name || "unnamed"})`,
+              );
+            }
             return false; // Block this timeblock (no date range = always applies)
           }
         }
@@ -840,9 +1084,19 @@ function filterBlocksByRestrictions(
               bookingDate <= restriction.endDate;
 
             if (withinDateRange) {
+              if (enableDebugLogging) {
+                blockedByGuest.push(
+                  `${blockTime} (restriction ${restriction.id}: ${restriction.name || "unnamed"})`,
+                );
+              }
               return false; // Block this timeblock for guests
             }
           } else {
+            if (enableDebugLogging) {
+              blockedByGuest.push(
+                `${blockTime} (restriction ${restriction.id}: ${restriction.name || "unnamed"})`,
+              );
+            }
             return false; // Block this timeblock for guests (no date range = always applies)
           }
         }
@@ -851,6 +1105,129 @@ function filterBlocksByRestrictions(
 
     return true; // No restrictions block this timeblock
   });
+
+  if (
+    enableDebugLogging &&
+    (blockedByMemberClass.length > 0 || blockedByGuest.length > 0)
+  ) {
+    console.log(
+      `🔒 Member ${memberInfo.memberId} (class ${memberInfo.memberClassId}) restriction filtering:`,
+    );
+    if (blockedByMemberClass.length > 0) {
+      console.log(
+        `   📋 MEMBER_CLASS blocked: ${blockedByMemberClass.join(", ")}`,
+      );
+    }
+    if (blockedByGuest.length > 0) {
+      console.log(`   👥 GUEST blocked: ${blockedByGuest.join(", ")}`);
+    }
+    console.log(`   ✅ Allowed: ${result.length}/${blocks.length} blocks`);
+  }
+
+  return result;
+}
+
+/**
+ * Get detailed information about which restrictions are blocking a member
+ * Used to populate restrictionDetails when a RESTRICTION_VIOLATION occurs
+ */
+function getRestrictionViolationDetails(
+  blocks: Array<{ id: number; startTime: string; availableSpots: number }>,
+  memberInfo: { memberId: number; memberClassId: number },
+  bookingDate: string,
+  timeRestrictions: TimeblockRestriction[],
+  hasGuestsOrGuestFills: boolean = false,
+): { restrictionIds: number[]; reasons: string[] } {
+  const [year, month, day] = bookingDate.split("-").map(Number);
+  const bookingDateObj = new Date(year!, month! - 1, day!);
+  const dayOfWeek = bookingDateObj.getDay();
+
+  const restrictionIds = new Set<number>();
+  const reasons: string[] = [];
+
+  for (const block of blocks) {
+    const blockTime = block.startTime;
+
+    for (const restriction of timeRestrictions) {
+      // Check MEMBER_CLASS restrictions
+      if (restriction.restrictionCategory === "MEMBER_CLASS") {
+        if (restriction.restrictionType !== "TIME") continue;
+        if (!restriction.isActive) continue;
+
+        const appliesToMemberClass =
+          !restriction.memberClassIds?.length ||
+          restriction.memberClassIds.includes(memberInfo.memberClassId);
+
+        if (!appliesToMemberClass) continue;
+
+        const appliesToDay =
+          !restriction.daysOfWeek?.length ||
+          restriction.daysOfWeek.includes(dayOfWeek);
+
+        if (!appliesToDay) continue;
+
+        const withinTimeRange =
+          blockTime >= (restriction.startTime || "00:00") &&
+          blockTime <= (restriction.endTime || "23:59");
+
+        if (withinTimeRange) {
+          const withinDateRange =
+            !restriction.startDate ||
+            !restriction.endDate ||
+            (bookingDate >= restriction.startDate &&
+              bookingDate <= restriction.endDate);
+
+          if (withinDateRange) {
+            restrictionIds.add(restriction.id);
+            const reason = `Member class restricted from ${restriction.startTime || "00:00"}-${restriction.endTime || "23:59"} (${restriction.name || `Restriction #${restriction.id}`})`;
+            if (!reasons.includes(reason)) {
+              reasons.push(reason);
+            }
+          }
+        }
+      }
+
+      // Check GUEST restrictions
+      if (
+        hasGuestsOrGuestFills &&
+        restriction.restrictionCategory === "GUEST"
+      ) {
+        if (restriction.restrictionType !== "TIME") continue;
+        if (!restriction.isActive) continue;
+
+        const appliesToDay =
+          !restriction.daysOfWeek?.length ||
+          restriction.daysOfWeek.includes(dayOfWeek);
+
+        if (!appliesToDay) continue;
+
+        const withinTimeRange =
+          blockTime >= (restriction.startTime || "00:00") &&
+          blockTime <= (restriction.endTime || "23:59");
+
+        if (withinTimeRange) {
+          const withinDateRange =
+            !restriction.startDate ||
+            !restriction.endDate ||
+            (bookingDate >= restriction.startDate &&
+              bookingDate <= restriction.endDate);
+
+          if (withinDateRange) {
+            restrictionIds.add(restriction.id);
+            const reason = `Guests restricted from ${restriction.startTime || "00:00"}-${restriction.endTime || "23:59"} (${restriction.name || `Restriction #${restriction.id}`})`;
+            if (!reasons.includes(reason)) {
+              reasons.push(reason);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return {
+    restrictionIds: Array.from(restrictionIds),
+    reasons,
+  };
 }
 
 /**
@@ -1024,11 +1401,49 @@ function matchesTimePreference(
 
 /**
  * Create test lottery entries for debugging (admin only)
+ * Now fetches the actual teesheet config to use dynamic time windows
  */
 export async function createTestLotteryEntries(
   date: string,
 ): Promise<ActionResult> {
   try {
+    // Fetch teesheet and config for this date to get actual time windows
+    const { teesheets, teesheetConfigs } = await import("~/server/db/schema");
+    const teesheet = await db.query.teesheets.findFirst({
+      where: eq(teesheets.date, date),
+      with: {
+        config: {
+          with: {
+            blocks: true,
+          },
+        },
+      },
+    });
+
+    if (!teesheet?.config) {
+      return {
+        success: false,
+        error:
+          "No teesheet config found for this date. Please create a teesheet first.",
+      };
+    }
+
+    // Calculate dynamic time windows from actual config
+    const timeWindows = calculateDynamicTimeWindows(teesheet.config);
+    const windowCount = timeWindows.length;
+
+    if (windowCount === 0) {
+      return {
+        success: false,
+        error: "No time windows could be calculated from the teesheet config.",
+      };
+    }
+
+    console.log(`📊 Config has ${windowCount} time windows:`);
+    timeWindows.forEach((w) => {
+      console.log(`   Window ${w.index}: ${w.timeRange}`);
+    });
+
     // Get active members from database - exclude STAFF and MANAGEMENT classes
     const excludedClasses = new Set([
       "RESIGNED",
@@ -1116,27 +1531,76 @@ export async function createTestLotteryEntries(
     let memberIndex = 0;
 
     // Helper function to get realistic time preference based on demand
-    // Uses window indexes: "0" (early), "1" (mid), "2" (late)
+    // Uses actual window indexes from the config (0 to windowCount-1)
     const getTimePreference = () => {
       const rand = Math.random();
-      let preferredWindow = "0"; // Early/morning
-      let alternateWindow: string | null = null;
+      let preferredWindowIndex: number;
+      let alternateWindowIndex: number | null = null;
 
-      if (rand < 0.6) {
-        // 60% want high-demand early times (creates conflicts)
-        preferredWindow = "0";
-        alternateWindow = Math.random() > 0.5 ? "1" : null;
-      } else if (rand < 0.8) {
-        // 20% want medium-demand times
-        preferredWindow = Math.random() > 0.5 ? "0" : "1";
-        alternateWindow = preferredWindow === "0" ? "1" : "2";
+      // Realistic golf demand distribution:
+      // - ~35% want early morning (first 25% of windows) - highest demand
+      // - ~30% want mid-morning (25-50% of windows) - high demand
+      // - ~20% want early afternoon (50-75% of windows) - medium demand
+      // - ~15% want late afternoon (75-100% of windows) - lower demand
+
+      // Calculate window ranges
+      const earlyEnd = Math.max(1, Math.floor(windowCount * 0.25));
+      const midEnd = Math.max(earlyEnd + 1, Math.floor(windowCount * 0.5));
+      const lateStart = Math.max(midEnd + 1, Math.floor(windowCount * 0.75));
+
+      if (rand < 0.35) {
+        // 35% want early morning (high demand creates conflicts)
+        preferredWindowIndex = Math.floor(Math.random() * earlyEnd);
+        // 60% of early requesters have an alternate
+        if (Math.random() < 0.6) {
+          alternateWindowIndex =
+            earlyEnd + Math.floor(Math.random() * (midEnd - earlyEnd));
+        }
+      } else if (rand < 0.65) {
+        // 30% want mid-morning
+        preferredWindowIndex =
+          earlyEnd + Math.floor(Math.random() * (midEnd - earlyEnd));
+        // 50% have an alternate (either earlier or later)
+        if (Math.random() < 0.5) {
+          alternateWindowIndex =
+            Math.random() < 0.5
+              ? Math.floor(Math.random() * earlyEnd) // Try earlier
+              : midEnd + Math.floor(Math.random() * (lateStart - midEnd)); // Try later
+        }
+      } else if (rand < 0.85) {
+        // 20% want early afternoon
+        preferredWindowIndex =
+          midEnd + Math.floor(Math.random() * (lateStart - midEnd));
+        // 40% have an alternate
+        if (Math.random() < 0.4) {
+          alternateWindowIndex =
+            lateStart + Math.floor(Math.random() * (windowCount - lateStart));
+        }
       } else {
-        // 20% want later times (easier to accommodate)
-        preferredWindow = Math.random() > 0.5 ? "1" : "2";
-        alternateWindow = "2";
+        // 15% want late afternoon (easier to accommodate)
+        preferredWindowIndex =
+          lateStart + Math.floor(Math.random() * (windowCount - lateStart));
+        // 30% have an alternate (usually don't need one)
+        if (Math.random() < 0.3) {
+          alternateWindowIndex =
+            midEnd + Math.floor(Math.random() * (lateStart - midEnd));
+        }
       }
 
-      return { preferredWindow, alternateWindow };
+      // Ensure indexes are within bounds
+      preferredWindowIndex = Math.min(preferredWindowIndex, windowCount - 1);
+      if (alternateWindowIndex !== null) {
+        alternateWindowIndex = Math.min(alternateWindowIndex, windowCount - 1);
+        // Make sure alternate is different from preferred
+        if (alternateWindowIndex === preferredWindowIndex) {
+          alternateWindowIndex = (preferredWindowIndex + 1) % windowCount;
+        }
+      }
+
+      return {
+        preferredWindow: preferredWindowIndex.toString(),
+        alternateWindow: alternateWindowIndex?.toString() ?? null,
+      };
     };
 
     // Create 4-player groups
@@ -1547,6 +2011,17 @@ export async function assignFairnessScoresForDate(
     const currentMonth = new Date().toISOString().slice(0, 7); // "2024-01" format
     const timeWindows = calculateDynamicTimeWindows(config);
 
+    // Find the processing run for this date
+    const processingRun = await db.query.lotteryProcessingRuns.findFirst({
+      where: eq(lotteryProcessingRuns.lotteryDate, date),
+    });
+
+    // Track fairness updates for entry logs
+    const fairnessUpdates: Map<
+      number,
+      { before: number; after: number; preferenceGranted: boolean }
+    > = new Map();
+
     // Update scores for individual entries
     for (const entry of entries.individual) {
       if (entry.status === "ASSIGNED" && entry.assignedTimeBlockId) {
@@ -1642,6 +2117,8 @@ export async function assignFairnessScoresForDate(
           ),
         });
 
+        const scoreBefore = existingScore?.fairnessScore ?? 0;
+
         if (existingScore) {
           // Update existing record
           const newTotalEntries = existingScore.totalEntriesMonth + 1;
@@ -1679,6 +2156,13 @@ export async function assignFairnessScoresForDate(
               lastUpdated: new Date(),
             })
             .where(eq(memberFairnessScores.memberId, memberId));
+
+          // Track for entry log (use organizer's score for entry)
+          fairnessUpdates.set(entry.id, {
+            before: scoreBefore,
+            after: newFairnessScore,
+            preferenceGranted,
+          });
         } else {
           // Create new record
           const fulfillmentRate = preferenceGranted ? 1 : 0;
@@ -1700,6 +2184,13 @@ export async function assignFairnessScoresForDate(
             daysWithoutGoodTime: daysWithoutGood,
             fairnessScore,
             lastUpdated: new Date(),
+          });
+
+          // Track for entry log
+          fairnessUpdates.set(entry.id, {
+            before: 0,
+            after: fairnessScore,
+            preferenceGranted,
           });
         }
       }
@@ -1783,6 +2274,17 @@ export async function assignFairnessScoresForDate(
           wasBlockedByRestrictions,
         );
 
+        // Track organizer's score for entry log (before processing all members)
+        const organizerExistingScore =
+          await db.query.memberFairnessScores.findFirst({
+            where: and(
+              eq(memberFairnessScores.memberId, group.organizerId),
+              eq(memberFairnessScores.currentMonth, currentMonth),
+            ),
+          });
+        const organizerScoreBefore = organizerExistingScore?.fairnessScore ?? 0;
+        let organizerScoreAfter = 0;
+
         // Update fairness score for ALL group members (not just organizer)
         for (const memberId of group.memberIds) {
           const existingScore = await db.query.memberFairnessScores.findFirst({
@@ -1825,6 +2327,11 @@ export async function assignFairnessScoresForDate(
                 lastUpdated: new Date(),
               })
               .where(eq(memberFairnessScores.memberId, memberId));
+
+            // Track organizer's score for entry log
+            if (memberId === group.organizerId) {
+              organizerScoreAfter = newFairnessScore;
+            }
           } else {
             const fulfillmentRate = preferenceGranted ? 1 : 0;
             // Bayesian dampened: 0/1 = 33%, 1/1 = 66%
@@ -1845,10 +2352,50 @@ export async function assignFairnessScoresForDate(
               fairnessScore,
               lastUpdated: new Date(),
             });
+
+            // Track organizer's score for entry log
+            if (memberId === group.organizerId) {
+              organizerScoreAfter = fairnessScore;
+            }
           }
         }
+
+        // Add group entry to fairness updates
+        fairnessUpdates.set(group.id, {
+          before: organizerScoreBefore,
+          after: organizerScoreAfter,
+          preferenceGranted,
+        });
       }
     }
+
+    // Update processing run and entry logs with fairness data
+    if (processingRun) {
+      // Update fairnessAssignedAt on the run
+      await db
+        .update(lotteryProcessingRuns)
+        .set({ fairnessAssignedAt: new Date() })
+        .where(eq(lotteryProcessingRuns.id, processingRun.id));
+
+      // Update entry logs with fairness data
+      for (const [entryId, fairnessData] of fairnessUpdates) {
+        await db
+          .update(lotteryProcessingEntryLogs)
+          .set({
+            fairnessScoreBefore: fairnessData.before,
+            fairnessScoreAfter: fairnessData.after,
+            fairnessScoreDelta: fairnessData.after - fairnessData.before,
+            preferenceGranted: fairnessData.preferenceGranted,
+          })
+          .where(
+            and(
+              eq(lotteryProcessingEntryLogs.runId, processingRun.id),
+              eq(lotteryProcessingEntryLogs.entryId, entryId),
+            ),
+          );
+      }
+    }
+
     revalidatePath("/admin/lottery");
     return {
       success: true,
@@ -1944,4 +2491,437 @@ function checkPreferenceMatchWithRestrictions(
   }
 
   return false; // Only penalize for availability issues
+}
+
+/**
+ * Finalize lottery for a date
+ * 1. Validates processing run exists and isn't already finalized
+ * 2. Assigns fairness scores
+ * 3. Compares auto vs final assignments and updates logs (batched)
+ * 4. Sets finalizedAt on the run
+ * 5. Optionally makes teesheet public
+ *
+ * This function is idempotent - calling it on an already finalized lottery
+ * will skip re-processing and optionally update visibility only.
+ */
+export async function finalizeLottery(
+  date: string,
+  teesheetId: number,
+  config: TeesheetConfigWithBlocks,
+  makePublic: boolean = false,
+): Promise<ActionResult> {
+  try {
+    // 1. Find the processing run first to validate state
+    const processingRun = await db.query.lotteryProcessingRuns.findFirst({
+      where: eq(lotteryProcessingRuns.lotteryDate, date),
+    });
+
+    if (!processingRun) {
+      return {
+        success: false,
+        error:
+          "No processing run found for this date. Please process the lottery first.",
+      };
+    }
+
+    // 2. Check if already finalized (idempotency)
+    if (processingRun.finalizedAt) {
+      // Already finalized - only handle makePublic if requested
+      if (makePublic) {
+        const { updateTeesheetVisibility } = await import(
+          "~/server/settings/actions"
+        );
+        await updateTeesheetVisibility(teesheetId, true, "", false);
+        revalidatePath("/admin/lottery");
+        revalidatePath("/admin/teesheet");
+        return {
+          success: true,
+          data: {
+            message: "Lottery was already finalized. Teesheet made public.",
+            alreadyFinalized: true,
+          },
+        };
+      }
+      return {
+        success: true,
+        data: {
+          message: "Lottery was already finalized.",
+          alreadyFinalized: true,
+          finalizedAt: processingRun.finalizedAt,
+        },
+      };
+    }
+
+    // 3. Assign fairness scores (this also updates entry logs with fairness data)
+    const fairnessResult = await assignFairnessScoresForDate(date, config);
+    if (!fairnessResult.success) {
+      return fairnessResult;
+    }
+
+    // 4. Get all assigned entries
+    const assignedEntries = await db.query.lotteryEntries.findMany({
+      where: and(
+        eq(lotteryEntries.lotteryDate, date),
+        eq(lotteryEntries.status, "ASSIGNED"),
+      ),
+    });
+
+    // 5. Batch fetch all time blocks we need (avoid N+1 queries)
+    const timeBlockIds = assignedEntries
+      .map((e) => e.assignedTimeBlockId)
+      .filter((id): id is number => id !== null);
+
+    const timeBlocksData =
+      timeBlockIds.length > 0
+        ? await db.query.timeBlocks.findMany({
+            where: inArray(timeBlocks.id, timeBlockIds),
+          })
+        : [];
+
+    const timeBlockMap = new Map(timeBlocksData.map((tb) => [tb.id, tb]));
+
+    // 6. Batch update entry logs with final assignments
+    // Using Promise.all for parallel updates (faster than sequential loop)
+    const updatePromises = assignedEntries.map((entry) => {
+      const finalTimeBlock = entry.assignedTimeBlockId
+        ? timeBlockMap.get(entry.assignedTimeBlockId)
+        : null;
+
+      return db
+        .update(lotteryProcessingEntryLogs)
+        .set({
+          finalTimeBlockId: entry.assignedTimeBlockId,
+          finalStartTime: finalTimeBlock?.startTime ?? null,
+        })
+        .where(
+          and(
+            eq(lotteryProcessingEntryLogs.runId, processingRun.id),
+            eq(lotteryProcessingEntryLogs.entryId, entry.id),
+          ),
+        );
+    });
+
+    await Promise.all(updatePromises);
+
+    // 7. Set finalizedAt on the run
+    await db
+      .update(lotteryProcessingRuns)
+      .set({ finalizedAt: new Date() })
+      .where(eq(lotteryProcessingRuns.id, processingRun.id));
+
+    // 8. Optionally make teesheet public
+    if (makePublic) {
+      const { updateTeesheetVisibility } = await import(
+        "~/server/settings/actions"
+      );
+      await updateTeesheetVisibility(teesheetId, true, "", false);
+    }
+
+    // 9. Calculate stats for response
+    const adminModifiedCount = assignedEntries.filter((entry) => {
+      // Entry was modified if current assignment differs from auto-assigned
+      // We can infer this from the entry logs, but for now just count entries
+      return entry.assignedTimeBlockId !== entry.autoAssignedTimeBlockId;
+    }).length;
+
+    revalidatePath("/admin/lottery");
+    revalidatePath("/admin/teesheet");
+
+    return {
+      success: true,
+      data: {
+        message: makePublic
+          ? "Lottery finalized and teesheet made public"
+          : "Lottery finalized successfully",
+        stats: {
+          entriesFinalized: assignedEntries.length,
+          adminModifiedCount,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Error finalizing lottery:", error);
+    return {
+      success: false,
+      error:
+        error instanceof Error ? error.message : "Failed to finalize lottery",
+    };
+  }
+}
+
+/**
+ * Get time window popularity for a lottery date
+ * Returns relative demand levels for each window
+ */
+export async function getLotteryWindowPopularity(lotteryDate: string): Promise<{
+  success: boolean;
+  data?: Array<{
+    windowIndex: number;
+    count: number;
+    demandLevel: "high" | "regular" | "low";
+  }>;
+  error?: string;
+}> {
+  try {
+    const { count } = await import("drizzle-orm");
+
+    // Count entries grouped by preferredWindow
+    const counts = await db
+      .select({
+        windowIndex: lotteryEntries.preferredWindow,
+        entryCount: count(),
+      })
+      .from(lotteryEntries)
+      .where(
+        and(
+          eq(lotteryEntries.lotteryDate, lotteryDate),
+          // Exclude cancelled entries
+          inArray(lotteryEntries.status, ["PENDING", "PROCESSING", "ASSIGNED"]),
+        ),
+      )
+      .groupBy(lotteryEntries.preferredWindow);
+
+    // Calculate relative demand
+    const total = counts.reduce((sum, c) => sum + Number(c.entryCount), 0);
+    const windowCount = counts.length || 1;
+    const average = total / windowCount;
+
+    const result = counts.map((c) => {
+      const entryCount = Number(c.entryCount);
+      // Demand level based on ratio to average
+      // >1.3x average = high, <0.7x average = low, otherwise regular
+      const ratio = average > 0 ? entryCount / average : 1;
+      let demandLevel: "high" | "regular" | "low" = "regular";
+      if (ratio > 1.3) {
+        demandLevel = "high";
+      } else if (ratio < 0.7) {
+        demandLevel = "low";
+      }
+
+      return {
+        windowIndex: parseInt(c.windowIndex, 10),
+        count: entryCount,
+        demandLevel,
+      };
+    });
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.error("Error getting lottery window popularity:", error);
+    return {
+      success: false,
+      error: "Failed to get window popularity",
+    };
+  }
+}
+
+/**
+ * Get lottery processing log for a specific date
+ * Returns the processing run summary and all entry logs with details
+ */
+export async function getLotteryProcessingLog(date: string) {
+  try {
+    // Find the processing run for this date
+    const processingRun = await db.query.lotteryProcessingRuns.findFirst({
+      where: eq(lotteryProcessingRuns.lotteryDate, date),
+    });
+
+    if (!processingRun) {
+      return {
+        success: false as const,
+        error: "No processing run found for this date",
+      };
+    }
+
+    // Get all entry logs for this run
+    const entryLogs = await db
+      .select({
+        log: lotteryProcessingEntryLogs,
+        entry: lotteryEntries,
+      })
+      .from(lotteryProcessingEntryLogs)
+      .leftJoin(
+        lotteryEntries,
+        eq(lotteryProcessingEntryLogs.entryId, lotteryEntries.id),
+      )
+      .where(eq(lotteryProcessingEntryLogs.runId, processingRun.id));
+
+    // Get unique member IDs from entries for name lookup
+    const allMemberIds = [
+      ...new Set(entryLogs.flatMap((el) => el.entry?.memberIds ?? [])),
+    ];
+
+    // Fetch member details
+    const memberDetails =
+      allMemberIds.length > 0
+        ? await db.query.members.findMany({
+            where: inArray(members.id, allMemberIds),
+            with: {
+              memberClass: true,
+            },
+          })
+        : [];
+
+    const memberMap = new Map(memberDetails.map((m) => [m.id, m]));
+
+    // Get time block details for assigned blocks
+    const timeBlockIds = [
+      ...new Set(
+        entryLogs
+          .flatMap((el) => [
+            el.log.autoAssignedTimeBlockId,
+            el.log.finalTimeBlockId,
+          ])
+          .filter((id): id is number => id !== null),
+      ),
+    ];
+
+    const timeBlockDetails =
+      timeBlockIds.length > 0
+        ? await db.query.timeBlocks.findMany({
+            where: inArray(timeBlocks.id, timeBlockIds),
+          })
+        : [];
+
+    const timeBlockMap = new Map(timeBlockDetails.map((tb) => [tb.id, tb]));
+
+    // Define type for enriched logs to avoid unknown type inference from jsonb
+    type EnrichedLogEntry = {
+      id: number;
+      runId: number;
+      entryId: number;
+      entryType: string;
+      preferredWindow: string | null;
+      alternateWindow: string | null;
+      autoAssignedTimeBlockId: number | null;
+      autoAssignedStartTime: string | null;
+      finalTimeBlockId: number | null;
+      finalStartTime: string | null;
+      assignmentReason: string;
+      violatedRestrictions: boolean | null;
+      restrictionDetails: {
+        restrictionIds?: number[];
+        reasons?: string[];
+      } | null;
+      fairnessScoreBefore: number | null;
+      fairnessScoreAfter: number | null;
+      fairnessScoreDelta: number | null;
+      preferenceGranted: boolean | null;
+      processedAt: Date;
+      memberNames: string;
+      organizerId: number | null | undefined;
+      memberIds: number[];
+      guestIds: number[];
+      guestFillCount: number;
+      status: string | null | undefined;
+      autoAssignedBlockTime: string | null;
+      finalBlockTime: string | null;
+      wasModifiedByAdmin: boolean;
+    };
+
+    // Enrich entry logs with member names and time block info
+    const enrichedLogs: EnrichedLogEntry[] = entryLogs.map((el) => {
+      const memberNames = (el.entry?.memberIds ?? [])
+        .map((id) => {
+          const m = memberMap.get(id);
+          return m ? `${m.firstName} ${m.lastName}` : `Member #${id}`;
+        })
+        .join(", ");
+
+      const autoAssignedBlock = el.log.autoAssignedTimeBlockId
+        ? timeBlockMap.get(el.log.autoAssignedTimeBlockId)
+        : null;
+      const finalBlock = el.log.finalTimeBlockId
+        ? timeBlockMap.get(el.log.finalTimeBlockId)
+        : null;
+
+      const wasModifiedByAdmin =
+        el.log.autoAssignedTimeBlockId !== null &&
+        el.log.finalTimeBlockId !== null &&
+        el.log.autoAssignedTimeBlockId !== el.log.finalTimeBlockId;
+
+      // Parse restriction details safely
+      const rawDetails = el.log.restrictionDetails as Record<
+        string,
+        unknown
+      > | null;
+      const restrictionDetails = rawDetails
+        ? {
+            restrictionIds: Array.isArray(rawDetails.restrictionIds)
+              ? (rawDetails.restrictionIds as number[])
+              : undefined,
+            reasons: Array.isArray(rawDetails.reasons)
+              ? (rawDetails.reasons as string[])
+              : undefined,
+          }
+        : null;
+
+      return {
+        id: el.log.id,
+        runId: el.log.runId,
+        entryId: el.log.entryId,
+        entryType: el.log.entryType,
+        preferredWindow: el.log.preferredWindow,
+        alternateWindow: el.log.alternateWindow,
+        autoAssignedTimeBlockId: el.log.autoAssignedTimeBlockId,
+        autoAssignedStartTime: el.log.autoAssignedStartTime,
+        finalTimeBlockId: el.log.finalTimeBlockId,
+        finalStartTime: el.log.finalStartTime,
+        assignmentReason: el.log.assignmentReason,
+        violatedRestrictions: el.log.violatedRestrictions,
+        restrictionDetails,
+        fairnessScoreBefore: el.log.fairnessScoreBefore,
+        fairnessScoreAfter: el.log.fairnessScoreAfter,
+        fairnessScoreDelta: el.log.fairnessScoreDelta,
+        preferenceGranted: el.log.preferenceGranted,
+        processedAt: el.log.processedAt,
+        memberNames,
+        organizerId: el.entry?.organizerId,
+        memberIds: el.entry?.memberIds ?? [],
+        guestIds: el.entry?.guestIds ?? [],
+        guestFillCount: el.entry?.guestFillCount ?? 0,
+        status: el.entry?.status,
+        autoAssignedBlockTime: autoAssignedBlock?.startTime ?? null,
+        finalBlockTime: finalBlock?.startTime ?? null,
+        wasModifiedByAdmin,
+      };
+    });
+
+    // Separate into groups and individuals
+    const groupLogs = enrichedLogs.filter((l) => l.entryType === "GROUP");
+    const individualLogs = enrichedLogs.filter(
+      (l) => l.entryType === "INDIVIDUAL",
+    );
+
+    return {
+      success: true as const,
+      data: {
+        run: processingRun,
+        logs: {
+          groups: groupLogs,
+          individuals: individualLogs,
+          all: enrichedLogs,
+        },
+        summary: {
+          totalEntries: processingRun.totalEntries,
+          assignedCount: processingRun.assignedCount,
+          groupCount: processingRun.groupCount,
+          individualCount: processingRun.individualCount,
+          violationCount: processingRun.violationCount,
+          processedAt: processingRun.processedAt,
+          fairnessAssignedAt: processingRun.fairnessAssignedAt,
+          finalizedAt: processingRun.finalizedAt,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Error getting lottery processing log:", error);
+    return {
+      success: false as const,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to get lottery processing log",
+    };
+  }
 }

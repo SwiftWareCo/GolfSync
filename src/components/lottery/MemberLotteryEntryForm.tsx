@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,9 +35,14 @@ import {
   UserPlus,
   Search,
   Loader2,
+  Flame,
+  Leaf,
 } from "lucide-react";
 import { formatDate } from "~/lib/dates";
-import { submitLotteryEntry } from "~/server/lottery/actions";
+import {
+  submitLotteryEntry,
+  getLotteryWindowPopularity,
+} from "~/server/lottery/actions";
 import { MemberSearchInput } from "~/components/members/MemberSearchInput";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import { checkLotteryTimeWindowRestrictions } from "~/server/timeblock-restrictions/actions";
@@ -142,6 +147,36 @@ export function MemberLotteryEntryForm({
     return initial;
   });
   const [isCheckingRestrictions, setIsCheckingRestrictions] = useState(false);
+
+  // Window popularity state
+  const [windowPopularity, setWindowPopularity] = useState<
+    Map<number, { count: number; demandLevel: "high" | "regular" | "low" }>
+  >(new Map());
+
+  // Fetch window popularity on mount
+  useEffect(() => {
+    async function fetchPopularity() {
+      try {
+        const result = await getLotteryWindowPopularity(lotteryDate);
+        if (result.success && result.data) {
+          const map = new Map<
+            number,
+            { count: number; demandLevel: "high" | "regular" | "low" }
+          >();
+          result.data.forEach((item) => {
+            map.set(item.windowIndex, {
+              count: item.count,
+              demandLevel: item.demandLevel,
+            });
+          });
+          setWindowPopularity(map);
+        }
+      } catch (error) {
+        console.error("Error fetching window popularity:", error);
+      }
+    }
+    fetchPopularity();
+  }, [lotteryDate]);
 
   // Calculate dynamic time windows based on config
   const timeWindows = calculateDynamicTimeWindows(config);
@@ -746,6 +781,8 @@ export function MemberLotteryEntryForm({
                             window.index,
                           );
                           const isRestricted = restriction?.isFullyRestricted;
+                          const popularity = windowPopularity.get(window.index);
+                          const demandLevel = popularity?.demandLevel;
 
                           return (
                             <div
@@ -761,6 +798,7 @@ export function MemberLotteryEntryForm({
                                 handleWindowClick(window.index, field.onChange)
                               }
                             >
+                              {/* Restricted badge takes priority */}
                               {isRestricted && (
                                 <Badge
                                   variant="destructive"
@@ -769,6 +807,30 @@ export function MemberLotteryEntryForm({
                                   Restricted
                                 </Badge>
                               )}
+                              {/* Popularity indicator - only show for non-restricted, non-regular demand */}
+                              {!isRestricted &&
+                                demandLevel &&
+                                demandLevel !== "regular" && (
+                                  <Badge
+                                    className={`absolute -top-2 -right-2 text-xs ${
+                                      demandLevel === "high"
+                                        ? "bg-orange-100 text-orange-800 hover:bg-orange-100"
+                                        : "bg-green-100 text-green-800 hover:bg-green-100"
+                                    }`}
+                                  >
+                                    {demandLevel === "high" ? (
+                                      <>
+                                        <Flame className="mr-1 h-3 w-3" />
+                                        Popular
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Leaf className="mr-1 h-3 w-3" />
+                                        Low demand
+                                      </>
+                                    )}
+                                  </Badge>
+                                )}
                               <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-lg">{window.icon}</span>
@@ -815,6 +877,10 @@ export function MemberLotteryEntryForm({
                               );
                               const isRestricted =
                                 restriction?.isFullyRestricted;
+                              const popularity = windowPopularity.get(
+                                window.index,
+                              );
+                              const demandLevel = popularity?.demandLevel;
 
                               return (
                                 <div
@@ -841,6 +907,7 @@ export function MemberLotteryEntryForm({
                                     );
                                   }}
                                 >
+                                  {/* Restricted badge takes priority */}
                                   {isRestricted && (
                                     <Badge
                                       variant="destructive"
@@ -849,6 +916,30 @@ export function MemberLotteryEntryForm({
                                       Restricted
                                     </Badge>
                                   )}
+                                  {/* Popularity indicator - only show for non-restricted, non-regular demand */}
+                                  {!isRestricted &&
+                                    demandLevel &&
+                                    demandLevel !== "regular" && (
+                                      <Badge
+                                        className={`absolute -top-2 -right-2 px-1 text-[10px] ${
+                                          demandLevel === "high"
+                                            ? "bg-orange-100 text-orange-800 hover:bg-orange-100"
+                                            : "bg-green-100 text-green-800 hover:bg-green-100"
+                                        }`}
+                                      >
+                                        {demandLevel === "high" ? (
+                                          <>
+                                            <Flame className="mr-0.5 h-2.5 w-2.5" />
+                                            Popular
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Leaf className="mr-0.5 h-2.5 w-2.5" />
+                                            Low
+                                          </>
+                                        )}
+                                      </Badge>
+                                    )}
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                       <span>{window.icon}</span>

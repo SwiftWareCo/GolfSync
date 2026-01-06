@@ -87,3 +87,25 @@ export {
   type LotterySettingsUpdate,
   type LotterySettingsFormData,
 } from "./lottery-settings.schema";
+
+// Lottery Processing Runs
+export {
+  lotteryProcessingRuns,
+  lotteryProcessingRunsSelectSchema,
+  lotteryProcessingRunsInsertSchema,
+  lotteryProcessingRunsUpdateSchema,
+  type LotteryProcessingRun,
+  type LotteryProcessingRunInsert,
+  type LotteryProcessingRunUpdate,
+} from "./lottery-processing-runs.schema";
+
+// Lottery Processing Entry Logs
+export {
+  lotteryProcessingEntryLogs,
+  lotteryProcessingEntryLogsSelectSchema,
+  lotteryProcessingEntryLogsInsertSchema,
+  lotteryProcessingEntryLogsUpdateSchema,
+  type LotteryProcessingEntryLog,
+  type LotteryProcessingEntryLogInsert,
+  type LotteryProcessingEntryLogUpdate,
+} from "./lottery-processing-entry-logs.schema";

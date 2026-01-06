@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { LoadingSpinner } from "~/components/ui/loading-spinner";
+import { Checkbox } from "~/components/ui/checkbox";
+import { Label } from "~/components/ui/label";
 import { toast } from "react-hot-toast";
 import {
   Calendar,
@@ -15,16 +17,19 @@ import {
   Undo,
   Play,
   Sliders,
+  FileText,
+  CheckCircle,
 } from "lucide-react";
 import { insertTimeBlock, deleteTimeBlock } from "~/server/teesheet/actions";
 import {
   batchUpdateLotteryAssignments,
-  assignFairnessScoresForDate,
+  finalizeLottery,
 } from "~/server/lottery/actions";
+import { LotteryProcessingLogDialog } from "./LotteryProcessingLogDialog";
 import { formatDate } from "~/lib/dates";
 import { InsertTimeBlockDialog } from "../teesheet/arrange-results/InsertTimeBlockDialog";
 import { TimeBlockPreviewCard } from "../teesheet/arrange-results/TimeBlockPreviewCard";
-import { EntryBadge, type LotteryEntryDisplay } from "./EntryBadge";
+import { type LotteryEntryDisplay } from "./EntryBadge";
 import { calculateDynamicTimeWindows } from "~/lib/lottery-utils";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { ConfirmationDialog } from "~/components/ui/confirmation-dialog";
@@ -159,8 +164,10 @@ export function TeesheetPreviewAndArrange({
   const [selectedItem, setSelectedItem] = useState<SelectedItem | null>(null);
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
-  const [isAssigningFairnessScores, setIsAssigningFairnessScores] =
-    useState(false);
+  const [isFinalizingLottery, setIsFinalizingLottery] = useState(false);
+  const [showProcessingLogDialog, setShowProcessingLogDialog] = useState(false);
+  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false);
+  const [makeTeesheetPublic, setMakeTeesheetPublic] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
     open: false,
     title: "",
@@ -861,51 +868,49 @@ export function TeesheetPreviewAndArrange({
     });
   };
 
-  // Handle Fairness Scores with confirmation
-  const handleFairnessScoresWithConfirm = () => {
+  // Handle Finalize Lottery with confirmation dialog
+  const handleFinalizeWithConfirm = () => {
     if (!teesheetData?.config) {
       toast.error("Teesheet configuration not available");
       return;
     }
 
-    setConfirmDialog({
-      open: true,
-      title: "Assign Fairness Scores",
-      description:
-        "This will update each member's fairness score based on their final teesheet placement. Members who received their preferred time window will have their fairness score decreased, while those who didn't will have it increased. This helps ensure fair distribution in future lotteries.",
-      onConfirm: async () => {
-        setConfirmDialog((prev) => ({ ...prev, open: false }));
-        await handleAssignFairnessScores();
-      },
-      variant: "default",
-    });
+    setMakeTeesheetPublic(false);
+    setFinalizeDialogOpen(true);
   };
 
-  // Handle assigning fairness scores (internal function)
-  const handleAssignFairnessScores = async () => {
+  // Handle finalize lottery (internal function)
+  const handleFinalizeLottery = async () => {
     if (!teesheetData?.config) {
       toast.error("Teesheet configuration not available");
       return;
     }
 
-    setIsAssigningFairnessScores(true);
+    setFinalizeDialogOpen(false);
+    setIsFinalizingLottery(true);
     try {
-      const result = await assignFairnessScoresForDate(
+      const result = await finalizeLottery(
         date,
+        teesheetId,
         teesheetData.config,
+        makeTeesheetPublic,
       );
       if (result.success) {
-        toast.success("Fairness scores assigned successfully");
-        // Optionally refresh data
+        toast.success(
+          makeTeesheetPublic
+            ? "Lottery finalized and teesheet made public"
+            : "Lottery finalized successfully",
+        );
+        // Refresh data
         onTimeBlocksChange([]);
       } else {
-        toast.error(result.error || "Failed to assign fairness scores");
+        toast.error(result.error || "Failed to finalize lottery");
       }
     } catch (error) {
-      console.error("Error assigning fairness scores:", error);
-      toast.error("An error occurred while assigning fairness scores");
+      console.error("Error finalizing lottery:", error);
+      toast.error("An error occurred while finalizing lottery");
     } finally {
-      setIsAssigningFairnessScores(false);
+      setIsFinalizingLottery(false);
     }
   };
 
@@ -1001,31 +1006,43 @@ export function TeesheetPreviewAndArrange({
                   </Button>
                 )}
 
-                {/* Assign Fairness Scores Button */}
+                {/* View Processing Log Button */}
                 <Button
-                  onClick={handleFairnessScoresWithConfirm}
+                  onClick={() => setShowProcessingLogDialog(true)}
+                  variant="outline"
+                  size="sm"
+                  title="View lottery processing log"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  View Log
+                </Button>
+
+                {/* Finalize Lottery Button */}
+                <Button
+                  onClick={handleFinalizeWithConfirm}
                   disabled={
-                    isAssigningFairnessScores ||
+                    isFinalizingLottery ||
                     pendingChanges.length > 0 ||
                     !teesheetData?.config
                   }
-                  variant="outline"
+                  variant="default"
                   size="sm"
+                  className="bg-green-600 hover:bg-green-700"
                   title={
                     pendingChanges.length > 0
-                      ? "Please save all changes before assigning fairness scores"
-                      : "Assign fairness scores based on final assignments"
+                      ? "Please save all changes before finalizing"
+                      : "Finalize lottery and assign fairness scores"
                   }
                 >
-                  {isAssigningFairnessScores ? (
+                  {isFinalizingLottery ? (
                     <>
                       <LoadingSpinner className="mr-2 h-4 w-4" />
-                      Assigning...
+                      Finalizing...
                     </>
                   ) : (
                     <>
-                      <Save className="mr-2 h-4 w-4" />
-                      Fairness Scores
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Finalize Lottery
                     </>
                   )}
                 </Button>
@@ -1033,7 +1050,7 @@ export function TeesheetPreviewAndArrange({
             </div>
             {pendingChanges.length > 0 && (
               <p className="mt-2 text-xs text-orange-600">
-                Save all changes before assigning fairness scores
+                Save all changes before finalizing the lottery
               </p>
             )}
           </CardHeader>
@@ -1092,6 +1109,45 @@ export function TeesheetPreviewAndArrange({
           title={confirmDialog.title}
           description={confirmDialog.description}
           variant={confirmDialog.variant}
+        />
+
+        {/* Finalize Lottery Dialog */}
+        <ConfirmationDialog
+          open={finalizeDialogOpen}
+          onOpenChange={setFinalizeDialogOpen}
+          onConfirm={handleFinalizeLottery}
+          title="Finalize Lottery"
+          description={
+            <div className="space-y-4">
+              <span>
+                This will finalize the lottery by assigning fairness scores to
+                all members based on their final teesheet placement. Members who
+                received their preferred time window will have their fairness
+                score decreased, while those who didn't will have it increased.
+              </span>
+              <div className="flex items-center space-x-2 rounded-md border p-3">
+                <Checkbox
+                  id="makePublic"
+                  checked={makeTeesheetPublic}
+                  onCheckedChange={(checked) =>
+                    setMakeTeesheetPublic(checked === true)
+                  }
+                />
+                <Label htmlFor="makePublic" className="cursor-pointer text-sm">
+                  Also make teesheet public after finalizing
+                </Label>
+              </div>
+            </div>
+          }
+          variant="default"
+          confirmText="Finalize"
+        />
+
+        {/* Processing Log Dialog */}
+        <LotteryProcessingLogDialog
+          open={showProcessingLogDialog}
+          onOpenChange={setShowProcessingLogDialog}
+          date={date}
         />
       </div>
     </TooltipProvider>

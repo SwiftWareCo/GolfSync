@@ -6,6 +6,7 @@ import {
   varchar,
   date,
   unique,
+  boolean,
 } from "drizzle-orm/pg-core";
 import {
   createInsertSchema,
@@ -38,6 +39,10 @@ export const lotteryEntries = createTable(
       .notNull(),
     processedAt: timestamp("processed_at", { withTimezone: true }),
     assignedTimeBlockId: integer("assigned_time_block_id"), // References timeBlocks.id
+    // Algorithm tracking fields
+    autoAssignedTimeBlockId: integer("auto_assigned_time_block_id"), // What algorithm initially assigned (before manual changes)
+    violatesRestrictions: boolean("violates_restrictions").default(false), // True if assignment violated member restrictions
+    assignmentReason: varchar("assignment_reason", { length: 50 }), // PREFERRED_MATCH, ALTERNATE_MATCH, ALLOWED_FALLBACK, RESTRICTION_VIOLATION
     createdAt: timestamp("created_at", { withTimezone: true })
       .default(sql`CURRENT_TIMESTAMP`)
       .notNull(),
